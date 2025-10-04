@@ -7,10 +7,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght400;600;700&display=swap');
+        html { 
+            height: 100%; /* Ensures HTML element spans the whole viewport */
+        }
         body { 
             font-family: 'Inter', sans-serif; 
             background-color: #f4f7f9; 
-            /* Added for modal scroll lock */
+            min-height: 100%; /* Ensures body content spans the whole viewport */
             transition: background-color 0.3s;
         }
         /* Mobile-friendly table styling */
@@ -38,17 +41,25 @@
         }
         /* Modal Backdrop */
         .modal-backdrop {
-            @apply fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-40 transition-opacity duration-300;
+            /* Just the full-screen overlay now (removed flex centering) */
+            @apply fixed inset-0 bg-gray-900 bg-opacity-75 z-50 transition-opacity duration-300;
         }
         .modal-content {
-            @apply bg-white w-full max-w-lg rounded-xl shadow-2xl transform transition-all duration-300 scale-100;
-            max-height: 90vh;
+            /* *** BULLETPROOF CENTERING FIX *** */
+            /* fixed positions relative to viewport */
+            /* top-1/2 & left-1/2 place the top-left corner at the center */
+            /* -translate-x-1/2 & -translate-y-1/2 shift it back by half its width/height to center it perfectly */
+            @apply fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 
+                   bg-white w-full max-w-lg mx-4 rounded-xl shadow-2xl 
+                   transform transition-all duration-300 scale-100;
+            
+            max-height: 90vh; /* Prevents overflow of the modal itself within the viewport */
             overflow-y: auto;
         }
     </style>
     <!-- Firebase Imports and All Application Logic (now unified) -->
     <script type="module">
-        console.log("APP SCRIPT STARTED"); // Diagnostic Step 1: Confirm script execution
+        console.log("APP SCRIPT STARTED"); 
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -158,12 +169,17 @@
                 METRICS.forEach(metric => {
                     const spanId = `${classId}-${metric}-display`;
                     const span = document.getElementById(spanId);
-                    const value = data[metric] !== undefined ? data[metric] : 0;
+                    // Use nullish coalescing to safely display 0 if the value is missing
+                    const value = data[metric] ?? 0; 
                     if (span) {
                         span.textContent = value;
                     }
                 });
             });
+
+            // Update save button text based on load status (Error Saving text is temporary)
+            getSaveButton().textContent = "Save Report";
+            getSaveButton().disabled = false;
         }
 
         // --- Core Application Logic ---
@@ -183,8 +199,10 @@
                 document.getElementById('user-id-display').textContent = `User ID: ${userId}`;
                 showMessage('Authentication successful. Ready to load/save data.', 'info');
                 
+                // Set the date input to today's date
                 getCurrentDateInput().value = todayDate;
                 
+                // Proceed to load data and history
                 await loadReport(todayDate);
                 await loadHistory();
 
@@ -230,8 +248,8 @@
             // Delete button visibility
             date === todayDate ? getDeleteButton().classList.add('hidden') : getDeleteButton().classList.remove('hidden');
 
-            // Reset report data state to an empty structure
-            currentReportData = CLASS_IDS.reduce((acc, classId) => {
+            // Reset report data state to an empty structure (all zeros)
+            const emptyReport = CLASS_IDS.reduce((acc, classId) => {
                 acc[classId] = {
                      totalStudents: 0,
                      presentToday: 0,
@@ -240,7 +258,10 @@
                 };
                 return acc;
             }, {});
-            
+
+            // Initialize global state to empty report structure
+            currentReportData = { ...emptyReport };
+
             showMessage(`Loading report for ${date}...`, 'info');
             
             try {
@@ -248,19 +269,25 @@
                 const docSnap = await getDoc(docRef);
 
                 if (docSnap.exists()) {
+                    // Data exists, load it from Firestore
                     const data = docSnap.data().classes;
                     Object.keys(data).forEach(classId => {
-                         currentReportData[classId] = data[classId];
+                         // Only merge data for existing class IDs
+                         if(currentReportData[classId]) {
+                             currentReportData[classId] = data[classId];
+                         }
                     });
                     getSaveButton().textContent = "Update Report";
                     showMessage(`Report for ${date} loaded successfully.`, 'success');
+
                 } else {
+                    // No data exists for this date
                     if (date === todayDate) {
-                         Object.keys(DEFAULT_TODAY_DATA).forEach(classId => {
-                             currentReportData[classId] = DEFAULT_TODAY_DATA[classId];
-                         });
+                         // CRITICAL FIX: If no data for TODAY, use the hardcoded defaults
+                         currentReportData = { ...DEFAULT_TODAY_DATA }; // Use all default data
                          showMessage(`No saved data for today. Pre-filling with default data.`, 'info');
                     } else {
+                        // If no data for a PAST date, it remains the emptyReport (all zeros)
                         showMessage(`No report found for ${date}. Click a row to enter data.`, 'info');
                     }
                     getSaveButton().textContent = "Save Report";
@@ -270,6 +297,8 @@
 
             } catch (e) {
                 console.error("Error loading document: ", e);
+                // Set the save button back to the standard text, but inform of load error
+                getSaveButton().textContent = "Save Report";
                 showMessage("Failed to load report.", 'error');
             }
         };
@@ -331,7 +360,7 @@
                 Object.keys(currentReportData).forEach(classId => {
                     const data = currentReportData[classId];
                     // Check if at least one metric is > 0
-                    const hasData = METRICS.some(metric => data[metric] > 0);
+                    const hasData = METRICS.some(metric => (data[metric] ?? 0) > 0);
                     if (hasData) {
                         classesToSave[classId] = data;
                         totalRecords++;
@@ -364,9 +393,9 @@
 
         const openEditModal = (classId) => {
             try {
-                // console.log(`Attempting to open modal for: ${classId}`); // Diagnostic Step 5: Is the function called?
                 currentModalClassId = classId;
-                const data = currentReportData[classId] || {};
+                // Use the merged data from the global state
+                const data = currentReportData[classId] || {}; 
                 
                 // Safety check: ensure classId is valid before splitting
                 if (!classId || !classId.includes('-')) {
@@ -379,22 +408,19 @@
                 METRICS.forEach(metric => {
                     const input = getModalInputs(metric);
                     if (!input) {
-                        // Throw a specific error if an input element is missing
                         throw new Error(`Modal input element not found for metric: ${metric}`);
                     }
-                    // Display the current value from the state
-                    input.value = data[metric] !== undefined ? data[metric] : 0;
+                    // Display the current value from the state, defaulting to 0 if undefined
+                    input.value = data[metric] ?? 0;
                 });
                 
                 // Show the modal
                 getModal().classList.remove('hidden');
                 document.body.classList.add('overflow-hidden');
-                // console.log('Modal opened successfully.'); // Diagnostic Step 6: Did it finish?
 
             } catch (error) {
                 console.error("Error in openEditModal:", error);
                 showMessage(`Failed to open editor: ${error.message}. Check console.`, 'error');
-                // Ensure the modal is hidden if an error occurred during opening
                 getModal().classList.add('hidden');
                 document.body.classList.remove('overflow-hidden');
             }
@@ -422,6 +448,7 @@
                     showMessage(`Invalid input for ${METRIC_LABELS[metric]}. Must be a non-negative number.`, 'error');
                     input.focus();
                     isValid = false;
+                    return; // Stop processing metrics
                 }
                 classData[metric] = value;
             });
@@ -530,22 +557,16 @@
 
         // --- Global Event Delegation Listener ---
         document.addEventListener('click', (e) => {
-            // console.log("CLICK DETECTED"); // Diagnostic Step 2: Did the handler fire?
             let target = e.target;
             
             // Traverse up the DOM to find the clickable row
-            while (target && !target.classList.contains('class-row-editable')) {
-                // console.log("TRAVERSING UP..."); // Diagnostic Step 3: Is it looping?
+            while (target && !target.classList.contains('class-row-editable') && target !== document.body) {
                 target = target.parentElement;
-                // Stop if we hit the body or a non-table element
-                if (target === document.body || !target.closest('table')) return; 
             }
 
             if (target && target.classList.contains('class-row-editable')) {
-                // console.log("CLASS ROW FOUND"); // Diagnostic Step 4: Did we find the target row?
                 const classId = target.getAttribute('data-class-id');
                 if (classId) {
-                    // console.log(`CLASS ID: ${classId}`); // Diagnostic Step 4b: Did we get the ID?
                     openEditModal(classId);
                 } else {
                     console.error("Clicked row is missing data-class-id attribute.");
