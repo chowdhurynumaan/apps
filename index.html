@@ -8,12 +8,12 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght400;600;700&display=swap');
         html { 
-            height: 100%; /* Ensures HTML element spans the whole viewport */
+            height: 100%;
         }
         body { 
             font-family: 'Inter', sans-serif; 
             background-color: #f4f7f9; 
-            min-height: 100%; /* Ensures body content spans the whole viewport */
+            min-height: 100%; 
             transition: background-color 0.3s;
         }
         /* Mobile-friendly table styling */
@@ -33,28 +33,29 @@
         .visible {
             transform: translateY(0) !important;
         }
+
         /* Custom style for the date picker input */
         #report-date-input {
             @apply text-2xl font-semibold text-gray-800 bg-transparent border-none p-0 focus:ring-0;
             cursor: pointer;
             width: auto; 
         }
-        /* Modal Backdrop */
-        .modal-backdrop {
-            /* Just the full-screen overlay now (removed flex centering) */
-            @apply fixed inset-0 bg-gray-900 bg-opacity-75 z-50 transition-opacity duration-300;
-        }
-        .modal-content {
-            /* *** BULLETPROOF CENTERING FIX *** */
-            /* fixed positions relative to viewport */
-            /* top-1/2 & left-1/2 place the top-left corner at the center */
-            /* -translate-x-1/2 & -translate-y-1/2 shift it back by half its width/height to center it perfectly */
-            @apply fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 
-                   bg-white w-full max-w-lg mx-4 rounded-xl shadow-2xl 
-                   transform transition-all duration-300 scale-100;
-            
-            max-height: 90vh; /* Prevents overflow of the modal itself within the viewport */
+
+        /* --- DIALOG/MODAL STYLING FIX --- */
+        #edit-modal {
+            /* 1. Reset standard dialog styling */
+            border: none;
+            padding: 0;
+            margin: auto; /* Standard browser centering */
+            /* 2. Apply Tailwind/Custom styling */
+            @apply bg-white w-full max-w-lg mx-4 rounded-xl shadow-2xl;
+            max-height: 90vh; 
             overflow-y: auto;
+            z-index: 60; /* Ensure it's above the environment/other elements */
+        }
+        /* Backdrop styling for the dialog element */
+        #edit-modal::backdrop {
+            @apply bg-gray-900 bg-opacity-75 backdrop-blur-sm;
         }
     </style>
     <!-- Firebase Imports and All Application Logic (now unified) -->
@@ -66,13 +67,10 @@
         import { getFirestore, doc, setDoc, collection, query, getDocs, getDoc, deleteDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- ENVIRONMENT & FALLBACK CONFIGURATION ---
-        
-        // 1. Get Environment Variables (if they exist)
         const envAppId = typeof __app_id !== 'undefined' ? __app_id : null;
         const envFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const envAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-        // 2. Fallback to User's Existing Project Config
         const userFirebaseConfig = {
             apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJpMJihQ",
             authDomain: "apps-e1163.firebaseapp.com",
@@ -83,10 +81,9 @@
             measurementId: "G-7YCKESJB8T"
         };
         
-        // Final values (Prioritize environment, then use user's explicit config)
         const appId = envAppId || userFirebaseConfig.projectId;
         const firebaseConfig = envFirebaseConfig || userFirebaseConfig;
-        const initialAuthToken = envAuthToken; // Auth token must come from the environment if provided
+        const initialAuthToken = envAuthToken;
 
         // --- GLOBAL STATE ---
         let db = null;
@@ -94,8 +91,8 @@
         let userId = null;
         let todayDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
         let currentReportDate = todayDate;
-        let currentReportData = {}; // Global state for report data
-        let currentModalClassId = null; // Track which class is being edited
+        let currentReportData = {}; 
+        let currentModalClassId = null; 
 
         // Constants 
         const SECTIONS = ['Girls', 'Boys'];
@@ -156,20 +153,19 @@
         const getCurrentDateInput = () => document.getElementById('report-date-input');
         const getSaveButton = () => document.getElementById('save-button');
         const getDeleteButton = () => document.getElementById('delete-button');
-        const getModal = () => document.getElementById('edit-modal');
+        // CRITICAL FIX: Get the new <dialog> element
+        const getModal = () => document.getElementById('edit-modal'); 
         const getModalClassTitle = () => document.getElementById('modal-class-title');
         const getModalInputs = (metric) => document.getElementById(`modal-input-${metric}`);
         
         // Helper to render all cells based on currentReportData state
         const renderTable = () => {
             CLASS_IDS.forEach(classId => {
-                // Initialize class data if missing (shouldn't happen after loadReport, but for safety)
                 const data = currentReportData[classId] || {}; 
 
                 METRICS.forEach(metric => {
                     const spanId = `${classId}-${metric}-display`;
                     const span = document.getElementById(spanId);
-                    // Use nullish coalescing to safely display 0 if the value is missing
                     const value = data[metric] ?? 0; 
                     if (span) {
                         span.textContent = value;
@@ -177,7 +173,6 @@
                 });
             });
 
-            // Update save button text based on load status (Error Saving text is temporary)
             getSaveButton().textContent = "Save Report";
             getSaveButton().disabled = false;
         }
@@ -199,10 +194,8 @@
                 document.getElementById('user-id-display').textContent = `User ID: ${userId}`;
                 showMessage('Authentication successful. Ready to load/save data.', 'info');
                 
-                // Set the date input to today's date
                 getCurrentDateInput().value = todayDate;
                 
-                // Proceed to load data and history
                 await loadReport(todayDate);
                 await loadHistory();
 
@@ -218,7 +211,6 @@
                     throw new Error("Firebase config is missing.");
                 }
                 
-                // Initialize Firebase App
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
@@ -245,10 +237,8 @@
             const dateLabel = document.getElementById('date-label');
             dateLabel.textContent = date === todayDate ? 'Report Date (Today)' : 'Report Date';
 
-            // Delete button visibility
             date === todayDate ? getDeleteButton().classList.add('hidden') : getDeleteButton().classList.remove('hidden');
 
-            // Reset report data state to an empty structure (all zeros)
             const emptyReport = CLASS_IDS.reduce((acc, classId) => {
                 acc[classId] = {
                      totalStudents: 0,
@@ -259,7 +249,6 @@
                 return acc;
             }, {});
 
-            // Initialize global state to empty report structure
             currentReportData = { ...emptyReport };
 
             showMessage(`Loading report for ${date}...`, 'info');
@@ -269,10 +258,8 @@
                 const docSnap = await getDoc(docRef);
 
                 if (docSnap.exists()) {
-                    // Data exists, load it from Firestore
                     const data = docSnap.data().classes;
                     Object.keys(data).forEach(classId => {
-                         // Only merge data for existing class IDs
                          if(currentReportData[classId]) {
                              currentReportData[classId] = data[classId];
                          }
@@ -281,13 +268,11 @@
                     showMessage(`Report for ${date} loaded successfully.`, 'success');
 
                 } else {
-                    // No data exists for this date
                     if (date === todayDate) {
-                         // CRITICAL FIX: If no data for TODAY, use the hardcoded defaults
-                         currentReportData = { ...DEFAULT_TODAY_DATA }; // Use all default data
+                         // Use the hardcoded defaults if no data for TODAY
+                         currentReportData = { ...DEFAULT_TODAY_DATA };
                          showMessage(`No saved data for today. Pre-filling with default data.`, 'info');
                     } else {
-                        // If no data for a PAST date, it remains the emptyReport (all zeros)
                         showMessage(`No report found for ${date}. Click a row to enter data.`, 'info');
                     }
                     getSaveButton().textContent = "Save Report";
@@ -297,7 +282,6 @@
 
             } catch (e) {
                 console.error("Error loading document: ", e);
-                // Set the save button back to the standard text, but inform of load error
                 getSaveButton().textContent = "Save Report";
                 showMessage("Failed to load report.", 'error');
             }
@@ -319,10 +303,8 @@
                     reports.push(docSnap.id);
                 });
 
-                // Sort documents by date (ID) in descending order (newest first)
                 reports.sort().reverse();
                 
-                // Only show the last 7 reports, excluding today's date
                 const historyReports = reports.filter(date => date !== todayDate).slice(0, 7);
                 
                 historyReports.forEach((date) => {
@@ -359,7 +341,6 @@
                 
                 Object.keys(currentReportData).forEach(classId => {
                     const data = currentReportData[classId];
-                    // Check if at least one metric is > 0
                     const hasData = METRICS.some(metric => (data[metric] ?? 0) > 0);
                     if (hasData) {
                         classesToSave[classId] = data;
@@ -394,10 +375,8 @@
         const openEditModal = (classId) => {
             try {
                 currentModalClassId = classId;
-                // Use the merged data from the global state
                 const data = currentReportData[classId] || {}; 
                 
-                // Safety check: ensure classId is valid before splitting
                 if (!classId || !classId.includes('-')) {
                     throw new Error(`Invalid class ID format: ${classId}`);
                 }
@@ -410,24 +389,25 @@
                     if (!input) {
                         throw new Error(`Modal input element not found for metric: ${metric}`);
                     }
-                    // Display the current value from the state, defaulting to 0 if undefined
                     input.value = data[metric] ?? 0;
                 });
                 
-                // Show the modal
-                getModal().classList.remove('hidden');
+                // CRITICAL FIX: Use the native showModal() method for <dialog>
+                getModal().showModal(); 
                 document.body.classList.add('overflow-hidden');
+                console.log("Edit Modal opened via showModal().");
 
             } catch (error) {
                 console.error("Error in openEditModal:", error);
-                showMessage(`Failed to open editor: ${error.message}. Check console.`, 'error');
-                getModal().classList.add('hidden');
+                showMessage(`Failed to open editor: ${error.message}. Check console for details.`, 'error');
+                getModal().close();
                 document.body.classList.remove('overflow-hidden');
             }
         };
 
         const closeEditModal = () => {
-            getModal().classList.add('hidden');
+            // CRITICAL FIX: Use the native close() method for <dialog>
+            getModal().close();
             currentModalClassId = null;
             document.body.classList.remove('overflow-hidden');
         };
@@ -443,12 +423,11 @@
                 const input = getModalInputs(metric);
                 const value = parseInt(input.value, 10);
                 
-                // Input validation (must be non-negative integer)
                 if (isNaN(value) || value < 0) {
                     showMessage(`Invalid input for ${METRIC_LABELS[metric]}. Must be a non-negative number.`, 'error');
                     input.focus();
                     isValid = false;
-                    return; // Stop processing metrics
+                    return; 
                 }
                 classData[metric] = value;
             });
@@ -476,26 +455,26 @@
 
             // Custom modal logic for confirmation (replacing window.confirm)
             const confirmation = await new Promise(resolve => {
-                const modal = document.createElement('div');
-                modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50';
+                const modal = document.createElement('dialog');
+                modal.className = 'bg-white p-6 rounded-lg shadow-2xl w-80';
                 modal.innerHTML = `
-                    <div class="bg-white p-6 rounded-lg shadow-2xl w-80">
-                        <p class="text-lg font-semibold mb-4">Confirm Deletion</p>
-                        <p class="mb-6">Are you sure you want to delete the report for <strong class="font-mono">${currentReportDate}</strong>?</p>
-                        <div class="flex justify-end space-x-3">
-                            <button id="cancel-btn" class="px-4 py-2 bg-gray-300 rounded-md hover:bg-gray-400">Cancel</button>
-                            <button id="delete-confirm-btn" class="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600">Delete</button>
-                        </div>
+                    <p class="text-lg font-semibold mb-4">Confirm Deletion</p>
+                    <p class="mb-6">Are you sure you want to delete the report for <strong class="font-mono">${currentReportDate}</strong>?</p>
+                    <div class="flex justify-end space-x-3">
+                        <button id="cancel-btn" class="px-4 py-2 bg-gray-300 rounded-md hover:bg-gray-400">Cancel</button>
+                        <button id="delete-confirm-btn" class="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600">Delete</button>
                     </div>
                 `;
                 document.body.appendChild(modal);
+                modal.showModal();
 
-                // Add event listeners for the dynamically created buttons
                 document.getElementById('cancel-btn').onclick = () => {
+                    modal.close();
                     document.body.removeChild(modal);
                     resolve(false);
                 };
-                document.getElementById('delete-confirm-btn').onclick = () => {
+                document.getElementById('delete-confirm-btn').onclick = async () => {
+                    modal.close();
                     document.body.removeChild(modal);
                     resolve(true);
                 };
@@ -518,12 +497,11 @@
         // --- DOM Structure Generation and Event Attachment ---
         const setupTableDom = () => {
             const tableBody = document.getElementById('report-table-body');
-            tableBody.innerHTML = ''; // Clear existing rows to prevent duplication
+            tableBody.innerHTML = ''; 
 
             SECTIONS.forEach(section => {
                 const isGirls = section === 'Girls';
                 const headerRow = document.createElement('tr');
-                // Using safer neutral colors for dynamic Tailwind class application
                 const headerBg = isGirls ? 'bg-pink-100' : 'bg-blue-100';
                 const headerText = isGirls ? 'text-pink-700' : 'text-blue-700';
 
@@ -535,14 +513,13 @@
                     const classId = `${section}-${classNum}`;
                     const row = document.createElement('tr');
                     
-                    // CRITICAL: Add data attribute instead of inline onclick
                     row.setAttribute('data-class-id', classId); 
-                    row.className = 'hover:bg-blue-50 cursor-pointer transition duration-150 class-row-editable'; // Add a specific class for event delegation
+                    row.className = 'hover:bg-blue-50 cursor-pointer transition duration-150 class-row-editable'; 
                     
                     // Class Name Cell
                     row.innerHTML += `<td class="data-cell font-bold text-gray-800">${classNum}</td>`;
 
-                    // Metric Display Cells (use SPANs for non-editable display)
+                    // Metric Display Cells
                     METRICS.forEach(metric => {
                         row.innerHTML += `
                             <td class="data-cell text-center">
@@ -559,7 +536,6 @@
         document.addEventListener('click', (e) => {
             let target = e.target;
             
-            // Traverse up the DOM to find the clickable row
             while (target && !target.classList.contains('class-row-editable') && target !== document.body) {
                 target = target.parentElement;
             }
@@ -657,7 +633,6 @@
             </div>
 
             <div class="mt-6 text-center">
-                <!-- This button is now primarily a save button for the entire report state -->
                 <button id="save-button" onclick="saveData()" class="px-8 py-3 bg-blue-600 text-white font-bold text-lg rounded-xl hover:bg-blue-700 transition duration-300 shadow-xl transform hover:scale-[1.01] focus:ring-4 focus:ring-blue-300">
                     Save Report
                 </button>
@@ -666,49 +641,47 @@
         </div>
     </main>
 
-    <!-- Class Edit Modal -->
-    <div id="edit-modal" class="modal-backdrop hidden">
-        <div class="modal-content">
-            <div class="p-6">
-                <div class="flex justify-between items-center border-b pb-3 mb-4">
-                    <h2 id="modal-class-title" class="text-2xl font-bold text-gray-800">Edit Class</h2>
-                    <button onclick="closeEditModal()" class="text-gray-500 hover:text-gray-800 transition">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </button>
+    <!-- Class Edit Modal (Now using <dialog> element for reliable centering) -->
+    <dialog id="edit-modal">
+        <div class="p-6">
+            <div class="flex justify-between items-center border-b pb-3 mb-4">
+                <h2 id="modal-class-title" class="text-2xl font-bold text-gray-800">Edit Class</h2>
+                <button type="button" onclick="closeEditModal()" class="text-gray-500 hover:text-gray-800 transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <form onsubmit="saveModalChanges(event)" class="space-y-4">
+                
+                <div class="space-y-4">
+                    <div class="flex flex-col">
+                        <label for="modal-input-totalStudents" class="text-sm font-medium text-gray-700 mb-1">Total Students</label>
+                        <input type="number" id="modal-input-totalStudents" class="input-field" value="0" min="0" required>
+                    </div>
+                    <div class="flex flex-col">
+                        <label for="modal-input-presentToday" class="text-sm font-medium text-gray-700 mb-1">Present Today</label>
+                        <input type="number" id="modal-input-presentToday" class="input-field" value="0" min="0" required>
+                    </div>
+                    <div class="flex flex-col">
+                        <label for="modal-input-progressReportBrought" class="text-sm font-medium text-gray-700 mb-1">Progress Report Brought</label>
+                        <input type="number" id="modal-input-progressReportBrought" class="input-field" value="0" min="0" required>
+                    </div>
+                    <div class="flex flex-col">
+                        <label for="modal-input-progressReportSigned" class="text-sm font-medium text-gray-700 mb-1">Progress Report Signed</label>
+                        <input type="number" id="modal-input-progressReportSigned" class="input-field" value="0" min="0" required>
+                    </div>
                 </div>
 
-                <form onsubmit="saveModalChanges(event)" class="space-y-4">
-                    
-                    <div class="space-y-4">
-                        <div class="flex flex-col">
-                            <label for="modal-input-totalStudents" class="text-sm font-medium text-gray-700 mb-1">Total Students</label>
-                            <input type="number" id="modal-input-totalStudents" class="input-field" value="0" min="0" required>
-                        </div>
-                        <div class="flex flex-col">
-                            <label for="modal-input-presentToday" class="text-sm font-medium text-gray-700 mb-1">Present Today</label>
-                            <input type="number" id="modal-input-presentToday" class="input-field" value="0" min="0" required>
-                        </div>
-                        <div class="flex flex-col">
-                            <label for="modal-input-progressReportBrought" class="text-sm font-medium text-gray-700 mb-1">Progress Report Brought</label>
-                            <input type="number" id="modal-input-progressReportBrought" class="input-field" value="0" min="0" required>
-                        </div>
-                        <div class="flex flex-col">
-                            <label for="modal-input-progressReportSigned" class="text-sm font-medium text-gray-700 mb-1">Progress Report Signed</label>
-                            <input type="number" id="modal-input-progressReportSigned" class="input-field" value="0" min="0" required>
-                        </div>
-                    </div>
-
-                    <div class="flex justify-end pt-4 space-x-3">
-                        <button type="button" onclick="closeEditModal()" class="px-5 py-2 bg-gray-300 text-gray-800 font-medium rounded-lg hover:bg-gray-400 transition">
-                            Cancel
-                        </button>
-                        <button type="submit" class="px-5 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition shadow-md">
-                            Apply Changes
-                        </button>
-                    </div>
-                </form>
-            </div>
+                <div class="flex justify-end pt-4 space-x-3">
+                    <button type="button" onclick="closeEditModal()" class="px-5 py-2 bg-gray-300 text-gray-800 font-medium rounded-lg hover:bg-gray-400 transition">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-5 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition shadow-md">
+                        Apply Changes
+                    </button>
+                </div>
+            </form>
         </div>
-    </div>
+    </dialog>
 </body>
 </html>
