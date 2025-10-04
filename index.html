@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Classroom Report Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght400;600;700&display=swap');
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f4f7f9; 
+            /* Added for modal scroll lock */
+            transition: background-color 0.3s;
+        }
+        /* Mobile-friendly table styling */
+        .data-cell {
+            @apply p-3 sm:p-4 text-sm text-gray-700 bg-white border-b border-gray-200 whitespace-normal;
+        }
+        .header-cell {
+            @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white bg-blue-600;
+        }
+        .input-field {
+            @apply w-full p-3 text-base text-gray-800 bg-gray-50 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition duration-150 ease-in-out;
+        }
+        /* Styling for the loading/message box */
+        #message-box {
+            @apply fixed bottom-5 right-5 p-3 rounded-lg shadow-xl font-medium z-50 transition-transform duration-300 ease-out transform translate-y-20;
+        }
+        .visible {
+            transform: translateY(0) !important;
+        }
+        /* Custom style for the date picker input */
+        #report-date-input {
+            @apply text-2xl font-semibold text-gray-800 bg-transparent border-none p-0 focus:ring-0;
+            cursor: pointer;
+            width: auto; 
+        }
+        /* Modal Backdrop */
+        .modal-backdrop {
+            @apply fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-40 transition-opacity duration-300;
+        }
+        .modal-content {
+            @apply bg-white w-full max-w-lg rounded-xl shadow-2xl transform transition-all duration-300 scale-100;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+    </style>
+    <!-- Firebase Imports and All Application Logic (now unified) -->
+    <script type="module">
+        console.log("APP SCRIPT STARTED"); // Diagnostic Step 1: Confirm script execution
+
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, collection, query, getDocs, getDoc, deleteDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- ENVIRONMENT & FALLBACK CONFIGURATION ---
+        
+        // 1. Get Environment Variables (if they exist)
+        const envAppId = typeof __app_id !== 'undefined' ? __app_id : null;
+        const envFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const envAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // 2. Fallback to User's Existing Project Config
+        const userFirebaseConfig = {
+            apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJpMJihQ",
+            authDomain: "apps-e1163.firebaseapp.com",
+            projectId: "apps-e1163",
+            storageBucket: "apps-e1163.firebasestorage.app",
+            messagingSenderId: "855206153422",
+            appId: "1:855206153422:web:2a1366b2e7825304c3d49f",
+            measurementId: "G-7YCKESJB8T"
+        };
+        
+        // Final values (Prioritize environment, then use user's explicit config)
+        const appId = envAppId || userFirebaseConfig.projectId;
+        const firebaseConfig = envFirebaseConfig || userFirebaseConfig;
+        const initialAuthToken = envAuthToken; // Auth token must come from the environment if provided
+
+        // --- GLOBAL STATE ---
+        let db = null;
+        let auth = null;
+        let userId = null;
+        let todayDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        let currentReportDate = todayDate;
+        let currentReportData = {}; // Global state for report data
+        let currentModalClassId = null; // Track which class is being edited
+
+        // Constants 
+        const SECTIONS = ['Girls', 'Boys'];
+        const CLASS_NUMS = ['1A', '1B', '1C', '2', '3', '4'];
+        const CLASS_IDS = SECTIONS.flatMap(section => 
+            CLASS_NUMS.map(classNum => `${section}-${classNum}`)
+        );
+        const METRICS = ['totalStudents', 'presentToday', 'progressReportBrought', 'progressReportSigned'];
+        const METRIC_LABELS = {
+            totalStudents: 'Total Students',
+            presentToday: 'Present Today',
+            progressReportBrought: 'Progress Report Brought',
+            progressReportSigned: 'Progress Report Signed',
+        };
+        const COLLECTION_NAME = 'daily_attendance_reports';
+
+        // --- HARDCODED DEFAULT DATA FROM USER'S IMAGE ---
+        const DEFAULT_TODAY_DATA = {
+            'Girls-1A': { totalStudents: 11, presentToday: 11, progressReportBrought: 10, progressReportSigned: 10 },
+            'Girls-1B': { totalStudents: 14, presentToday: 11, progressReportBrought: 11, progressReportSigned: 10 },
+            'Girls-1C': { totalStudents: 16, presentToday: 15, progressReportBrought: 15, progressReportSigned: 10 },
+            'Girls-2':  { totalStudents: 20, presentToday: 14, progressReportBrought: 14, progressReportSigned: 7 },
+            'Girls-3':  { totalStudents: 21, presentToday: 17, progressReportBrought: 14, progressReportSigned: 14 },
+            'Girls-4':  { totalStudents: 14, presentToday: 12, progressReportBrought: 12, progressReportSigned: 8 },
+            'Boys-1A':  { totalStudents: 7, presentToday: 7, progressReportBrought: 5, progressReportSigned: 4 },
+            'Boys-1B':  { totalStudents: 7, presentToday: 5, progressReportBrought: 3, progressReportSigned: 3 },
+            'Boys-1C':  { totalStudents: 16, presentToday: 13, progressReportBrought: 12, progressReportSigned: 12 },
+            'Boys-2':   { totalStudents: 20, presentToday: 18, progressReportBrought: 18, progressReportSigned: 18 },
+            'Boys-3':   { totalStudents: 19, presentToday: 15, progressReportBrought: 13, progressReportSigned: 11 },
+            'Boys-4':   { totalStudents: 14, presentToday: 12, progressReportBrought: 11, progressReportSigned: 10 },
+        };
+        // -----------------------------------------------------------------------------------------------
+        
+        // Utility Functions
+        const getReportPath = (id = currentReportDate) => {
+            return `/artifacts/${appId}/users/${userId}/${COLLECTION_NAME}/${id}`;
+        };
+
+        const showMessage = (text, type = 'success') => {
+            const box = document.getElementById('message-box');
+            box.textContent = text;
+            box.className = 'fixed bottom-5 right-5 p-3 rounded-lg shadow-xl font-medium z-50 transition-transform duration-300 ease-out transform visible';
+            
+            if (type === 'success') {
+                box.classList.add('bg-green-500', 'text-white');
+            } else if (type === 'error') {
+                box.classList.add('bg-red-500', 'text-white');
+            } else { // info
+                box.classList.add('bg-blue-500', 'text-white');
+            }
+
+            setTimeout(() => {
+                box.classList.remove('visible');
+                box.classList.add('translate-y-20');
+            }, 3000);
+        };
+
+        const getCurrentDateInput = () => document.getElementById('report-date-input');
+        const getSaveButton = () => document.getElementById('save-button');
+        const getDeleteButton = () => document.getElementById('delete-button');
+        const getModal = () => document.getElementById('edit-modal');
+        const getModalClassTitle = () => document.getElementById('modal-class-title');
+        const getModalInputs = (metric) => document.getElementById(`modal-input-${metric}`);
+        
+        // Helper to render all cells based on currentReportData state
+        const renderTable = () => {
+            CLASS_IDS.forEach(classId => {
+                // Initialize class data if missing (shouldn't happen after loadReport, but for safety)
+                const data = currentReportData[classId] || {}; 
+
+                METRICS.forEach(metric => {
+                    const spanId = `${classId}-${metric}-display`;
+                    const span = document.getElementById(spanId);
+                    const value = data[metric] !== undefined ? data[metric] : 0;
+                    if (span) {
+                        span.textContent = value;
+                    }
+                });
+            });
+        }
+
+        // --- Core Application Logic ---
+        
+        const changeDate = (date) => {
+            loadReport(date);
+        };
+
+        const authenticateUser = async () => {
+            try {
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                userId = auth.currentUser?.uid || crypto.randomUUID();
+                document.getElementById('user-id-display').textContent = `User ID: ${userId}`;
+                showMessage('Authentication successful. Ready to load/save data.', 'info');
+                
+                getCurrentDateInput().value = todayDate;
+                
+                await loadReport(todayDate);
+                await loadHistory();
+
+            } catch (error) {
+                console.error("Firebase Auth Error:", error);
+                showMessage('Authentication failed. Check console for details.', 'error');
+            }
+        };
+
+        const initFirebase = () => {
+            try {
+                if (!firebaseConfig) {
+                    throw new Error("Firebase config is missing.");
+                }
+                
+                // Initialize Firebase App
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                setLogLevel('error');
+                
+                onAuthStateChanged(auth, (user) => {
+                    if (user) { /* user signed in */ }
+                });
+                
+                authenticateUser();
+
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                showMessage(`Firebase Init Error: ${error.message}`, 'error');
+            }
+        };
+
+        const loadReport = async (date) => {
+            if (!db || !userId) return;
+
+            currentReportDate = date;
+            getCurrentDateInput().value = date;
+            
+            const dateLabel = document.getElementById('date-label');
+            dateLabel.textContent = date === todayDate ? 'Report Date (Today)' : 'Report Date';
+
+            // Delete button visibility
+            date === todayDate ? getDeleteButton().classList.add('hidden') : getDeleteButton().classList.remove('hidden');
+
+            // Reset report data state to an empty structure
+            currentReportData = CLASS_IDS.reduce((acc, classId) => {
+                acc[classId] = {
+                     totalStudents: 0,
+                     presentToday: 0,
+                     progressReportBrought: 0,
+                     progressReportSigned: 0,
+                };
+                return acc;
+            }, {});
+            
+            showMessage(`Loading report for ${date}...`, 'info');
+            
+            try {
+                const docRef = doc(db, getReportPath(date));
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const data = docSnap.data().classes;
+                    Object.keys(data).forEach(classId => {
+                         currentReportData[classId] = data[classId];
+                    });
+                    getSaveButton().textContent = "Update Report";
+                    showMessage(`Report for ${date} loaded successfully.`, 'success');
+                } else {
+                    if (date === todayDate) {
+                         Object.keys(DEFAULT_TODAY_DATA).forEach(classId => {
+                             currentReportData[classId] = DEFAULT_TODAY_DATA[classId];
+                         });
+                         showMessage(`No saved data for today. Pre-filling with default data.`, 'info');
+                    } else {
+                        showMessage(`No report found for ${date}. Click a row to enter data.`, 'info');
+                    }
+                    getSaveButton().textContent = "Save Report";
+                }
+                
+                renderTable(); 
+
+            } catch (e) {
+                console.error("Error loading document: ", e);
+                showMessage("Failed to load report.", 'error');
+            }
+        };
+
+        const loadHistory = async () => {
+            if (!db || !userId) return;
+
+            const historyList = document.getElementById('history-list');
+            historyList.innerHTML = ''; 
+
+            try {
+                const reportsRef = collection(db, `/artifacts/${appId}/users/${userId}/${COLLECTION_NAME}`);
+                const q = query(reportsRef); 
+                const querySnapshot = await getDocs(q);
+                
+                const reports = [];
+                querySnapshot.forEach((docSnap) => {
+                    reports.push(docSnap.id);
+                });
+
+                // Sort documents by date (ID) in descending order (newest first)
+                reports.sort().reverse();
+                
+                // Only show the last 7 reports, excluding today's date
+                const historyReports = reports.filter(date => date !== todayDate).slice(0, 7);
+                
+                historyReports.forEach((date) => {
+                    const li = document.createElement('li');
+                    li.className = 'cursor-pointer p-2 bg-gray-50 hover:bg-gray-200 rounded-md text-sm transition duration-150';
+                    li.textContent = date;
+                    li.onclick = () => changeDate(date); 
+                    historyList.appendChild(li);
+                });
+
+                if (historyList.children.length === 0) {
+                    historyList.innerHTML = '<p class="text-xs text-gray-500 italic">No previous reports found.</p>';
+                }
+
+            } catch (e) {
+                console.error("Error loading history: ", e);
+            }
+        };
+        
+        const saveData = async () => {
+            if (!db || !userId) {
+                showMessage('App not initialized. Check Firebase connection.', 'error');
+                return;
+            }
+
+            getSaveButton().disabled = true;
+            getSaveButton().textContent = "Saving...";
+
+            try {
+                const docRef = doc(db, getReportPath(currentReportDate));
+                
+                const classesToSave = {};
+                let totalRecords = 0;
+                
+                Object.keys(currentReportData).forEach(classId => {
+                    const data = currentReportData[classId];
+                    // Check if at least one metric is > 0
+                    const hasData = METRICS.some(metric => data[metric] > 0);
+                    if (hasData) {
+                        classesToSave[classId] = data;
+                        totalRecords++;
+                    }
+                });
+
+                const dataToSave = {
+                    date: currentReportDate,
+                    userId: userId,
+                    classes: classesToSave,
+                };
+
+                await setDoc(docRef, dataToSave);
+                
+                showMessage(`Report for ${currentReportDate} saved successfully! ${totalRecords} classes updated.`, 'success');
+                getSaveButton().textContent = "Update Report";
+                getSaveButton().disabled = false;
+
+                loadHistory();
+
+            } catch (e) {
+                console.error("Error adding document: ", e);
+                showMessage("Failed to save report.", 'error');
+                getSaveButton().textContent = "Error Saving";
+                getSaveButton().disabled = false;
+            }
+        };
+
+        // --- Modal Logic ---
+
+        const openEditModal = (classId) => {
+            try {
+                // console.log(`Attempting to open modal for: ${classId}`); // Diagnostic Step 5: Is the function called?
+                currentModalClassId = classId;
+                const data = currentReportData[classId] || {};
+                
+                // Safety check: ensure classId is valid before splitting
+                if (!classId || !classId.includes('-')) {
+                    throw new Error(`Invalid class ID format: ${classId}`);
+                }
+                const [section, classNum] = classId.split('-');
+
+                getModalClassTitle().textContent = `${section} Class ${classNum}`;
+
+                METRICS.forEach(metric => {
+                    const input = getModalInputs(metric);
+                    if (!input) {
+                        // Throw a specific error if an input element is missing
+                        throw new Error(`Modal input element not found for metric: ${metric}`);
+                    }
+                    // Display the current value from the state
+                    input.value = data[metric] !== undefined ? data[metric] : 0;
+                });
+                
+                // Show the modal
+                getModal().classList.remove('hidden');
+                document.body.classList.add('overflow-hidden');
+                // console.log('Modal opened successfully.'); // Diagnostic Step 6: Did it finish?
+
+            } catch (error) {
+                console.error("Error in openEditModal:", error);
+                showMessage(`Failed to open editor: ${error.message}. Check console.`, 'error');
+                // Ensure the modal is hidden if an error occurred during opening
+                getModal().classList.add('hidden');
+                document.body.classList.remove('overflow-hidden');
+            }
+        };
+
+        const closeEditModal = () => {
+            getModal().classList.add('hidden');
+            currentModalClassId = null;
+            document.body.classList.remove('overflow-hidden');
+        };
+
+        const saveModalChanges = (event) => {
+            event.preventDefault();
+            if (!currentModalClassId) return closeEditModal();
+
+            let isValid = true;
+            const classData = {};
+
+            METRICS.forEach(metric => {
+                const input = getModalInputs(metric);
+                const value = parseInt(input.value, 10);
+                
+                // Input validation (must be non-negative integer)
+                if (isNaN(value) || value < 0) {
+                    showMessage(`Invalid input for ${METRIC_LABELS[metric]}. Must be a non-negative number.`, 'error');
+                    input.focus();
+                    isValid = false;
+                }
+                classData[metric] = value;
+            });
+            
+            if (!isValid) return;
+
+            // 1. Update the global state
+            currentReportData[currentModalClassId] = classData;
+
+            // 2. Re-render the table display
+            renderTable();
+
+            // 3. Close the modal
+            closeEditModal();
+            
+            // 4. Trigger the full save to Firestore
+            saveData();
+        };
+        
+        const deleteReport = async () => {
+             if (currentReportDate === todayDate) {
+                showMessage("Cannot delete today's report.", 'error');
+                return;
+            }
+
+            // Custom modal logic for confirmation (replacing window.confirm)
+            const confirmation = await new Promise(resolve => {
+                const modal = document.createElement('div');
+                modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50';
+                modal.innerHTML = `
+                    <div class="bg-white p-6 rounded-lg shadow-2xl w-80">
+                        <p class="text-lg font-semibold mb-4">Confirm Deletion</p>
+                        <p class="mb-6">Are you sure you want to delete the report for <strong class="font-mono">${currentReportDate}</strong>?</p>
+                        <div class="flex justify-end space-x-3">
+                            <button id="cancel-btn" class="px-4 py-2 bg-gray-300 rounded-md hover:bg-gray-400">Cancel</button>
+                            <button id="delete-confirm-btn" class="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600">Delete</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+
+                // Add event listeners for the dynamically created buttons
+                document.getElementById('cancel-btn').onclick = () => {
+                    document.body.removeChild(modal);
+                    resolve(false);
+                };
+                document.getElementById('delete-confirm-btn').onclick = () => {
+                    document.body.removeChild(modal);
+                    resolve(true);
+                };
+            });
+
+            if (!confirmation) return;
+            
+            try {
+                await deleteDoc(doc(db, getReportPath(currentReportDate)));
+                showMessage(`Report for ${currentReportDate} deleted.`, 'success');
+                
+                await changeDate(todayDate);
+                await loadHistory();
+            } catch (e) {
+                console.error("Error deleting document: ", e);
+                showMessage("Failed to delete report.", 'error');
+            }
+        }
+        
+        // --- DOM Structure Generation and Event Attachment ---
+        const setupTableDom = () => {
+            const tableBody = document.getElementById('report-table-body');
+            tableBody.innerHTML = ''; // Clear existing rows to prevent duplication
+
+            SECTIONS.forEach(section => {
+                const isGirls = section === 'Girls';
+                const headerRow = document.createElement('tr');
+                // Using safer neutral colors for dynamic Tailwind class application
+                const headerBg = isGirls ? 'bg-pink-100' : 'bg-blue-100';
+                const headerText = isGirls ? 'text-pink-700' : 'text-blue-700';
+
+                headerRow.className = headerBg;
+                headerRow.innerHTML = `<td colspan="5" class="px-4 py-3 text-sm font-extrabold ${headerText} uppercase tracking-widest border-t-4 border-b-4 border-gray-300">${section} SECTION}</td>`;
+                tableBody.appendChild(headerRow);
+                
+                CLASS_NUMS.forEach(classNum => {
+                    const classId = `${section}-${classNum}`;
+                    const row = document.createElement('tr');
+                    
+                    // CRITICAL: Add data attribute instead of inline onclick
+                    row.setAttribute('data-class-id', classId); 
+                    row.className = 'hover:bg-blue-50 cursor-pointer transition duration-150 class-row-editable'; // Add a specific class for event delegation
+                    
+                    // Class Name Cell
+                    row.innerHTML += `<td class="data-cell font-bold text-gray-800">${classNum}</td>`;
+
+                    // Metric Display Cells (use SPANs for non-editable display)
+                    METRICS.forEach(metric => {
+                        row.innerHTML += `
+                            <td class="data-cell text-center">
+                                <span id="${classId}-${metric}-display" class="font-mono text-base font-semibold">0</span>
+                            </td>
+                        `;
+                    });
+                    tableBody.appendChild(row);
+                });
+            });
+        };
+
+        // --- Global Event Delegation Listener ---
+        document.addEventListener('click', (e) => {
+            // console.log("CLICK DETECTED"); // Diagnostic Step 2: Did the handler fire?
+            let target = e.target;
+            
+            // Traverse up the DOM to find the clickable row
+            while (target && !target.classList.contains('class-row-editable')) {
+                // console.log("TRAVERSING UP..."); // Diagnostic Step 3: Is it looping?
+                target = target.parentElement;
+                // Stop if we hit the body or a non-table element
+                if (target === document.body || !target.closest('table')) return; 
+            }
+
+            if (target && target.classList.contains('class-row-editable')) {
+                // console.log("CLASS ROW FOUND"); // Diagnostic Step 4: Did we find the target row?
+                const classId = target.getAttribute('data-class-id');
+                if (classId) {
+                    // console.log(`CLASS ID: ${classId}`); // Diagnostic Step 4b: Did we get the ID?
+                    openEditModal(classId);
+                } else {
+                    console.error("Clicked row is missing data-class-id attribute.");
+                }
+            }
+        });
+
+        // Expose functions to the global scope for HTML inline event handlers (like onchange)
+        window.saveData = saveData;
+        window.loadReport = loadReport;
+        window.deleteReport = deleteReport;
+        window.changeDate = changeDate;
+        window.openEditModal = openEditModal;
+        window.saveModalChanges = saveModalChanges;
+        window.closeEditModal = closeEditModal;
+        window.todayDate = todayDate;
+
+        // Setup the DOM structure when content is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            setupTableDom();
+        });
+
+        // Start the application after all resources are loaded
+        window.onload = initFirebase;
+
+    </script>
+</head>
+<body class="min-h-screen p-4 sm:p-8">
+
+    <div id="message-box" class="translate-y-20"></div>
+
+    <header class="mb-6 pb-4 border-b border-gray-300">
+        <h1 class="text-3xl font-bold text-gray-800">Daily Class Metrics</h1>
+        <p id="user-id-display" class="text-xs text-gray-500 mt-1"></p>
+    </header>
+
+    <main class="grid grid-cols-1 lg:grid-cols-4 gap-6 max-w-full">
+        
+        <!-- Report History Panel (Desktop: Col 1, Mobile: Full Width) -->
+        <aside class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg h-fit">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Past Reports</h2>
+            <ul id="history-list" class="space-y-2">
+                <li class="text-gray-400 italic text-sm">Loading history...</li>
+            </ul>
+        </aside>
+
+        <!-- Main Report View (Desktop: Cols 2-4, Mobile: Full Width) -->
+        <div class="lg:col-span-3 bg-white p-4 sm:p-6 rounded-xl shadow-lg">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b pb-4">
+                
+                <!-- Date Picker Area -->
+                <div class="flex items-center space-x-2">
+                    <span id="date-label" class="text-xl sm:text-2xl font-semibold text-gray-800">Report Date</span>
+                    <input 
+                        type="date" 
+                        id="report-date-input" 
+                        class="text-xl sm:text-2xl font-semibold text-gray-800 bg-transparent border-none p-0" 
+                        onchange="changeDate(this.value)"
+                    />
+                </div>
+                
+                <div class="mt-4 sm:mt-0 flex space-x-2">
+                    <button id="delete-button" onclick="deleteReport()" class="hidden px-4 py-2 bg-red-500 text-white font-medium rounded-lg hover:bg-red-600 transition duration-150 shadow-md text-sm">
+                        Delete Report
+                    </button>
+                    <button onclick="changeDate(todayDate)" class="px-4 py-2 bg-gray-400 text-white font-medium rounded-lg hover:bg-gray-500 transition duration-150 shadow-md text-sm">
+                        Load Today
+                    </button>
+                </div>
+            </div>
+
+            <!-- Report Table/Form -->
+            <div class="overflow-x-auto rounded-lg border border-gray-200">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="sticky top-0 z-10">
+                        <tr>
+                            <th class="header-cell rounded-tl-lg">Class</th>
+                            <th class="header-cell">Total Students</th>
+                            <th class="header-cell">Present Today</th>
+                            <th class="header-cell">Report Brought</th>
+                            <th class="header-cell rounded-tr-lg">Report Signed</th>
+                        </tr>
+                    </thead>
+                    <tbody id="report-table-body" class="divide-y divide-gray-200">
+                        <!-- Class rows generated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-6 text-center">
+                <!-- This button is now primarily a save button for the entire report state -->
+                <button id="save-button" onclick="saveData()" class="px-8 py-3 bg-blue-600 text-white font-bold text-lg rounded-xl hover:bg-blue-700 transition duration-300 shadow-xl transform hover:scale-[1.01] focus:ring-4 focus:ring-blue-300">
+                    Save Report
+                </button>
+                <p class="text-sm text-gray-500 mt-2">Click on any class row above to edit its metrics.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Class Edit Modal -->
+    <div id="edit-modal" class="modal-backdrop hidden">
+        <div class="modal-content">
+            <div class="p-6">
+                <div class="flex justify-between items-center border-b pb-3 mb-4">
+                    <h2 id="modal-class-title" class="text-2xl font-bold text-gray-800">Edit Class</h2>
+                    <button onclick="closeEditModal()" class="text-gray-500 hover:text-gray-800 transition">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+
+                <form onsubmit="saveModalChanges(event)" class="space-y-4">
+                    
+                    <div class="space-y-4">
+                        <div class="flex flex-col">
+                            <label for="modal-input-totalStudents" class="text-sm font-medium text-gray-700 mb-1">Total Students</label>
+                            <input type="number" id="modal-input-totalStudents" class="input-field" value="0" min="0" required>
+                        </div>
+                        <div class="flex flex-col">
+                            <label for="modal-input-presentToday" class="text-sm font-medium text-gray-700 mb-1">Present Today</label>
+                            <input type="number" id="modal-input-presentToday" class="input-field" value="0" min="0" required>
+                        </div>
+                        <div class="flex flex-col">
+                            <label for="modal-input-progressReportBrought" class="text-sm font-medium text-gray-700 mb-1">Progress Report Brought</label>
+                            <input type="number" id="modal-input-progressReportBrought" class="input-field" value="0" min="0" required>
+                        </div>
+                        <div class="flex flex-col">
+                            <label for="modal-input-progressReportSigned" class="text-sm font-medium text-gray-700 mb-1">Progress Report Signed</label>
+                            <input type="number" id="modal-input-progressReportSigned" class="input-field" value="0" min="0" required>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end pt-4 space-x-3">
+                        <button type="button" onclick="closeEditModal()" class="px-5 py-2 bg-gray-300 text-gray-800 font-medium rounded-lg hover:bg-gray-400 transition">
+                            Cancel
+                        </button>
+                        <button type="submit" class="px-5 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition shadow-md">
+                            Apply Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
