@@ -24,14 +24,10 @@
         }
 
         /* Utility classes for inputs and containers */
-        .card {
-            /* Standard card style for the clickable class tiles */
-            @apply bg-white p-2 rounded-xl shadow-md transition duration-150 ease-in-out border border-gray-100;
-        }
         
-        /* Ultra-small font size utility for critical data */
+        /* Ultra-small font size utility (text-[10px] equivalent) */
         .text-2xs {
-            font-size: 0.65rem; /* ~10.4px, smaller than text-xs */
+            font-size: 0.65rem; /* ~10.4px (Used for high-density labels) */
         }
 
         /* Custom spinner animation */
@@ -50,7 +46,7 @@
     <header class="flex-shrink-0 bg-white shadow-lg p-3 border-b border-gray-200">
         <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center">
             <h1 class="text-xl font-extrabold text-indigo-700 mb-2 sm:mb-0">
-                <span class="mr-1">📚</span> Class Tracker
+                <span class="mr-1">📚</span> High-Density Class Tracker
             </h1>
             
             <!-- Date Display and User ID -->
@@ -71,23 +67,20 @@
     <!-- Main Content Area -->
     <main id="main-content-area" class="flex-grow overflow-hidden relative max-w-7xl mx-auto w-full min-h-0 p-2 flex flex-col">
         
-        <!-- Loading/Initial Message (Persists outside the scores-view container) -->
+        <!-- Loading/Initial Message -->
         <p id="initial-message" class="flex-shrink-0 text-center text-xs text-gray-500 italic mt-3 mb-4">Loading class data and authenticating...</p>
         
         <!-- Overall Scores View (The main, persistent grid view) -->
-        <div id="scores-view" class="flex-grow overflow-y-auto space-y-4 pb-4 min-h-0">
-            <!-- Rendered content (Girls Section & Boys Section) goes here -->
+        <div id="scores-view" class="flex-grow overflow-y-auto space-y-3 pb-2 min-h-0">
+            <!-- Class sections will be rendered here -->
         </div>
 
         <!-- MODAL for Daily Report Entry (New) -->
         <div id="report-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-80 z-40 flex items-center justify-center p-4" onclick="closeModal()">
             <div class="bg-white p-4 rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
-                <!-- The Report Form will be rendered into this container -->
                 <div id="details-panel-content">
                     <p class="text-center text-gray-500 italic py-10">Select a class to load the report entry form.</p>
                 </div>
-
-                <!-- Modal Footer with Save/View Status buttons -->
                 <div id="modal-footer" class="mt-4 flex justify-center">
                     <!-- Content will be dynamically inserted here -->
                 </div>
@@ -126,10 +119,9 @@
             setLogLevel
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- FIREBASE CONFIGURATION (CRITICAL: THIS SECTION IS NOW CONFIGURED) ---
-        // These values have been replaced with your provided Firebase project settings.
+        // --- FIREBASE CONFIGURATION (CRITICAL: Replace with your actual config) ---
         const MY_FIREBASE_CONFIG = {
-            apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJpMJihQ", 
+            apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJzMJihQ", // Placeholder - Canvas replaces this
             authDomain: "apps-e1163.firebaseapp.com",
             projectId: "apps-e1163",
             storageBucket: "apps-e1163.firebasestorage.app",
@@ -137,14 +129,8 @@
             appId: "1:855206153422:web:2a1366b2e7825304c3d49f" 
         };
         
-        // This is used for Firestore pathing.
         const appId = typeof __app_id !== 'undefined' ? __app_id : MY_FIREBASE_CONFIG.projectId; 
-        
-        // Use the Canvas config if available, otherwise use your hardcoded config.
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : MY_FIREBASE_CONFIG;
-        
-        // In a real hosting environment, we default to null for the custom token, 
-        // which triggers signInAnonymously().
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
         // --- END FIREBASE CONFIGURATION ---
 
@@ -154,12 +140,11 @@
         let app, db, auth;
         let userId = null;
         let isAuthReady = false;
-        let currentReports = {}; // State for the SELECTED DAY's report entries
-        let currentAccumulatedScores = {}; // State for accumulated scores (all classes)
-        let selectedClassId = null; // Currently selected class in the detail view
+        let currentReports = {}; // Daily report entries for the SELECTED DAY
+        let currentAccumulatedScores = {}; // Accumulated scores (all classes)
+        let selectedClassId = null; 
         let isSaving = false;
         
-        // New State Variables for Date Selection
         const getTodayDateId = () => {
             const now = new Date();
             const year = now.getFullYear();
@@ -170,32 +155,26 @@
         const todayDateId = getTodayDateId();
         let selectedDateId = todayDateId;
 
-        // UPDATED Class names to reflect the exact structure: 1A, 1B, 1C, 2, 3, 4
+        // Class definitions (used for fixed order and ID mapping)
         const CLASS_DEFINITIONS = [
-            // Level 1
             { id: 'Girls-1A', name: '1-A' },
             { id: 'Girls-1B', name: '1-B' },
             { id: 'Girls-1C', name: '1-C' },
+            { id: 'Girls-2', name: '2' },
+            { id: 'Girls-3', name: '3' },
+            { id: 'Girls-4', name: '4' },
             { id: 'Boys-1A', name: '1-A' },
             { id: 'Boys-1B', name: '1-B' },
             { id: 'Boys-1C', name: '1-C' },
-            // Level 2
-            { id: 'Girls-2', name: '2' },
             { id: 'Boys-2', name: '2' },
-            // Level 3
-            { id: 'Girls-3', name: '3' },
             { id: 'Boys-3', name: '3' },
-            // Level 4
-            { id: 'Girls-4', name: '4' },
             { id: 'Boys-4', name: '4' },
         ];
-
+        
         // --- UTILITY FUNCTIONS ---
 
         /**
          * Custom function to display a message to the user (replaces alert()).
-         * @param {string} title - The title of the message box.
-         * @param {string} text - The body content of the message.
          */
         window.showMessage = (title, text) => {
             const box = document.getElementById('message-box');
@@ -205,7 +184,7 @@
         };
 
         /**
-         * Closes the modal and resets the selected class ID.
+         * Closes the modal.
          */
         window.closeModal = () => {
             document.getElementById('report-modal').classList.add('hidden');
@@ -214,81 +193,79 @@
 
         /**
          * Converts YYYY-MM-DD date ID to a display format.
-         * FIX: Manually constructs the date to prevent timezone shifting from YYYY-MM-DD.
-         * @param {string} dateId - The date string in YYYY-MM-DD format.
-         * @returns {string} The formatted date string.
          */
         const getDisplayDate = (dateId) => {
-            // Split the YYYY-MM-DD string
             const parts = dateId.split('-');
-            // Construct the date using YYYY, MM (0-indexed), DD, forcing the local time interpretation
-            // Note: Month is 0-indexed in JS Date constructor (parts[1] - 1)
             const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); 
-
             const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-            // Add " (Today)" if the date is today
             const suffix = dateId === todayDateId ? ' (Today)' : '';
             return date.toLocaleDateString(undefined, options) + suffix;
         };
         
         /**
          * Handles the change event from the date selector input.
-         * @param {string} newDateId - The new date string in YYYY-MM-DD format.
          */
         window.handleDateChange = (newDateId) => {
             if (newDateId === selectedDateId) return;
-            
             selectedDateId = newDateId;
-            
-            // This is now safe because initial-message is a direct child of <main> and is not cleared.
             document.getElementById('initial-message').textContent = `Fetching reports for ${getDisplayDate(selectedDateId)}...`;
             document.getElementById('initial-message').classList.remove('hidden');
-            
-            // Re-run listeners for the new date's daily report data
             setupFirestoreListeners();
-            // Re-render the class list immediately (it will show old accumulated data, but new daily data)
             renderClassList();
         };
 
         /**
          * Calculates the Daily Class Score (DCS) out of 100 based on number of students.
-         * @param {object} report - The daily report object for a class.
-         * @returns {number} The calculated Daily Class Score (0-100).
          */
         const calculateDailyScore = (report) => {
             const { totalStudents, presentToday, progressReportBrought, progressReportSigned } = report;
-
-            if (totalStudents <= 0) return 0; // Avoid division by zero
-
-            // 1. Attendance Ratio (Max 50 points)
-            const attendanceRatio = Math.min(presentToday, totalStudents) / totalStudents;
-            const attendanceScore = 50 * attendanceRatio; 
-
-            // 2. Progress Report Brought (Max 25 points)
-            const broughtRatio = Math.min(progressReportBrought, totalStudents) / totalStudents;
-            const broughtScore = 25 * broughtRatio; 
-
-            // 3. Progress Report Signed (Max 25 points)
-            const signedRatio = Math.min(progressReportSigned, totalStudents) / totalStudents;
-            const signedScore = 25 * signedRatio; 
+            if (totalStudents <= 0) return 0; 
             
-            // Final Score (rounded to 2 decimal places)
-            const dcs = attendanceScore + broughtScore + signedScore;
-            return Math.round(dcs * 100) / 100;
+            // Attendance (50%) + Report Brought (25%) + Report Signed (25%)
+            const attendanceScore = 50 * (Math.min(presentToday, totalStudents) / totalStudents);
+            const broughtScore = 25 * (Math.min(progressReportBrought, totalStudents) / totalStudents);
+            const signedScore = 25 * (Math.min(progressReportSigned, totalStudents) / totalStudents);
+            
+            return Math.round((attendanceScore + broughtScore + signedScore) * 100) / 100;
         };
+        
+        /**
+         * Determines the color coding for the card border based on the CUMULATIVE average score.
+         * The card look must remain fixed.
+         */
+        const getPerformanceBorder = (cumulativeAvg, hasData) => {
+            if (!hasData || cumulativeAvg === null) return 'border-gray-300';
+            if (cumulativeAvg >= 80) return 'border-green-500';
+            if (cumulativeAvg >= 50) return 'border-yellow-500';
+            return 'border-red-500';
+        };
+
+        /**
+         * Determines the performance label and associated Tailwind classes based on the CUMULATIVE average score.
+         * The card look must remain fixed.
+         */
+        const getPerformanceStatus = (cumulativeAvg, hasData) => {
+            if (!hasData || cumulativeAvg === null) {
+                return { text: 'No Data', bg: 'bg-gray-100', text_color: 'text-gray-500', bar_color: 'bg-gray-400', score_color: 'text-gray-500' };
+            }
+            if (cumulativeAvg >= 80) {
+                return { text: 'Excellent', bg: 'bg-green-100', text_color: 'text-green-700', bar_color: 'bg-green-500', score_color: 'text-green-700' };
+            }
+            if (cumulativeAvg >= 50) {
+                return { text: 'Good', bg: 'bg-yellow-100', text_color: 'text-yellow-700', bar_color: 'bg-yellow-500', score_color: 'text-yellow-700' };
+            }
+            return { text: 'Poor', bg: 'bg-red-100', text_color: 'text-red-700', bar_color: 'bg-red-500', score_color: 'text-red-700' };
+        };
+
 
         // --- FIREBASE AND AUTHENTICATION ---
 
-        /**
-         * Initializes Firebase app, Auth, and Firestore.
-         */
         const initializeFirebase = () => {
             try {
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
                 
-                // 1. Listen for Auth State Changes
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
@@ -296,18 +273,13 @@
                         document.getElementById('user-id-display').textContent = `ID: ${userId}`;
                         document.getElementById('initial-message').textContent = `Fetching reports for ${getDisplayDate(selectedDateId)}...`;
                         isAuthReady = true;
-                        
-                        // Start real-time listeners once authenticated
                         setupFirestoreListeners();
                         
                     } else {
-                        // 2. If not authenticated, try to sign in
                         if (initialAuthToken) {
                             await signInWithCustomToken(auth, initialAuthToken);
                         } else {
-                            // Fallback to anonymous sign-in if no custom token is available
                             await signInAnonymously(auth);
-                            // The onAuthStateChanged listener will fire again with the new anonymous user
                         }
                     }
                 });
@@ -320,32 +292,20 @@
 
         // --- FIRESTORE LISTENERS ---
 
-        /**
-         * Sets up real-time listeners for Daily Reports (based on selectedDateId) and Accumulated Scores (always today's view).
-         */
         const setupFirestoreListeners = () => {
             if (!isAuthReady) return;
 
-            // 1. Listener for the SELECTED DATE's Daily Reports (Source of truth for report entries)
-            // This is the only listener that changes based on selectedDateId
+            // 1. Listener for the SELECTED DATE's Daily Reports (Changes with date selector)
             const dailyReportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', selectedDateId);
             
-            // Unsubscribe from previous listener before setting up a new one
             if (window.dailyReportUnsubscribe) {
                 window.dailyReportUnsubscribe();
             }
 
             window.dailyReportUnsubscribe = onSnapshot(dailyReportDocRef, (docSnapshot) => {
-                if (docSnapshot.exists()) {
-                    currentReports = docSnapshot.data();
-                    console.log(`Daily Reports updated for ${selectedDateId}:`, currentReports);
-                } else {
-                    currentReports = {}; // Document doesn't exist yet for this date
-                    console.log(`Daily report document not found for ${selectedDateId}. Starting fresh.`);
-                }
+                currentReports = docSnapshot.exists() ? docSnapshot.data() : {};
+                console.log(`Daily Reports updated for ${selectedDateId}:`, currentReports);
                 renderClassList();
-                
-                // If a class is open in the modal, re-render the content to sync input values
                 if (selectedClassId && document.getElementById('report-modal').classList.contains('hidden') === false) {
                     renderModalContent(selectedClassId);
                 }
@@ -355,8 +315,7 @@
             });
 
 
-            // 2. Listener for Accumulated Scores (Source of truth for overall ranking - ALWAYS uses the latest data)
-            // This listener does not need to change when the date selector changes.
+            // 2. Listener for Accumulated Scores (Always uses the latest data for overall ranking)
             if (!window.accumulatedScoresUnsubscribe) {
                 const scoresCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'accumulated_class_scores');
                 
@@ -367,7 +326,7 @@
                     });
                     currentAccumulatedScores = scores;
                     console.log("Accumulated Scores updated:", currentAccumulatedScores);
-                    renderClassList(); // Re-render to show updated averages
+                    renderClassList();
                 }, (error) => {
                     console.error("Error fetching accumulated scores:", error);
                 });
@@ -377,50 +336,53 @@
         // --- RENDERING FUNCTIONS (UI/UX) ---
 
         /**
-         * Renders the overall class list with Daily and Accumulated Scores using a responsive grid of tiles.
+         * Renders the overall class list with Daily and Accumulated Scores using the high-density grid.
          */
         const renderClassList = () => {
             const container = document.getElementById('scores-view');
             container.innerHTML = '';
             
-            // Hide the initial message once data starts coming in or is being rendered
             const initialMessage = document.getElementById('initial-message');
             if (initialMessage) {
                 initialMessage.classList.add('hidden');
             }
             
             const allClasses = CLASS_DEFINITIONS.map(classDef => {
-                // Use currentReports (which holds data for selectedDateId)
                 const report = currentReports[classDef.id] || {}; 
-                // Always use the latest Accumulated Score for the ranking view
                 const accumulated = currentAccumulatedScores[classDef.id] || { totalScore: 0, daysCount: 0 };
                 
-                // Calculate today's score 
-                const dailyScore = report.totalStudents !== undefined && report.totalStudents !== 0 
+                // 1. DAILY SCORE (Dynamic, changes with selectedDateId)
+                // dailyReportHasData checks if a report exists for the SELECTED DATE
+                const dailyReportHasData = report.totalStudents !== undefined && report.totalStudents !== 0 && Object.keys(report).length > 1;
+
+                const dailyScore = dailyReportHasData 
                     ? calculateDailyScore(report) 
                     : null; 
 
-                const averageScore = accumulated.daysCount > 0 
+                const dailyScoreText = dailyReportHasData ? `${dailyScore.toFixed(2)}` : 'N/A';
+                
+                // 2. CUMULATIVE AVERAGE (Static for card styling)
+                const isCumulativeData = accumulated.daysCount > 0;
+                const averageScore = isCumulativeData 
                     ? (accumulated.totalScore / accumulated.daysCount)
                     : 0;
 
-                const hasData = dailyScore !== null;
-                const dailyScoreText = hasData ? `${dailyScore.toFixed(2)}` : 'N/A';
-                // Color coding for today's score display
-                const dailyColor = hasData ? (dailyScore >= 80 ? 'bg-green-100 text-green-700' : dailyScore >= 50 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700') : 'bg-gray-100 text-gray-500';
+                const cumulativeAvgText = averageScore.toFixed(2);
+
+                // --- CRITICAL FIX: Use CUMULATIVE AVERAGE for Card Look ---
+                const borderColorClass = getPerformanceBorder(averageScore, isCumulativeData);
+                const performance = getPerformanceStatus(averageScore, isCumulativeData);
+                // -----------------------------------------------------------
                 
                 return {
                     ...classDef,
                     dailyScoreText,
-                    dailyColor,
-                    averageScore: averageScore.toFixed(2)
+                    averageScore: cumulativeAvgText, // Used for the big text display
+                    borderColorClass, // Used for the fixed border
+                    performance // Used for the fixed status pill
                 };
             });
 
-            // Sort by average score descending (still based on accumulated scores)
-            allClasses.sort((a, b) => parseFloat(b.averageScore) - parseFloat(a.averageScore));
-
-            // Split into sections after sorting
             const girlsClasses = allClasses.filter(c => c.id.startsWith('Girls'));
             const boysClasses = allClasses.filter(c => c.id.startsWith('Boys'));
             
@@ -428,49 +390,61 @@
             
             const createSection = (title, classes) => {
                 const section = document.createElement('div');
-                section.className = 'mb-6';
+                section.className = 'mb-3';
                 section.innerHTML = `
-                    <h2 class="text-lg font-extrabold text-gray-800 mb-3 border-b-2 border-indigo-200 pb-1 flex justify-between items-center">
+                    <h2 class="text-base font-extrabold text-gray-800 mb-2 border-b-2 border-indigo-200 pb-0.5 flex justify-between items-center">
                         <span>${title}</span>
-                        <span class="text-xs font-semibold text-gray-500 italic">Scores for ${selectedDateDisplay}</span>
+                        <span class="text-2xs font-semibold text-gray-500 italic">Reports for ${selectedDateDisplay}</span>
                     </h2>
-                    <!-- Responsive Grid: 2 columns on mobile, 3 on sm/md, 4 on lg+ -->
-                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                        ${classes.map(c => `
-                            <!-- Class Tile -->
-                            <div class="card p-3 flex flex-col justify-between items-start cursor-pointer hover:shadow-lg hover:border-indigo-500 transition-all duration-200 h-full transform hover:scale-[1.02] active:scale-[0.98]" 
-                                onclick="selectClass('${c.id}')">
-                                
-                                <!-- Class Name (e.g., '1-A' or '3') -->
-                                <p class="font-bold text-sm text-gray-800 mb-1 leading-tight">${c.name}</p>
-                                
-                                <div class="w-full mt-2">
-                                    <!-- Average Score (Based on cumulative data) -->
-                                    <div class="flex justify-between items-center text-xs font-medium text-gray-500">
-                                        <span>Avg (Cumulative):</span>
-                                        <span class="font-extrabold text-indigo-600">${c.averageScore}</span>
+                    <!-- LAYOUT CONSTRAINT: md:grid-cols-6 ensures 6-in-a-row on desktop/tablet -->
+                    <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                        ${classes.map(c => {
+                            // Calculate width for the progress bar based on daily score
+                            const dailyScoreValue = c.dailyScoreText === 'N/A' ? 0 : parseFloat(c.dailyScoreText);
+                            const dailyScoreWidth = dailyScoreValue > 0 ? Math.min(dailyScoreValue, 100).toFixed(0) : '0';
+                            
+                            // The daily score needs its own temporary color for the progress bar
+                            const dailyProgressBarColor = dailyScoreValue >= 80 ? 'bg-indigo-500' : dailyScoreValue >= 50 ? 'bg-orange-500' : 'bg-red-500';
+
+                            return `
+                                <!-- MANDATED CARD STRUCTURE AND HOVER EFFECT -->
+                                <div class="p-2 bg-white rounded-xl shadow-md transition transform duration-300 ease-in-out hover:scale-[1.03] hover:shadow-xl h-full cursor-pointer
+                                             border-l-4 ${c.borderColorClass}" 
+                                     onclick="selectClass('${c.id}')">
+                                    
+                                    <div class="flex justify-between items-start mb-1">
+                                        <!-- Class Name -->
+                                        <span class="font-extrabold text-sm text-gray-900 leading-tight">${c.name}</span>
+                                        <!-- Performance Label (FIXED based on CUMULATIVE SCORE) -->
+                                        <span class="text-2xs font-semibold px-1 py-0.5 rounded-full ${c.performance.bg} ${c.performance.text_color} whitespace-nowrap">
+                                            ${c.performance.text}
+                                        </span>
                                     </div>
-                                    <!-- Daily Score (Based on selected date's data) -->
-                                    <div class="flex justify-between items-center text-xs font-semibold mt-1 p-1 rounded-md ${c.dailyColor} shadow-inner">
-                                        <span>Daily Score:</span>
-                                        <span class="font-extrabold">${c.dailyScoreText}</span>
+                                    
+                                    <!-- Accumulated Average Score (FIXED TEXT) -->
+                                    <p class="text-2xs text-gray-500 leading-none">Avg (Cumul.):</p>
+                                    <p class="font-extrabold text-lg text-indigo-700 leading-snug">${c.averageScore}%</p>
+                                    
+                                    <!-- Daily Score (Progress Bar - DYNAMIC) -->
+                                    <p class="text-2xs text-gray-500 leading-none mt-2">Daily Score (${c.dailyScoreText}%):</p>
+                                    <!-- h-1 is used for the thin progress bar -->
+                                    <div class="h-1 bg-gray-200 rounded-full">
+                                        <div class="h-1 ${dailyProgressBarColor} rounded-full transition-all duration-300" style="width: ${dailyScoreWidth}%;"></div>
                                     </div>
                                 </div>
-                            </div>
-                        `).join('')}
+                            `;
+                        }).join('')}
                     </div>
                 `;
                 container.appendChild(section);
             };
 
-            createSection('Girls Section (Ranked by Average)', girlsClasses);
-            createSection('Boys Section (Ranked by Average)', boysClasses);
+            createSection('Girls Section', girlsClasses);
+            createSection('Boys Section', boysClasses);
         };
         
         /**
          * Updates only the Daily Class Score (DCS) text and color in the open modal.
-         * This prevents the entire form from re-rendering and losing input focus.
-         * @param {string} classId - The ID of the class currently in the modal.
          */
         const updateModalScoreDisplay = (classId) => {
             const report = currentReports[classId];
@@ -481,7 +455,6 @@
             
             if (scoreElement) {
                 scoreElement.textContent = `DCS: ${dailyScore.toFixed(2)} / 100`;
-                // Recalculate color classes (and remove old ones)
                 const colorClass = dailyScore >= 80 ? 'text-green-600' : dailyScore >= 50 ? 'text-yellow-600' : 'text-red-600';
                 scoreElement.className = `text-lg font-bold ${colorClass}`;
             }
@@ -490,18 +463,15 @@
 
         /**
          * Renders the detail entry panel structure for the selected class into the modal content area.
-         * @param {string} classId - The ID of the class to render.
          */
         const renderModalContent = (classId) => {
             const classDef = CLASS_DEFINITIONS.find(c => c.id === classId);
             if (!classDef) return;
 
-            // Determine if the report is editable (only today's date is editable)
             const isEditable = selectedDateId === todayDateId;
             const disabledAttr = isEditable ? '' : 'disabled';
             const statusColor = isEditable ? 'text-indigo-700' : 'text-gray-500';
 
-            // Ensure the state object is ready for the current class
             if (!currentReports[classId]) {
                 currentReports[classId] = { totalStudents: 0, presentToday: 0, progressReportBrought: 0, progressReportSigned: 0 };
             }
@@ -509,17 +479,15 @@
             selectedClassId = classId;
             const report = currentReports[classId];
 
-            // Use current state values for initial rendering of inputs
             const totalStudents = report.totalStudents || '';
             const presentToday = report.presentToday || '';
             const reportBrought = report.progressReportBrought || '';
             const reportSigned = report.progressReportSigned || '';
 
             document.getElementById('details-panel-content').innerHTML = `
-                <div class="card p-4 space-y-4 shadow-none border-none">
+                <div class="p-4 space-y-4 shadow-none border-none">
                     <div class="flex justify-between items-center border-b pb-2 mb-3">
                         <h2 class="text-2xl font-extrabold ${statusColor}">Class ${classDef.name}</h2>
-                        <!-- Use ID here for real-time score updates without re-rendering -->
                         <div id="daily-class-score" class="text-lg font-bold text-gray-400">
                             Loading...
                         </div>
@@ -529,19 +497,13 @@
                         ${isEditable ? 'EDIT MODE: Data entry for today.' : `VIEW MODE: Showing data for ${getDisplayDate(selectedDateId)}`}
                     </p>
 
-                    <!-- Form Grid -->
                     <div class="space-y-4">
-
-                        <!-- Total Students & Present Today -->
                         <div class="grid grid-cols-2 gap-4">
-                            <!-- Total Students -->
                             <div>
                                 <label for="totalStudents" class="block text-xs font-medium text-gray-700 mb-1">Total Students in Class</label>
                                 <input type="number" id="totalStudents" value="${totalStudents}" oninput="updateReportEntry('${classId}', 'totalStudents', this.value)"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-lg ${disabledAttr ? 'bg-gray-100' : ''}" placeholder="0" min="0" ${disabledAttr}>
                             </div>
-
-                            <!-- Present Today -->
                             <div>
                                 <label for="presentToday" class="block text-xs font-medium text-gray-700 mb-1">Students Present Today</label>
                                 <input type="number" id="presentToday" value="${presentToday}" oninput="updateReportEntry('${classId}', 'presentToday', this.value)"
@@ -549,17 +511,12 @@
                             </div>
                         </div>
 
-                        <!-- Progress Report Status (Number inputs for counts) -->
                         <div class="space-y-3 pt-2 border-t border-dashed">
-                            
-                            <!-- Report Brought (Number Input) -->
                             <div>
                                 <label for="reportBrought" class="block text-xs font-medium text-gray-700 mb-1">Students Who Brought Progress Report</label>
                                 <input type="number" id="reportBrought" value="${reportBrought}" oninput="updateReportEntry('${classId}', 'progressReportBrought', this.value)"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-lg ${disabledAttr ? 'bg-gray-100' : ''}" placeholder="0" min="0" ${disabledAttr}>
                             </div>
-
-                            <!-- Report Signed (Number Input) -->
                             <div>
                                 <label for="reportSigned" class="block text-xs font-medium text-gray-700 mb-1">Students with Signed Progress Report</label>
                                 <input type="number" id="reportSigned" value="${reportSigned}" oninput="updateReportEntry('${classId}', 'progressReportSigned', this.value)"
@@ -570,10 +527,8 @@
                 </div>
             `;
             
-            // Now update the score display immediately after rendering the structure
             updateModalScoreDisplay(classId);
 
-            // Dynamically set the footer content based on editability
             const modalFooter = document.getElementById('modal-footer');
             if (isEditable) {
                 modalFooter.innerHTML = `
@@ -596,12 +551,10 @@
 
         /**
          * Selects a class for detail entry and shows the modal.
-         * @param {string} classId - The ID of the class selected.
          */
         window.selectClass = (classId) => {
             selectedClassId = classId;
             renderModalContent(classId);
-            // Show the modal 
             document.getElementById('report-modal').classList.remove('hidden');
         };
 
@@ -609,101 +562,64 @@
 
         /**
          * Updates the local state object for the selected class report and performs data integrity checks.
-         * @param {string} classId - The class ID.
-         * @param {string} key - The field key to update (e.g., 'presentToday').
-         * @param {string | number} value - The new value (expected string from input).
          */
         window.updateReportEntry = (classId, key, value) => {
-            // Safety check for editing past dates (shouldn't happen with disabled inputs, but good practice)
-            if (selectedDateId !== todayDateId) {
-                console.warn("Attempted to edit non-today report.");
-                return;
-            }
+            if (selectedDateId !== todayDateId) return;
 
             let numValue = parseInt(value, 10);
-
-            // Ensure it's a valid non-negative number, default to 0 if invalid
-            if (isNaN(numValue) || numValue < 0) {
-                numValue = 0;
-            }
+            if (isNaN(numValue) || numValue < 0) numValue = 0;
             
-            // Ensure the class report object exists in the currentReports state
             if (!currentReports[classId]) {
-                currentReports[classId] = {
-                    totalStudents: 0,
-                    presentToday: 0,
-                    progressReportBrought: 0,
-                    progressReportSigned: 0,
-                };
+                currentReports[classId] = { totalStudents: 0, presentToday: 0, progressReportBrought: 0, progressReportSigned: 0 };
             }
 
-            // 1. Update the state with the raw input value
             currentReports[classId][key] = numValue;
 
             const totalStudents = currentReports[classId].totalStudents || 0;
-
-            // 2. Data Integrity Check: Cap dependent fields if they exceed totalStudents
             const dependentKeys = ['presentToday', 'progressReportBrought', 'progressReportSigned'];
             
             if (key === 'totalStudents') {
-                // If Total Students is changed, check and cap ALL dependent fields
                 dependentKeys.forEach(depKey => {
                     const depValue = currentReports[classId][depKey] || 0;
                     if (depValue > totalStudents) {
                         currentReports[classId][depKey] = totalStudents;
-                        
-                        // Visually update the dependent input fields in the open modal
                         let inputId = null;
                         if (depKey === 'presentToday') inputId = 'presentToday';
                         else if (depKey === 'progressReportBrought') inputId = 'reportBrought';
                         else if (depKey === 'progressReportSigned') inputId = 'reportSigned';
                         
                         const inputElement = document.getElementById(inputId);
-                        if (inputElement) {
-                            inputElement.value = totalStudents;
-                        }
+                        if (inputElement) inputElement.value = totalStudents;
                     }
                 });
             } else if (dependentKeys.includes(key) && numValue > totalStudents) {
-                // If a dependent field is changed and exceeds totalStudents, cap it
-                currentReports[classId][key] = totalStudents; // Update state with capped value
+                currentReports[classId][key] = totalStudents; 
                 
-                // Visually update the current input field
                 let inputId = null;
                 if (key === 'presentToday') inputId = 'presentToday';
                 else if (key === 'progressReportBrought') inputId = 'reportBrought';
                 else if (key === 'progressReportSigned') inputId = 'reportSigned';
 
                 const inputElement = document.getElementById(inputId);
-                if (inputElement) {
-                    inputElement.value = totalStudents;
-                }
+                if (inputElement) inputElement.value = totalStudents;
             }
             
-            // FIX: Only update the score display, do NOT re-render the whole panel
             updateModalScoreDisplay(classId);
-            
-            // Enable save button
             document.getElementById('modal-save-button').disabled = false;
         };
 
         /**
-         * Executes the save operation for a single class: writes the daily report and updates accumulated score via a transaction.
+         * Executes the save operation for a single class.
          */
         window.saveClassReport = async () => {
-            // CRITICAL: Check if the currently selected date is today before saving
             if (selectedDateId !== todayDateId) {
                 showMessage('Access Denied', 'You can only save or modify reports for the current date.');
                 return;
             }
-
-            // Retrieve classId from the module-scoped global variable
             const classId = selectedClassId;
-            
             if (isSaving || !isAuthReady || !classId) return;
 
             isSaving = true;
-            
             const saveButton = document.getElementById('modal-save-button');
             const buttonText = document.getElementById('modal-save-button-text');
             const spinner = document.getElementById('modal-save-spinner');
@@ -723,20 +639,14 @@
             }
 
             try {
-                // 1. Write the daily report entry for this single class (uses todayDateId)
+                // 1. Write the daily report entry
                 const dailyReportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', todayDateId);
-                const updatePayload = {
-                    [classId]: {
-                        ...report,
-                        lastUpdated: serverTimestamp()
-                    }
-                };
+                const updatePayload = { [classId]: { ...report, lastUpdated: serverTimestamp() } };
                 await setDoc(dailyReportDocRef, updatePayload, { merge: true });
 
                 // 2. Update Accumulated Score using a Transaction
                 const newDailyScore = calculateDailyScore(report);
                 const accumulatedDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'accumulated_class_scores', classId);
-                
                 let cumulativeUpdateSuccessful = false;
 
                 await runTransaction(db, async (transaction) => {
@@ -753,13 +663,11 @@
                         lastReportDate = data.lastReportDate || '';
                     }
                     
-                    // We only update the cumulative score if the report date is NOT today,
-                    // OR if the document doesn't exist yet. This prevents double counting.
                     if (lastReportDate !== todayDateId) {
                         totalScore += newDailyScore;
                         daysCount += 1;
                         lastReportDate = todayDateId;
-                        cumulativeUpdateSuccessful = true; // Mark that we did an actual cumulative update
+                        cumulativeUpdateSuccessful = true;
 
                         transaction.set(accumulatedDocRef, {
                             classId: classId,
@@ -777,11 +685,7 @@
                     : `Report for ${classId} saved successfully. Cumulative score was already counted for today.`;
 
                 showMessage('Success!', message);
-                
-                // Re-render the class list in the background
                 renderClassList();
-                
-                // Close the modal upon successful save, as requested.
                 closeModal();
 
             } catch (error) {
@@ -792,17 +696,12 @@
                 isSaving = false;
                 buttonText.textContent = 'Save and Close Report';
                 spinner.classList.add('hidden');
-                // The button remains disabled until a new change is made in the input fields
             }
         };
 
         // --- INITIALIZATION ---
         
-        /**
-         * Runs on window load to set up the app.
-         */
         window.onload = () => {
-            // Set the initial value of the date selector to today's date
             document.getElementById('date-selector').value = todayDateId;
             initializeFirebase();
         };
@@ -812,7 +711,6 @@
             const idText = document.getElementById('user-id-display').textContent;
             const id = idText.replace('ID: ', '');
             try {
-                // Fallback for document.execCommand('copy')
                 const tempInput = document.createElement('textarea');
                 tempInput.value = id;
                 document.body.appendChild(tempInput);
