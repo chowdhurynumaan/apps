@@ -131,7 +131,7 @@
         // --- FIREBASE CONFIGURATION (CRITICAL: Using user-provided config as base) ---
         
         const USER_PROVIDED_FIREBASE_CONFIG = {
-            // FINAL CRITICAL FIX: Using the exact API key provided in the user's latest console dump (ending in ...BuLJpMJihQ)
+            // API key from the user's latest console output
             apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJpMJihQ", 
             authDomain: "apps-e1163.firebaseapp.com",
             projectId: "apps-e1163",
@@ -245,7 +245,12 @@
          * Calculates the Daily Class Score (DCS) out of 100 based on number of students.
          */
         const calculateDailyScore = (report) => {
-            const { totalStudents, presentToday, progressReportBrought, progressReportSigned } = report;
+            // CRITICAL DEFENSE: Use 0 if a key is missing from the report object
+            const totalStudents = report.totalStudents || 0;
+            const presentToday = report.presentToday || 0;
+            const progressReportBrought = report.progressReportBrought || 0;
+            const progressReportSigned = report.progressReportSigned || 0;
+
             if (totalStudents <= 0) return 0; 
             
             // Attendance (50%) + Report Brought (25%) + Report Signed (25%)
@@ -375,6 +380,8 @@
             }
 
             window.dailyReportUnsubscribe = onSnapshot(dailyReportDocRef, (docSnapshot) => {
+                // IMPORTANT: The document should only contain class entries. 
+                // We trust the security rules to ensure only valid data is present.
                 currentReports = docSnapshot.exists() ? docSnapshot.data() : {};
                 console.log(`Daily Reports updated for ${selectedDateId}:`, currentReports);
                 renderClassList(); // Re-render when daily report data updates
@@ -424,8 +431,15 @@
             
             const allClasses = CLASS_DEFINITIONS.map(classDef => {
                 const report = currentReports[classDef.id] || {}; 
-                // CRITICAL CHANGE: added lastScoreContribution to the default object
-                const accumulated = currentAccumulatedScores[classDef.id] || { totalScore: 0, daysCount: 0, lastScoreContribution: 0 }; 
+                const rawAccumulated = currentAccumulatedScores[classDef.id] || {};
+                
+                // FIX: Defensively ensure all numeric fields are present, defaulting to 0.
+                const accumulated = {
+                    totalScore: rawAccumulated.totalScore || 0,
+                    daysCount: rawAccumulated.daysCount || 0,
+                    lastScoreContribution: rawAccumulated.lastScoreContribution || 0,
+                    lastReportDate: rawAccumulated.lastReportDate || ''
+                };
                 
                 // 1. DAILY SCORE (Dynamic, changes with selectedDateId)
                 const dailyReportHasData = report.totalStudents !== undefined && report.totalStudents !== 0 && Object.keys(report).length > 1;
@@ -436,20 +450,21 @@
 
                 const dailyScoreText = dailyReportHasData ? `${dailyScore.toFixed(2)}` : 'N/A';
                 
-                // 2. CUMULATIVE AVERAGE (Static for card styling)
+                // 2. CUMULATIVE AVERAGE
+                // Since totalScore and daysCount are now guaranteed to be numbers (0 or from DB), this is safe.
                 const isCumulativeData = accumulated.daysCount > 0;
                 const averageScore = isCumulativeData 
                     ? (accumulated.totalScore / accumulated.daysCount)
                     : 0;
 
-                const cumulativeAvgText = averageScore.toFixed(2);
+                const cumulativeAvgText = averageScore.toFixed(2); // CRITICAL: This is now called on a guaranteed number (0 or calculated float)
 
                 // Add a detailed title for inspection (Includes new field)
                 const cumulativeTitle = isCumulativeData 
                     ? `Cumulative Breakdown:\nTotal Points: ${accumulated.totalScore.toFixed(2)}\nTotal Days: ${accumulated.daysCount}\nLast Score Added: ${accumulated.lastScoreContribution.toFixed(2)}\nLast Report Date: ${accumulated.lastReportDate || 'Unknown'}`
                     : `No previous reports recorded.`;
 
-                // --- CRITICAL FIX: Use CUMULATIVE AVERAGE for Card Look ---
+                // --- CRITICAL CHECK: Use CUMULATIVE AVERAGE for Card Look ---
                 const borderColorClass = getPerformanceBorder(averageScore, isCumulativeData);
                 const performance = getPerformanceStatus(averageScore, isCumulativeData);
                 // -----------------------------------------------------------
@@ -567,10 +582,11 @@
             selectedClassId = classId;
             const report = currentReports[classId];
 
-            const totalStudents = report.totalStudents || '';
-            const presentToday = report.presentToday || '';
-            const reportBrought = report.progressReportBrought || '';
-            const reportSigned = report.progressReportSigned || '';
+            // CRITICAL DEFENSE: Use 0 if the field is missing from the report object
+            const totalStudents = report.totalStudents || 0;
+            const presentToday = report.presentToday || 0;
+            const reportBrought = report.progressReportBrought || 0;
+            const reportSigned = report.progressReportSigned || 0;
 
             document.getElementById('details-panel-content').innerHTML = `
                 <div class="p-4 space-y-4 shadow-none border-none">
@@ -745,27 +761,20 @@
                 await runTransaction(db, async (transaction) => {
                     const accumulatedDoc = await transaction.get(accumulatedDocRef);
                     
-                    let totalScore = 0;
-                    let daysCount = 0;
-                    let lastReportDate = '';
-                    let lastScoreContribution = 0;
+                    // CRITICAL DEFENSE: Get data with defaults
+                    const data = accumulatedDoc.exists() ? accumulatedDoc.data() : {};
+                    let totalScore = data.totalScore || 0;
+                    let daysCount = data.daysCount || 0;
+                    let lastReportDate = data.lastReportDate || '';
+                    let lastScoreContribution = data.lastScoreContribution || 0;
                     let updateRequired = false;
 
-                    if (accumulatedDoc.exists()) {
-                        const data = accumulatedDoc.data();
-                        totalScore = data.totalScore || 0;
-                        daysCount = data.daysCount || 0;
-                        lastReportDate = data.lastReportDate || '';
-                        lastScoreContribution = data.lastScoreContribution || 0; 
-                        
-                        // *** CRITICAL PATCH FOR LEGACY DATA ***
-                        // If the document was created before the 'lastScoreContribution' field was added, 
-                        // and it's a same-day update, we must assume the existing totalScore is the value to subtract.
-                        if (lastReportDate === todayDateId && lastScoreContribution === 0 && totalScore > 0) {
-                            console.warn(`[LEGACY DATA FIX] Re-aligning lastScoreContribution from totalScore (${totalScore}) for same-day correction on ${classId}.`);
-                            lastScoreContribution = totalScore;
-                        }
+                    // *** CRITICAL PATCH FOR LEGACY DATA ***
+                    if (accumulatedDoc.exists() && lastReportDate === todayDateId && lastScoreContribution === 0 && totalScore > 0) {
+                        console.warn(`[LEGACY DATA FIX] Re-aligning lastScoreContribution from totalScore (${totalScore}) for same-day correction on ${classId}.`);
+                        lastScoreContribution = totalScore;
                     }
+                    // *** END LEGACY PATCH ***
                     
                     if (lastReportDate !== todayDateId) {
                         // CASE A: NEW DAY - Add new score and increment day count
@@ -822,6 +831,7 @@
                 
             } finally {
                 isSaving = false;
+                saveButton.disabled = false;
                 buttonText.textContent = 'Save and Close Report';
                 spinner.classList.add('hidden');
             }
