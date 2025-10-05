@@ -6,686 +6,826 @@
     <title>Daily Classroom Report Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght400;600;700&display=swap');
-        html { 
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        
+        /* Enforce full viewport height and prevent main page scrolling */
+        html, body { 
             height: 100%;
+            min-height: 100vh;
+            overflow: hidden; /* Prevent page-level scroll */
         }
+        
         body { 
             font-family: 'Inter', sans-serif; 
             background-color: #f4f7f9; 
-            min-height: 100%; 
             transition: background-color 0.3s;
-        }
-        /* Mobile-friendly table styling */
-        .data-cell {
-            @apply p-3 sm:p-4 text-sm text-gray-700 bg-white border-b border-gray-200 whitespace-normal;
-        }
-        .header-cell {
-            @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white bg-blue-600;
-        }
-        .input-field {
-            @apply w-full p-3 text-base text-gray-800 bg-gray-50 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition duration-150 ease-in-out;
-        }
-        /* Styling for the loading/message box */
-        #message-box {
-            @apply fixed bottom-5 right-5 p-3 rounded-lg shadow-xl font-medium z-50 transition-transform duration-300 ease-out transform translate-y-20;
-        }
-        .visible {
-            transform: translateY(0) !important;
+            display: flex;
+            flex-direction: column;
         }
 
-        /* Custom style for the date picker input */
-        #report-date-input {
-            @apply text-2xl font-semibold text-gray-800 bg-transparent border-none p-0 focus:ring-0;
-            cursor: pointer;
-            width: auto; 
+        /* Utility classes for inputs and containers */
+        .card {
+            /* Standard card style for the clickable class tiles */
+            @apply bg-white p-2 rounded-xl shadow-md transition duration-150 ease-in-out border border-gray-100;
+        }
+        
+        /* Ultra-small font size utility for critical data */
+        .text-2xs {
+            font-size: 0.65rem; /* ~10.4px, smaller than text-xs */
         }
 
-        /* --- DIALOG/MODAL STYLING FIX --- */
-        #edit-modal {
-            /* 1. Reset standard dialog styling */
-            border: none;
-            padding: 0;
-            margin: auto; /* Standard browser centering */
-            /* 2. Apply Tailwind/Custom styling */
-            @apply bg-white w-full max-w-lg mx-4 rounded-xl shadow-2xl;
-            max-height: 90vh; 
-            overflow-y: auto;
-            z-index: 60; /* Ensure it's above the environment/other elements */
+        /* Custom spinner animation */
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
-        /* Backdrop styling for the dialog element */
-        #edit-modal::backdrop {
-            @apply bg-gray-900 bg-opacity-75 backdrop-blur-sm;
+        .animate-spin-slow {
+          animation: spin 3s linear infinite;
         }
+        
     </style>
-    <!-- Firebase Imports and All Application Logic (now unified) -->
-    <script type="module">
-        console.log("APP SCRIPT STARTED"); 
-
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, collection, query, getDocs, getDoc, deleteDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // --- ENVIRONMENT & FALLBACK CONFIGURATION ---
-        const envAppId = typeof __app_id !== 'undefined' ? __app_id : null;
-        const envFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-        const envAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        const userFirebaseConfig = {
-            apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJpMJihQ",
-            authDomain: "apps-e1163.firebaseapp.com",
-            projectId: "apps-e1163",
-            storageBucket: "apps-e1163.firebasestorage.app",
-            messagingSenderId: "855206153422",
-            appId: "1:855206153422:web:2a1366b2e7825304c3d49f",
-            measurementId: "G-7YCKESJB8T"
-        };
-        
-        const appId = envAppId || userFirebaseConfig.projectId;
-        const firebaseConfig = envFirebaseConfig || userFirebaseConfig;
-        const initialAuthToken = envAuthToken;
-
-        // --- GLOBAL STATE ---
-        let db = null;
-        let auth = null;
-        let userId = null; // Still needed for authentication/session, but not for data pathing
-        let todayDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-        let currentReportDate = todayDate;
-        let currentReportData = {}; 
-        let currentModalClassId = null; 
-
-        // Constants 
-        const SECTIONS = ['Girls', 'Boys'];
-        const CLASS_NUMS = ['1A', '1B', '1C', '2', '3', '4'];
-        const CLASS_IDS = SECTIONS.flatMap(section => 
-            CLASS_NUMS.map(classNum => `${section}-${classNum}`)
-        );
-        const METRICS = ['totalStudents', 'presentToday', 'progressReportBrought', 'progressReportSigned'];
-        const METRIC_LABELS = {
-            totalStudents: 'Total Students',
-            presentToday: 'Present Today',
-            progressReportBrought: 'Progress Report Brought',
-            progressReportSigned: 'Progress Report Signed',
-        };
-        const COLLECTION_NAME = 'daily_attendance_reports';
-
-        // --- HARDCODED DEFAULT DATA FROM USER'S IMAGE ---
-        const DEFAULT_TODAY_DATA = {
-            'Girls-1A': { totalStudents: 11, presentToday: 11, progressReportBrought: 10, progressReportSigned: 10 },
-            'Girls-1B': { totalStudents: 14, presentToday: 11, progressReportBrought: 11, progressReportSigned: 10 },
-            'Girls-1C': { totalStudents: 16, presentToday: 15, progressReportBrought: 15, progressReportSigned: 10 },
-            'Girls-2':  { totalStudents: 20, presentToday: 14, progressReportBrought: 14, progressReportSigned: 7 },
-            'Girls-3':  { totalStudents: 21, presentToday: 17, progressReportBrought: 14, progressReportSigned: 14 },
-            'Girls-4':  { totalStudents: 14, presentToday: 12, progressReportBrought: 12, progressReportSigned: 8 },
-            'Boys-1A':  { totalStudents: 7, presentToday: 7, progressReportBrought: 5, progressReportSigned: 4 },
-            'Boys-1B':  { totalStudents: 7, presentToday: 5, progressReportBrought: 3, progressReportSigned: 3 },
-            'Boys-1C':  { totalStudents: 16, presentToday: 13, progressReportBrought: 12, progressReportSigned: 12 },
-            'Boys-2':   { totalStudents: 20, presentToday: 18, progressReportBrought: 18, progressReportSigned: 18 },
-            'Boys-3':   { totalStudents: 19, presentToday: 15, progressReportBrought: 13, progressReportSigned: 11 },
-            'Boys-4':   { totalStudents: 14, presentToday: 12, progressReportBrought: 11, progressReportSigned: 10 },
-        };
-        // -----------------------------------------------------------------------------------------------
-        
-        // Utility Functions
-        /**
-         * IMPORTANT: This path is now PUBLIC, meaning all users share the same data.
-         * The structure is /artifacts/{appId}/public/data/{COLLECTION_NAME}/{reportDate}
-         */
-        const getReportPath = (id = currentReportDate) => {
-            return `/artifacts/${appId}/public/data/${COLLECTION_NAME}/${id}`;
-        };
-
-        const showMessage = (text, type = 'success') => {
-            const box = document.getElementById('message-box');
-            box.textContent = text;
-            box.className = 'fixed bottom-5 right-5 p-3 rounded-lg shadow-xl font-medium z-50 transition-transform duration-300 ease-out transform visible';
-            
-            if (type === 'success') {
-                box.classList.add('bg-green-500', 'text-white');
-            } else if (type === 'error') {
-                box.classList.add('bg-red-500', 'text-white');
-            } else { // info
-                box.classList.add('bg-blue-500', 'text-white');
-            }
-
-            setTimeout(() => {
-                box.classList.remove('visible');
-                box.classList.add('translate-y-20');
-            }, 3000);
-        };
-
-        const getCurrentDateInput = () => document.getElementById('report-date-input');
-        const getSaveButton = () => document.getElementById('save-button');
-        const getDeleteButton = () => document.getElementById('delete-button');
-        const getModal = () => document.getElementById('edit-modal'); 
-        const getModalClassTitle = () => document.getElementById('modal-class-title');
-        const getModalInputs = (metric) => document.getElementById(`modal-input-${metric}`);
-        
-        // Helper to render all cells based on currentReportData state
-        const renderTable = () => {
-            CLASS_IDS.forEach(classId => {
-                const data = currentReportData[classId] || {}; 
-
-                METRICS.forEach(metric => {
-                    const spanId = `${classId}-${metric}-display`;
-                    const span = document.getElementById(spanId);
-                    const value = data[metric] ?? 0; 
-                    if (span) {
-                        span.textContent = value;
-                    }
-                });
-            });
-
-            getSaveButton().textContent = "Save Report";
-            getSaveButton().disabled = false;
-        }
-
-        // --- Core Application Logic ---
-        
-        const changeDate = (date) => {
-            loadReport(date);
-        };
-
-        const authenticateUser = async () => {
-            try {
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    // Sign in anonymously, allowing read/write access to public data.
-                    await signInAnonymously(auth); 
-                }
-                userId = auth.currentUser?.uid || crypto.randomUUID();
-                
-                showMessage('Authentication successful. Data is now shared publicly.', 'info');
-                
-                getCurrentDateInput().value = todayDate;
-                
-                await loadReport(todayDate);
-                await loadHistory();
-
-            } catch (error) {
-                console.error("Firebase Auth Error:", error);
-                showMessage('Authentication failed. Check console for details.', 'error');
-            }
-        };
-
-        const initFirebase = () => {
-            try {
-                if (!firebaseConfig) {
-                    throw new Error("Firebase config is missing.");
-                }
-                
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                setLogLevel('error');
-                
-                onAuthStateChanged(auth, (user) => {
-                    if (user) { /* user signed in */ }
-                });
-                
-                authenticateUser();
-
-            } catch (error) {
-                console.error("Firebase Initialization Error:", error);
-                showMessage(`Firebase Init Error: ${error.message}`, 'error');
-            }
-        };
-
-        const loadReport = async (date) => {
-            if (!db) return;
-
-            currentReportDate = date;
-            getCurrentDateInput().value = date;
-            
-            const dateLabel = document.getElementById('date-label');
-            dateLabel.textContent = date === todayDate ? 'Report Date (Today)' : 'Report Date';
-
-            date === todayDate ? getDeleteButton().classList.add('hidden') : getDeleteButton().classList.remove('hidden');
-
-            const emptyReport = CLASS_IDS.reduce((acc, classId) => {
-                acc[classId] = {
-                     totalStudents: 0,
-                     presentToday: 0,
-                     progressReportBrought: 0,
-                     progressReportSigned: 0,
-                };
-                return acc;
-            }, {});
-
-            currentReportData = { ...emptyReport };
-
-            showMessage(`Loading public report for ${date}...`, 'info');
-            
-            try {
-                // Use the new public path
-                const docRef = doc(db, getReportPath(date)); 
-                const docSnap = await getDoc(docRef);
-
-                if (docSnap.exists()) {
-                    const data = docSnap.data().classes;
-                    Object.keys(data).forEach(classId => {
-                         if(currentReportData[classId]) {
-                             currentReportData[classId] = data[classId];
-                         }
-                    });
-                    getSaveButton().textContent = "Update Report";
-                    showMessage(`Public report for ${date} loaded successfully.`, 'success');
-
-                } else {
-                    if (date === todayDate) {
-                         // Use the hardcoded defaults if no data for TODAY
-                         currentReportData = { ...DEFAULT_TODAY_DATA };
-                         showMessage(`No saved data for today. Pre-filling with default data.`, 'info');
-                    } else {
-                        showMessage(`No public report found for ${date}. Click a row to enter data.`, 'info');
-                    }
-                    getSaveButton().textContent = "Save Report";
-                }
-                
-                renderTable(); 
-
-            } catch (e) {
-                console.error("Error loading document: ", e);
-                getSaveButton().textContent = "Save Report";
-                showMessage("Failed to load report.", 'error');
-            }
-        };
-
-        const loadHistory = async () => {
-            if (!db) return;
-
-            const historyList = document.getElementById('history-list');
-            historyList.innerHTML = ''; 
-
-            try {
-                // Use the collection path for public data
-                const reportsRef = collection(db, `/artifacts/${appId}/public/data/${COLLECTION_NAME}`);
-                const q = query(reportsRef); 
-                const querySnapshot = await getDocs(q);
-                
-                const reports = [];
-                querySnapshot.forEach((docSnap) => {
-                    reports.push(docSnap.id);
-                });
-
-                reports.sort().reverse();
-                
-                const historyReports = reports.filter(date => date !== todayDate).slice(0, 7);
-                
-                historyReports.forEach((date) => {
-                    const li = document.createElement('li');
-                    li.className = 'cursor-pointer p-2 bg-gray-50 hover:bg-gray-200 rounded-md text-sm transition duration-150';
-                    li.textContent = date;
-                    li.onclick = () => changeDate(date); 
-                    historyList.appendChild(li);
-                });
-
-                if (historyList.children.length === 0) {
-                    historyList.innerHTML = '<p class="text-xs text-gray-500 italic">No previous reports found.</p>';
-                }
-
-            } catch (e) {
-                console.error("Error loading history: ", e);
-            }
-        };
-        
-        const saveData = async () => {
-            if (!db) {
-                showMessage('App not initialized. Check Firebase connection.', 'error');
-                return;
-            }
-
-            getSaveButton().disabled = true;
-            getSaveButton().textContent = "Saving...";
-
-            try {
-                // Use the new public path
-                const docRef = doc(db, getReportPath(currentReportDate));
-                
-                const classesToSave = {};
-                let totalRecords = 0;
-                
-                Object.keys(currentReportData).forEach(classId => {
-                    const data = currentReportData[classId];
-                    const hasData = METRICS.some(metric => (data[metric] ?? 0) > 0);
-                    if (hasData) {
-                        classesToSave[classId] = data;
-                        totalRecords++;
-                    }
-                });
-
-                const dataToSave = {
-                    date: currentReportDate,
-                    classes: classesToSave,
-                };
-
-                await setDoc(docRef, dataToSave);
-                
-                showMessage(`Public Report for ${currentReportDate} saved successfully! ${totalRecords} classes updated.`, 'success');
-                getSaveButton().textContent = "Update Report";
-                getSaveButton().disabled = false;
-
-                loadHistory();
-
-            } catch (e) {
-                console.error("Error adding document: ", e);
-                showMessage("Failed to save report.", 'error');
-                getSaveButton().textContent = "Error Saving";
-                getSaveButton().disabled = false;
-            }
-        };
-
-        // --- Modal Logic (Unchanged, as it deals with local data entry) ---
-
-        const openEditModal = (classId) => {
-            try {
-                currentModalClassId = classId;
-                const data = currentReportData[classId] || {}; 
-                
-                if (!classId || !classId.includes('-')) {
-                    throw new Error(`Invalid class ID format: ${classId}`);
-                }
-                const [section, classNum] = classId.split('-');
-
-                getModalClassTitle().textContent = `${section} Class ${classNum}`;
-
-                METRICS.forEach(metric => {
-                    const input = getModalInputs(metric);
-                    if (!input) {
-                        throw new Error(`Modal input element not found for metric: ${metric}`);
-                    }
-                    input.value = data[metric] ?? 0;
-                });
-                
-                getModal().showModal(); 
-                document.body.classList.add('overflow-hidden');
-
-            } catch (error) {
-                console.error("Error in openEditModal:", error);
-                showMessage(`Failed to open editor: ${error.message}. Check console for details.`, 'error');
-                getModal().close();
-                document.body.classList.remove('overflow-hidden');
-            }
-        };
-
-        const closeEditModal = () => {
-            getModal().close();
-            currentModalClassId = null;
-            document.body.classList.remove('overflow-hidden');
-        };
-
-        const saveModalChanges = (event) => {
-            event.preventDefault();
-            if (!currentModalClassId) return closeEditModal();
-
-            let isValid = true;
-            const classData = {};
-
-            METRICS.forEach(metric => {
-                const input = getModalInputs(metric);
-                const value = parseInt(input.value, 10);
-                
-                if (isNaN(value) || value < 0) {
-                    showMessage(`Invalid input for ${METRIC_LABELS[metric]}. Must be a non-negative number.`, 'error');
-                    input.focus();
-                    isValid = false;
-                    return; 
-                }
-                classData[metric] = value;
-            });
-            
-            if (!isValid) return;
-
-            // 1. Update the global state
-            currentReportData[currentModalClassId] = classData;
-
-            // 2. Re-render the table display
-            renderTable();
-
-            // 3. Close the modal
-            closeEditModal();
-            
-            // 4. Trigger the full save to Firestore
-            saveData();
-        };
-        
-        const deleteReport = async () => {
-             if (currentReportDate === todayDate) {
-                showMessage("Cannot delete today's report.", 'error');
-                return;
-            }
-
-            // Custom modal logic for confirmation (replacing window.confirm)
-            const confirmation = await new Promise(resolve => {
-                const modal = document.createElement('dialog');
-                modal.className = 'bg-white p-6 rounded-lg shadow-2xl w-80';
-                modal.innerHTML = `
-                    <p class="text-lg font-semibold mb-4">Confirm Deletion</p>
-                    <p class="mb-6">Are you sure you want to delete the public report for <strong class="font-mono">${currentReportDate}</strong>?</p>
-                    <div class="flex justify-end space-x-3">
-                        <button id="cancel-btn" class="px-4 py-2 bg-gray-300 rounded-md hover:bg-gray-400">Cancel</button>
-                        <button id="delete-confirm-btn" class="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600">Delete</button>
-                    </div>
-                `;
-                document.body.appendChild(modal);
-                modal.showModal();
-
-                document.getElementById('cancel-btn').onclick = () => {
-                    modal.close();
-                    document.body.removeChild(modal);
-                    resolve(false);
-                };
-                document.getElementById('delete-confirm-btn').onclick = async () => {
-                    modal.close();
-                    document.body.removeChild(modal);
-                    resolve(true);
-                };
-            });
-
-            if (!confirmation) return;
-            
-            try {
-                // Use the new public path
-                await deleteDoc(doc(db, getReportPath(currentReportDate))); 
-                showMessage(`Public report for ${currentReportDate} deleted.`, 'success');
-                
-                await changeDate(todayDate);
-                await loadHistory();
-            } catch (e) {
-                console.error("Error deleting document: ", e);
-                showMessage("Failed to delete report.", 'error');
-            }
-        }
-        
-        // --- DOM Structure Generation and Event Attachment ---
-        const setupTableDom = () => {
-            const tableBody = document.getElementById('report-table-body');
-            tableBody.innerHTML = ''; 
-
-            SECTIONS.forEach(section => {
-                const isGirls = section === 'Girls';
-                const headerRow = document.createElement('tr');
-                const headerBg = isGirls ? 'bg-pink-100' : 'bg-blue-100';
-                const headerText = isGirls ? 'text-pink-700' : 'text-blue-700';
-
-                headerRow.className = headerBg;
-                headerRow.innerHTML = `<td colspan="5" class="px-4 py-3 text-sm font-extrabold ${headerText} uppercase tracking-widest border-t-4 border-b-4 border-gray-300">${section} SECTION}</td>`;
-                tableBody.appendChild(headerRow);
-                
-                CLASS_NUMS.forEach(classNum => {
-                    const classId = `${section}-${classNum}`;
-                    const row = document.createElement('tr');
-                    
-                    row.setAttribute('data-class-id', classId); 
-                    row.className = 'hover:bg-blue-50 cursor-pointer transition duration-150 class-row-editable'; 
-                    
-                    // Class Name Cell
-                    row.innerHTML += `<td class="data-cell font-bold text-gray-800">${classNum}</td>`;
-
-                    // Metric Display Cells
-                    METRICS.forEach(metric => {
-                        row.innerHTML += `
-                            <td class="data-cell text-center">
-                                <span id="${classId}-${metric}-display" class="font-mono text-base font-semibold">0</span>
-                            </td>
-                        `;
-                    });
-                    tableBody.appendChild(row);
-                });
-            });
-        };
-
-        // --- Global Event Delegation Listener ---
-        document.addEventListener('click', (e) => {
-            let target = e.target;
-            
-            while (target && !target.classList.contains('class-row-editable') && target !== document.body) {
-                target = target.parentElement;
-            }
-
-            if (target && target.classList.contains('class-row-editable')) {
-                const classId = target.getAttribute('data-class-id');
-                if (classId) {
-                    openEditModal(classId);
-                } else {
-                    console.error("Clicked row is missing data-class-id attribute.");
-                }
-            }
-        });
-
-        // Expose functions to the global scope for HTML inline event handlers (like onchange)
-        window.saveData = saveData;
-        window.loadReport = loadReport;
-        window.deleteReport = deleteReport;
-        window.changeDate = changeDate;
-        window.openEditModal = openEditModal;
-        window.saveModalChanges = saveModalChanges;
-        window.closeEditModal = closeEditModal;
-        window.todayDate = todayDate;
-
-        // Setup the DOM structure when content is loaded
-        document.addEventListener('DOMContentLoaded', () => {
-            setupTableDom();
-        });
-
-        // Start the application after all resources are loaded
-        window.onload = initFirebase;
-
-    </script>
 </head>
-<body class="min-h-screen p-4 sm:p-8">
+<body class="flex flex-col h-full">
 
-    <div id="message-box" class="translate-y-20"></div>
-
-    <header class="mb-6 pb-4 border-b border-gray-300">
-        <h1 class="text-3xl font-bold text-gray-800">Daily Class Metrics</h1>
-        <p class="text-sm text-gray-500 mt-1">Shared Public Report for all users.</p>
+    <!-- Header Section -->
+    <header class="flex-shrink-0 bg-white shadow-lg p-3 border-b border-gray-200">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center">
+            <h1 class="text-xl font-extrabold text-indigo-700 mb-2 sm:mb-0">
+                <span class="mr-1">📚</span> Class Tracker
+            </h1>
+            
+            <!-- Date Display and User ID -->
+            <div class="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-3">
+                <!-- Date Input Field -->
+                <input type="date" id="date-selector" onchange="handleDateChange(this.value)"
+                       class="px-2 py-1 border border-indigo-300 rounded-lg text-sm font-semibold text-gray-700 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition duration-150">
+                
+                <!-- User ID -->
+                <div id="user-id-display" class="text-2xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full truncate max-w-[100px] sm:max-w-xs cursor-pointer" 
+                     title="User ID. Click to Copy">
+                     ID: ...
+                </div>
+            </div>
+        </div>
     </header>
 
-    <main class="grid grid-cols-1 lg:grid-cols-4 gap-6 max-w-full">
+    <!-- Main Content Area -->
+    <main id="main-content-area" class="flex-grow overflow-hidden relative max-w-7xl mx-auto w-full min-h-0 p-2 flex flex-col">
         
-        <!-- Report History Panel (Desktop: Col 1, Mobile: Full Width) -->
-        <aside class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg h-fit">
-            <h2 class="text-xl font-semibold mb-4 text-gray-700">Past Reports</h2>
-            <ul id="history-list" class="space-y-2">
-                <li class="text-gray-400 italic text-sm">Loading history...</li>
-            </ul>
-        </aside>
+        <!-- Loading/Initial Message (Persists outside the scores-view container) -->
+        <p id="initial-message" class="flex-shrink-0 text-center text-xs text-gray-500 italic mt-3 mb-4">Loading class data and authenticating...</p>
+        
+        <!-- Overall Scores View (The main, persistent grid view) -->
+        <div id="scores-view" class="flex-grow overflow-y-auto space-y-4 pb-4 min-h-0">
+            <!-- Rendered content (Girls Section & Boys Section) goes here -->
+        </div>
 
-        <!-- Main Report View (Desktop: Cols 2-4, Mobile: Full Width) -->
-        <div class="lg:col-span-3 bg-white p-4 sm:p-6 rounded-xl shadow-lg">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b pb-4">
-                
-                <!-- Date Picker Area -->
-                <div class="flex items-center space-x-2">
-                    <span id="date-label" class="text-xl sm:text-2xl font-semibold text-gray-800">Report Date</span>
-                    <input 
-                        type="date" 
-                        id="report-date-input" 
-                        class="text-xl sm:text-2xl font-semibold text-gray-800 bg-transparent border-none p-0" 
-                        onchange="changeDate(this.value)"
-                    />
+        <!-- MODAL for Daily Report Entry (New) -->
+        <div id="report-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-80 z-40 flex items-center justify-center p-4" onclick="closeModal()">
+            <div class="bg-white p-4 rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+                <!-- The Report Form will be rendered into this container -->
+                <div id="details-panel-content">
+                    <p class="text-center text-gray-500 italic py-10">Select a class to load the report entry form.</p>
                 </div>
-                
-                <div class="mt-4 sm:mt-0 flex space-x-2">
-                    <button id="delete-button" onclick="deleteReport()" class="hidden px-4 py-2 bg-red-500 text-white font-medium rounded-lg hover:bg-red-600 transition duration-150 shadow-md text-sm">
-                        Delete Report
-                    </button>
-                    <button onclick="changeDate(todayDate)" class="px-4 py-2 bg-gray-400 text-white font-medium rounded-lg hover:bg-gray-500 transition duration-150 shadow-md text-sm">
-                        Load Today
-                    </button>
+
+                <!-- Modal Footer with Save/View Status buttons -->
+                <div id="modal-footer" class="mt-4 flex justify-center">
+                    <!-- Content will be dynamically inserted here -->
                 </div>
             </div>
-
-            <!-- Report Table/Form -->
-            <div class="overflow-x-auto rounded-lg border border-gray-200">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="sticky top-0 z-10">
-                        <tr>
-                            <th class="header-cell rounded-tl-lg">Class</th>
-                            <th class="header-cell">Total Students</th>
-                            <th class="header-cell">Present Today</th>
-                            <th class="header-cell">Report Brought</th>
-                            <th class="header-cell rounded-tr-lg">Report Signed</th>
-                        </tr>
-                    </thead>
-                    <tbody id="report-table-body" class="divide-y divide-gray-200">
-                        <!-- Class rows generated by JavaScript -->
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="mt-6 text-center">
-                <button id="save-button" onclick="saveData()" class="px-8 py-3 bg-blue-600 text-white font-bold text-lg rounded-xl hover:bg-blue-700 transition duration-300 shadow-xl transform hover:scale-[1.01] focus:ring-4 focus:ring-blue-300">
-                    Save Report
+        </div>
+        
+        <!-- Message Box for Confirmation/Errors (Replaces alert()) -->
+        <div id="message-box" class="hidden fixed inset-0 bg-gray-900 bg-opacity-70 z-50 flex items-center justify-center p-4" onclick="this.classList.add('hidden')">
+            <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full" onclick="event.stopPropagation()">
+                <h3 id="message-title" class="text-xl font-bold mb-3 text-indigo-700"></h3>
+                <p id="message-text" class="text-gray-700 mb-4"></p>
+                <button onclick="document.getElementById('message-box').classList.add('hidden')" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 transition">
+                    Got It
                 </button>
-                <p class="text-sm text-gray-500 mt-2">Click on any class row above to edit its metrics.</p>
             </div>
         </div>
     </main>
 
-    <!-- Class Edit Modal -->
-    <dialog id="edit-modal">
-        <div class="p-6">
-            <div class="flex justify-between items-center border-b pb-3 mb-4">
-                <h2 id="modal-class-title" class="text-2xl font-bold text-gray-800">Edit Class</h2>
-                <button type="button" onclick="closeEditModal()" class="text-gray-500 hover:text-gray-800 transition">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
+    <!-- Firebase SDK Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            signInWithCustomToken, 
+            onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            setDoc, 
+            onSnapshot, 
+            collection, 
+            serverTimestamp,
+            runTransaction,
+            setLogLevel
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-            <form onsubmit="saveModalChanges(event)" class="space-y-4">
+        // --- FIREBASE CONFIGURATION (CRITICAL: THIS SECTION IS NOW CONFIGURED) ---
+        // These values have been replaced with your provided Firebase project settings.
+        const MY_FIREBASE_CONFIG = {
+            apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJpMJihQ", 
+            authDomain: "apps-e1163.firebaseapp.com",
+            projectId: "apps-e1163",
+            storageBucket: "apps-e1163.firebasestorage.app",
+            messagingSenderId: "855206153422",
+            appId: "1:855206153422:web:2a1366b2e7825304c3d49f" 
+        };
+        
+        // This is used for Firestore pathing.
+        const appId = typeof __app_id !== 'undefined' ? __app_id : MY_FIREBASE_CONFIG.projectId; 
+        
+        // Use the Canvas config if available, otherwise use your hardcoded config.
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : MY_FIREBASE_CONFIG;
+        
+        // In a real hosting environment, we default to null for the custom token, 
+        // which triggers signInAnonymously().
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
+        // --- END FIREBASE CONFIGURATION ---
+
+        setLogLevel('Debug');
+
+        // --- GLOBAL STATE & FIREBASE INIT ---
+        let app, db, auth;
+        let userId = null;
+        let isAuthReady = false;
+        let currentReports = {}; // State for the SELECTED DAY's report entries
+        let currentAccumulatedScores = {}; // State for accumulated scores (all classes)
+        let selectedClassId = null; // Currently selected class in the detail view
+        let isSaving = false;
+        
+        // New State Variables for Date Selection
+        const getTodayDateId = () => {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+        const todayDateId = getTodayDateId();
+        let selectedDateId = todayDateId;
+
+        // UPDATED Class names to reflect the exact structure: 1A, 1B, 1C, 2, 3, 4
+        const CLASS_DEFINITIONS = [
+            // Level 1
+            { id: 'Girls-1A', name: '1-A' },
+            { id: 'Girls-1B', name: '1-B' },
+            { id: 'Girls-1C', name: '1-C' },
+            { id: 'Boys-1A', name: '1-A' },
+            { id: 'Boys-1B', name: '1-B' },
+            { id: 'Boys-1C', name: '1-C' },
+            // Level 2
+            { id: 'Girls-2', name: '2' },
+            { id: 'Boys-2', name: '2' },
+            // Level 3
+            { id: 'Girls-3', name: '3' },
+            { id: 'Boys-3', name: '3' },
+            // Level 4
+            { id: 'Girls-4', name: '4' },
+            { id: 'Boys-4', name: '4' },
+        ];
+
+        // --- UTILITY FUNCTIONS ---
+
+        /**
+         * Custom function to display a message to the user (replaces alert()).
+         * @param {string} title - The title of the message box.
+         * @param {string} text - The body content of the message.
+         */
+        window.showMessage = (title, text) => {
+            const box = document.getElementById('message-box');
+            document.getElementById('message-title').textContent = title;
+            document.getElementById('message-text').textContent = text;
+            box.classList.remove('hidden');
+        };
+
+        /**
+         * Closes the modal and resets the selected class ID.
+         */
+        window.closeModal = () => {
+            document.getElementById('report-modal').classList.add('hidden');
+            selectedClassId = null;
+        }
+
+        /**
+         * Converts YYYY-MM-DD date ID to a display format.
+         * FIX: Manually constructs the date to prevent timezone shifting from YYYY-MM-DD.
+         * @param {string} dateId - The date string in YYYY-MM-DD format.
+         * @returns {string} The formatted date string.
+         */
+        const getDisplayDate = (dateId) => {
+            // Split the YYYY-MM-DD string
+            const parts = dateId.split('-');
+            // Construct the date using YYYY, MM (0-indexed), DD, forcing the local time interpretation
+            // Note: Month is 0-indexed in JS Date constructor (parts[1] - 1)
+            const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); 
+
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            // Add " (Today)" if the date is today
+            const suffix = dateId === todayDateId ? ' (Today)' : '';
+            return date.toLocaleDateString(undefined, options) + suffix;
+        };
+        
+        /**
+         * Handles the change event from the date selector input.
+         * @param {string} newDateId - The new date string in YYYY-MM-DD format.
+         */
+        window.handleDateChange = (newDateId) => {
+            if (newDateId === selectedDateId) return;
+            
+            selectedDateId = newDateId;
+            
+            // This is now safe because initial-message is a direct child of <main> and is not cleared.
+            document.getElementById('initial-message').textContent = `Fetching reports for ${getDisplayDate(selectedDateId)}...`;
+            document.getElementById('initial-message').classList.remove('hidden');
+            
+            // Re-run listeners for the new date's daily report data
+            setupFirestoreListeners();
+            // Re-render the class list immediately (it will show old accumulated data, but new daily data)
+            renderClassList();
+        };
+
+        /**
+         * Calculates the Daily Class Score (DCS) out of 100 based on number of students.
+         * @param {object} report - The daily report object for a class.
+         * @returns {number} The calculated Daily Class Score (0-100).
+         */
+        const calculateDailyScore = (report) => {
+            const { totalStudents, presentToday, progressReportBrought, progressReportSigned } = report;
+
+            if (totalStudents <= 0) return 0; // Avoid division by zero
+
+            // 1. Attendance Ratio (Max 50 points)
+            const attendanceRatio = Math.min(presentToday, totalStudents) / totalStudents;
+            const attendanceScore = 50 * attendanceRatio; 
+
+            // 2. Progress Report Brought (Max 25 points)
+            const broughtRatio = Math.min(progressReportBrought, totalStudents) / totalStudents;
+            const broughtScore = 25 * broughtRatio; 
+
+            // 3. Progress Report Signed (Max 25 points)
+            const signedRatio = Math.min(progressReportSigned, totalStudents) / totalStudents;
+            const signedScore = 25 * signedRatio; 
+            
+            // Final Score (rounded to 2 decimal places)
+            const dcs = attendanceScore + broughtScore + signedScore;
+            return Math.round(dcs * 100) / 100;
+        };
+
+        // --- FIREBASE AND AUTHENTICATION ---
+
+        /**
+         * Initializes Firebase app, Auth, and Firestore.
+         */
+        const initializeFirebase = () => {
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
                 
-                <div class="space-y-4">
-                    <div class="flex flex-col">
-                        <label for="modal-input-totalStudents" class="text-sm font-medium text-gray-700 mb-1">Total Students</label>
-                        <input type="number" id="modal-input-totalStudents" class="input-field" value="0" min="0" required>
-                    </div>
-                    <div class="flex flex-col">
-                        <label for="modal-input-presentToday" class="text-sm font-medium text-gray-700 mb-1">Present Today</label>
-                        <input type="number" id="modal-input-presentToday" class="input-field" value="0" min="0" required>
-                    </div>
-                    <div class="flex flex-col">
-                        <label for="modal-input-progressReportBrought" class="text-sm font-medium text-gray-700 mb-1">Progress Report Brought</label>
-                        <input type="number" id="modal-input-progressReportBrought" class="input-field" value="0" min="0" required>
-                    </div>
-                    <div class="flex flex-col">
-                        <label for="modal-input-progressReportSigned" class="text-sm font-medium text-gray-700 mb-1">Progress Report Signed</label>
-                        <input type="number" id="modal-input-progressReportSigned" class="input-field" value="0" min="0" required>
-                    </div>
-                </div>
+                // 1. Listen for Auth State Changes
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        console.log("Authenticated as:", userId);
+                        document.getElementById('user-id-display').textContent = `ID: ${userId}`;
+                        document.getElementById('initial-message').textContent = `Fetching reports for ${getDisplayDate(selectedDateId)}...`;
+                        isAuthReady = true;
+                        
+                        // Start real-time listeners once authenticated
+                        setupFirestoreListeners();
+                        
+                    } else {
+                        // 2. If not authenticated, try to sign in
+                        if (initialAuthToken) {
+                            await signInWithCustomToken(auth, initialAuthToken);
+                        } else {
+                            // Fallback to anonymous sign-in if no custom token is available
+                            await signInAnonymously(auth);
+                            // The onAuthStateChanged listener will fire again with the new anonymous user
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                document.getElementById('initial-message').textContent = 'Error: Failed to initialize Firebase. Check console for details.';
+                showMessage('Initialization Error', 'The app could not connect to the database. See console for details.');
+            }
+        };
 
-                <div class="flex justify-end pt-4 space-x-3">
-                    <button type="button" onclick="closeEditModal()" class="px-5 py-2 bg-gray-300 text-gray-800 font-medium rounded-lg hover:bg-gray-400 transition">
-                        Cancel
-                    </button>
-                    <button type="submit" class="px-5 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition shadow-md">
-                        Apply Changes
-                    </button>
+        // --- FIRESTORE LISTENERS ---
+
+        /**
+         * Sets up real-time listeners for Daily Reports (based on selectedDateId) and Accumulated Scores (always today's view).
+         */
+        const setupFirestoreListeners = () => {
+            if (!isAuthReady) return;
+
+            // 1. Listener for the SELECTED DATE's Daily Reports (Source of truth for report entries)
+            // This is the only listener that changes based on selectedDateId
+            const dailyReportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', selectedDateId);
+            
+            // Unsubscribe from previous listener before setting up a new one
+            if (window.dailyReportUnsubscribe) {
+                window.dailyReportUnsubscribe();
+            }
+
+            window.dailyReportUnsubscribe = onSnapshot(dailyReportDocRef, (docSnapshot) => {
+                if (docSnapshot.exists()) {
+                    currentReports = docSnapshot.data();
+                    console.log(`Daily Reports updated for ${selectedDateId}:`, currentReports);
+                } else {
+                    currentReports = {}; // Document doesn't exist yet for this date
+                    console.log(`Daily report document not found for ${selectedDateId}. Starting fresh.`);
+                }
+                renderClassList();
+                
+                // If a class is open in the modal, re-render the content to sync input values
+                if (selectedClassId && document.getElementById('report-modal').classList.contains('hidden') === false) {
+                    renderModalContent(selectedClassId);
+                }
+            }, (error) => {
+                console.error(`Error fetching daily report for ${selectedDateId}:`, error);
+                document.getElementById('initial-message').textContent = `Error: Failed to fetch daily reports for ${selectedDateId}.`;
+            });
+
+
+            // 2. Listener for Accumulated Scores (Source of truth for overall ranking - ALWAYS uses the latest data)
+            // This listener does not need to change when the date selector changes.
+            if (!window.accumulatedScoresUnsubscribe) {
+                const scoresCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'accumulated_class_scores');
+                
+                window.accumulatedScoresUnsubscribe = onSnapshot(scoresCollectionRef, (querySnapshot) => {
+                    const scores = {};
+                    querySnapshot.forEach(doc => {
+                        scores[doc.id] = doc.data();
+                    });
+                    currentAccumulatedScores = scores;
+                    console.log("Accumulated Scores updated:", currentAccumulatedScores);
+                    renderClassList(); // Re-render to show updated averages
+                }, (error) => {
+                    console.error("Error fetching accumulated scores:", error);
+                });
+            }
+        };
+
+        // --- RENDERING FUNCTIONS (UI/UX) ---
+
+        /**
+         * Renders the overall class list with Daily and Accumulated Scores using a responsive grid of tiles.
+         */
+        const renderClassList = () => {
+            const container = document.getElementById('scores-view');
+            container.innerHTML = '';
+            
+            // Hide the initial message once data starts coming in or is being rendered
+            const initialMessage = document.getElementById('initial-message');
+            if (initialMessage) {
+                initialMessage.classList.add('hidden');
+            }
+            
+            const allClasses = CLASS_DEFINITIONS.map(classDef => {
+                // Use currentReports (which holds data for selectedDateId)
+                const report = currentReports[classDef.id] || {}; 
+                // Always use the latest Accumulated Score for the ranking view
+                const accumulated = currentAccumulatedScores[classDef.id] || { totalScore: 0, daysCount: 0 };
+                
+                // Calculate today's score 
+                const dailyScore = report.totalStudents !== undefined && report.totalStudents !== 0 
+                    ? calculateDailyScore(report) 
+                    : null; 
+
+                const averageScore = accumulated.daysCount > 0 
+                    ? (accumulated.totalScore / accumulated.daysCount)
+                    : 0;
+
+                const hasData = dailyScore !== null;
+                const dailyScoreText = hasData ? `${dailyScore.toFixed(2)}` : 'N/A';
+                // Color coding for today's score display
+                const dailyColor = hasData ? (dailyScore >= 80 ? 'bg-green-100 text-green-700' : dailyScore >= 50 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700') : 'bg-gray-100 text-gray-500';
+                
+                return {
+                    ...classDef,
+                    dailyScoreText,
+                    dailyColor,
+                    averageScore: averageScore.toFixed(2)
+                };
+            });
+
+            // Sort by average score descending (still based on accumulated scores)
+            allClasses.sort((a, b) => parseFloat(b.averageScore) - parseFloat(a.averageScore));
+
+            // Split into sections after sorting
+            const girlsClasses = allClasses.filter(c => c.id.startsWith('Girls'));
+            const boysClasses = allClasses.filter(c => c.id.startsWith('Boys'));
+            
+            const selectedDateDisplay = getDisplayDate(selectedDateId);
+            
+            const createSection = (title, classes) => {
+                const section = document.createElement('div');
+                section.className = 'mb-6';
+                section.innerHTML = `
+                    <h2 class="text-lg font-extrabold text-gray-800 mb-3 border-b-2 border-indigo-200 pb-1 flex justify-between items-center">
+                        <span>${title}</span>
+                        <span class="text-xs font-semibold text-gray-500 italic">Scores for ${selectedDateDisplay}</span>
+                    </h2>
+                    <!-- Responsive Grid: 2 columns on mobile, 3 on sm/md, 4 on lg+ -->
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                        ${classes.map(c => `
+                            <!-- Class Tile -->
+                            <div class="card p-3 flex flex-col justify-between items-start cursor-pointer hover:shadow-lg hover:border-indigo-500 transition-all duration-200 h-full transform hover:scale-[1.02] active:scale-[0.98]" 
+                                onclick="selectClass('${c.id}')">
+                                
+                                <!-- Class Name (e.g., '1-A' or '3') -->
+                                <p class="font-bold text-sm text-gray-800 mb-1 leading-tight">${c.name}</p>
+                                
+                                <div class="w-full mt-2">
+                                    <!-- Average Score (Based on cumulative data) -->
+                                    <div class="flex justify-between items-center text-xs font-medium text-gray-500">
+                                        <span>Avg (Cumulative):</span>
+                                        <span class="font-extrabold text-indigo-600">${c.averageScore}</span>
+                                    </div>
+                                    <!-- Daily Score (Based on selected date's data) -->
+                                    <div class="flex justify-between items-center text-xs font-semibold mt-1 p-1 rounded-md ${c.dailyColor} shadow-inner">
+                                        <span>Daily Score:</span>
+                                        <span class="font-extrabold">${c.dailyScoreText}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                container.appendChild(section);
+            };
+
+            createSection('Girls Section (Ranked by Average)', girlsClasses);
+            createSection('Boys Section (Ranked by Average)', boysClasses);
+        };
+        
+        /**
+         * Updates only the Daily Class Score (DCS) text and color in the open modal.
+         * This prevents the entire form from re-rendering and losing input focus.
+         * @param {string} classId - The ID of the class currently in the modal.
+         */
+        const updateModalScoreDisplay = (classId) => {
+            const report = currentReports[classId];
+            if (!report) return;
+
+            const dailyScore = calculateDailyScore(report);
+            const scoreElement = document.getElementById('daily-class-score');
+            
+            if (scoreElement) {
+                scoreElement.textContent = `DCS: ${dailyScore.toFixed(2)} / 100`;
+                // Recalculate color classes (and remove old ones)
+                const colorClass = dailyScore >= 80 ? 'text-green-600' : dailyScore >= 50 ? 'text-yellow-600' : 'text-red-600';
+                scoreElement.className = `text-lg font-bold ${colorClass}`;
+            }
+        }
+
+
+        /**
+         * Renders the detail entry panel structure for the selected class into the modal content area.
+         * @param {string} classId - The ID of the class to render.
+         */
+        const renderModalContent = (classId) => {
+            const classDef = CLASS_DEFINITIONS.find(c => c.id === classId);
+            if (!classDef) return;
+
+            // Determine if the report is editable (only today's date is editable)
+            const isEditable = selectedDateId === todayDateId;
+            const disabledAttr = isEditable ? '' : 'disabled';
+            const statusColor = isEditable ? 'text-indigo-700' : 'text-gray-500';
+
+            // Ensure the state object is ready for the current class
+            if (!currentReports[classId]) {
+                currentReports[classId] = { totalStudents: 0, presentToday: 0, progressReportBrought: 0, progressReportSigned: 0 };
+            }
+
+            selectedClassId = classId;
+            const report = currentReports[classId];
+
+            // Use current state values for initial rendering of inputs
+            const totalStudents = report.totalStudents || '';
+            const presentToday = report.presentToday || '';
+            const reportBrought = report.progressReportBrought || '';
+            const reportSigned = report.progressReportSigned || '';
+
+            document.getElementById('details-panel-content').innerHTML = `
+                <div class="card p-4 space-y-4 shadow-none border-none">
+                    <div class="flex justify-between items-center border-b pb-2 mb-3">
+                        <h2 class="text-2xl font-extrabold ${statusColor}">Class ${classDef.name}</h2>
+                        <!-- Use ID here for real-time score updates without re-rendering -->
+                        <div id="daily-class-score" class="text-lg font-bold text-gray-400">
+                            Loading...
+                        </div>
+                    </div>
+                    
+                    <p class="text-sm font-medium text-center ${isEditable ? 'text-green-600' : 'text-red-600'} bg-${isEditable ? 'green-50' : 'red-50'} py-1 rounded-lg border border-${isEditable ? 'green-200' : 'red-200'}">
+                        ${isEditable ? 'EDIT MODE: Data entry for today.' : `VIEW MODE: Showing data for ${getDisplayDate(selectedDateId)}`}
+                    </p>
+
+                    <!-- Form Grid -->
+                    <div class="space-y-4">
+
+                        <!-- Total Students & Present Today -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <!-- Total Students -->
+                            <div>
+                                <label for="totalStudents" class="block text-xs font-medium text-gray-700 mb-1">Total Students in Class</label>
+                                <input type="number" id="totalStudents" value="${totalStudents}" oninput="updateReportEntry('${classId}', 'totalStudents', this.value)"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-lg ${disabledAttr ? 'bg-gray-100' : ''}" placeholder="0" min="0" ${disabledAttr}>
+                            </div>
+
+                            <!-- Present Today -->
+                            <div>
+                                <label for="presentToday" class="block text-xs font-medium text-gray-700 mb-1">Students Present Today</label>
+                                <input type="number" id="presentToday" value="${presentToday}" oninput="updateReportEntry('${classId}', 'presentToday', this.value)"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-lg ${disabledAttr ? 'bg-gray-100' : ''}" placeholder="0" min="0" ${disabledAttr}>
+                            </div>
+                        </div>
+
+                        <!-- Progress Report Status (Number inputs for counts) -->
+                        <div class="space-y-3 pt-2 border-t border-dashed">
+                            
+                            <!-- Report Brought (Number Input) -->
+                            <div>
+                                <label for="reportBrought" class="block text-xs font-medium text-gray-700 mb-1">Students Who Brought Progress Report</label>
+                                <input type="number" id="reportBrought" value="${reportBrought}" oninput="updateReportEntry('${classId}', 'progressReportBrought', this.value)"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-lg ${disabledAttr ? 'bg-gray-100' : ''}" placeholder="0" min="0" ${disabledAttr}>
+                            </div>
+
+                            <!-- Report Signed (Number Input) -->
+                            <div>
+                                <label for="reportSigned" class="block text-xs font-medium text-gray-700 mb-1">Students with Signed Progress Report</label>
+                                <input type="number" id="reportSigned" value="${reportSigned}" oninput="updateReportEntry('${classId}', 'progressReportSigned', this.value)"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-lg ${disabledAttr ? 'bg-gray-100' : ''}" placeholder="0" min="0" ${disabledAttr}>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </form>
-        </div>
-    </dialog>
+            `;
+            
+            // Now update the score display immediately after rendering the structure
+            updateModalScoreDisplay(classId);
+
+            // Dynamically set the footer content based on editability
+            const modalFooter = document.getElementById('modal-footer');
+            if (isEditable) {
+                modalFooter.innerHTML = `
+                    <button id="modal-save-button" onclick="saveClassReport()" class="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold shadow-md hover:bg-indigo-700 transition duration-150 ease-in-out disabled:opacity-50 flex items-center justify-center" disabled>
+                        <span id="modal-save-button-text">Save and Close Report</span>
+                        <svg id="modal-save-spinner" class="animate-spin-slow h-5 w-5 text-white ml-2 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </button>
+                `;
+            } else {
+                 modalFooter.innerHTML = `
+                    <button onclick="closeModal()" class="w-full px-4 py-2 bg-gray-600 text-white rounded-lg font-semibold shadow-md hover:bg-gray-700 transition duration-150 ease-in-out">
+                        Close View
+                    </button>
+                `;
+            }
+        };
+
+        /**
+         * Selects a class for detail entry and shows the modal.
+         * @param {string} classId - The ID of the class selected.
+         */
+        window.selectClass = (classId) => {
+            selectedClassId = classId;
+            renderModalContent(classId);
+            // Show the modal 
+            document.getElementById('report-modal').classList.remove('hidden');
+        };
+
+        // --- DATA INPUT & PROCESSING ---
+
+        /**
+         * Updates the local state object for the selected class report and performs data integrity checks.
+         * @param {string} classId - The class ID.
+         * @param {string} key - The field key to update (e.g., 'presentToday').
+         * @param {string | number} value - The new value (expected string from input).
+         */
+        window.updateReportEntry = (classId, key, value) => {
+            // Safety check for editing past dates (shouldn't happen with disabled inputs, but good practice)
+            if (selectedDateId !== todayDateId) {
+                console.warn("Attempted to edit non-today report.");
+                return;
+            }
+
+            let numValue = parseInt(value, 10);
+
+            // Ensure it's a valid non-negative number, default to 0 if invalid
+            if (isNaN(numValue) || numValue < 0) {
+                numValue = 0;
+            }
+            
+            // Ensure the class report object exists in the currentReports state
+            if (!currentReports[classId]) {
+                currentReports[classId] = {
+                    totalStudents: 0,
+                    presentToday: 0,
+                    progressReportBrought: 0,
+                    progressReportSigned: 0,
+                };
+            }
+
+            // 1. Update the state with the raw input value
+            currentReports[classId][key] = numValue;
+
+            const totalStudents = currentReports[classId].totalStudents || 0;
+
+            // 2. Data Integrity Check: Cap dependent fields if they exceed totalStudents
+            const dependentKeys = ['presentToday', 'progressReportBrought', 'progressReportSigned'];
+            
+            if (key === 'totalStudents') {
+                // If Total Students is changed, check and cap ALL dependent fields
+                dependentKeys.forEach(depKey => {
+                    const depValue = currentReports[classId][depKey] || 0;
+                    if (depValue > totalStudents) {
+                        currentReports[classId][depKey] = totalStudents;
+                        
+                        // Visually update the dependent input fields in the open modal
+                        let inputId = null;
+                        if (depKey === 'presentToday') inputId = 'presentToday';
+                        else if (depKey === 'progressReportBrought') inputId = 'reportBrought';
+                        else if (depKey === 'progressReportSigned') inputId = 'reportSigned';
+                        
+                        const inputElement = document.getElementById(inputId);
+                        if (inputElement) {
+                            inputElement.value = totalStudents;
+                        }
+                    }
+                });
+            } else if (dependentKeys.includes(key) && numValue > totalStudents) {
+                // If a dependent field is changed and exceeds totalStudents, cap it
+                currentReports[classId][key] = totalStudents; // Update state with capped value
+                
+                // Visually update the current input field
+                let inputId = null;
+                if (key === 'presentToday') inputId = 'presentToday';
+                else if (key === 'progressReportBrought') inputId = 'reportBrought';
+                else if (key === 'progressReportSigned') inputId = 'reportSigned';
+
+                const inputElement = document.getElementById(inputId);
+                if (inputElement) {
+                    inputElement.value = totalStudents;
+                }
+            }
+            
+            // FIX: Only update the score display, do NOT re-render the whole panel
+            updateModalScoreDisplay(classId);
+            
+            // Enable save button
+            document.getElementById('modal-save-button').disabled = false;
+        };
+
+        /**
+         * Executes the save operation for a single class: writes the daily report and updates accumulated score via a transaction.
+         */
+        window.saveClassReport = async () => {
+            // CRITICAL: Check if the currently selected date is today before saving
+            if (selectedDateId !== todayDateId) {
+                showMessage('Access Denied', 'You can only save or modify reports for the current date.');
+                return;
+            }
+
+            // Retrieve classId from the module-scoped global variable
+            const classId = selectedClassId;
+            
+            if (isSaving || !isAuthReady || !classId) return;
+
+            isSaving = true;
+            
+            const saveButton = document.getElementById('modal-save-button');
+            const buttonText = document.getElementById('modal-save-button-text');
+            const spinner = document.getElementById('modal-save-spinner');
+
+            saveButton.disabled = true;
+            buttonText.textContent = 'Saving...';
+            spinner.classList.remove('hidden');
+
+            const report = currentReports[classId];
+            if (!report || report.totalStudents <= 0) {
+                showMessage('Save Failed', `Cannot save report for ${classId}. Please enter the total number of students.`);
+                isSaving = false;
+                saveButton.disabled = false;
+                buttonText.textContent = 'Save and Close Report';
+                spinner.classList.add('hidden');
+                return;
+            }
+
+            try {
+                // 1. Write the daily report entry for this single class (uses todayDateId)
+                const dailyReportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', todayDateId);
+                const updatePayload = {
+                    [classId]: {
+                        ...report,
+                        lastUpdated: serverTimestamp()
+                    }
+                };
+                await setDoc(dailyReportDocRef, updatePayload, { merge: true });
+
+                // 2. Update Accumulated Score using a Transaction
+                const newDailyScore = calculateDailyScore(report);
+                const accumulatedDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'accumulated_class_scores', classId);
+                
+                let cumulativeUpdateSuccessful = false;
+
+                await runTransaction(db, async (transaction) => {
+                    const accumulatedDoc = await transaction.get(accumulatedDocRef);
+                    
+                    let totalScore = 0;
+                    let daysCount = 0;
+                    let lastReportDate = '';
+
+                    if (accumulatedDoc.exists()) {
+                        const data = accumulatedDoc.data();
+                        totalScore = data.totalScore || 0;
+                        daysCount = data.daysCount || 0;
+                        lastReportDate = data.lastReportDate || '';
+                    }
+                    
+                    // We only update the cumulative score if the report date is NOT today,
+                    // OR if the document doesn't exist yet. This prevents double counting.
+                    if (lastReportDate !== todayDateId) {
+                        totalScore += newDailyScore;
+                        daysCount += 1;
+                        lastReportDate = todayDateId;
+                        cumulativeUpdateSuccessful = true; // Mark that we did an actual cumulative update
+
+                        transaction.set(accumulatedDocRef, {
+                            classId: classId,
+                            totalScore: totalScore,
+                            daysCount: daysCount,
+                            averageScore: totalScore / daysCount,
+                            lastReportDate: lastReportDate,
+                            lastUpdated: serverTimestamp()
+                        }, { merge: true });
+                    }
+                });
+                
+                const message = cumulativeUpdateSuccessful 
+                    ? `Report for ${classId} saved successfully, and cumulative score updated.`
+                    : `Report for ${classId} saved successfully. Cumulative score was already counted for today.`;
+
+                showMessage('Success!', message);
+                
+                // Re-render the class list in the background
+                renderClassList();
+                
+                // Close the modal upon successful save, as requested.
+                closeModal();
+
+            } catch (error) {
+                console.error(`Error saving report for ${classId}:`, error);
+                showMessage('Error', `Failed to save report for ${classId}: ${error.message}`);
+                
+            } finally {
+                isSaving = false;
+                buttonText.textContent = 'Save and Close Report';
+                spinner.classList.add('hidden');
+                // The button remains disabled until a new change is made in the input fields
+            }
+        };
+
+        // --- INITIALIZATION ---
+        
+        /**
+         * Runs on window load to set up the app.
+         */
+        window.onload = () => {
+            // Set the initial value of the date selector to today's date
+            document.getElementById('date-selector').value = todayDateId;
+            initializeFirebase();
+        };
+        
+        // Copy user ID utility
+        document.getElementById('user-id-display').addEventListener('click', () => {
+            const idText = document.getElementById('user-id-display').textContent;
+            const id = idText.replace('ID: ', '');
+            try {
+                // Fallback for document.execCommand('copy')
+                const tempInput = document.createElement('textarea');
+                tempInput.value = id;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempInput);
+                showMessage('Copied!', `User ID: ${id} has been copied to your clipboard.`);
+            } catch (err) {
+                console.error('Could not copy text: ', err);
+                showMessage('Error', 'Failed to copy User ID to clipboard.');
+            }
+        });
+
+    </script>
 </body>
 </html>
