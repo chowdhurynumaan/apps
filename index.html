@@ -130,11 +130,12 @@
 
         // --- FIREBASE CONFIGURATION (CRITICAL: Populated with your actual config) ---
         // 
-        // This configuration allows the app to work both in the Canvas environment (using __vars) 
-        // and on public hosts (using MY_FIREBASE_CONFIG).
+        // IMPORTANT: The app relies on the Canvas environment variables (__app_id, __firebase_config, __initial_auth_token).
+        // The MY_FIREBASE_CONFIG below is a placeholder/fallback.
         // 
         const MY_FIREBASE_CONFIG = {
-            apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJvMJihQ", 
+            // Placeholder: The actual key must be provided by the canvas environment
+            apiKey: "YOUR_CANVAS_INJECTED_API_KEY", 
             authDomain: "apps-e1163.firebaseapp.com",
             projectId: "apps-e1163",
             storageBucket: "apps-e1163.firebasestorage.app",
@@ -142,8 +143,7 @@
             appId: "1:855206153422:web:2a1366b2e7825304c3d49f" 
         };
         
-        // This logic allows the app to work both in the Canvas environment (using __vars) 
-        // and on public hosts (using MY_FIREBASE_CONFIG).
+        // This logic ensures we use the injected variables if available, otherwise fall back.
         const appId = typeof __app_id !== 'undefined' ? __app_id : MY_FIREBASE_CONFIG.projectId; 
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : MY_FIREBASE_CONFIG;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
@@ -265,6 +265,10 @@
         const getPerformanceStatus = (cumulativeAvg, hasData) => {
             if (!hasData || cumulativeAvg === null) {
                 return { text: 'No Data', bg: 'bg-gray-100', text_color: 'text-gray-500', bar_color: 'bg-gray-400', score_color: 'text-gray-500' };
+            }
+            // CRITICAL CHECK: If the average is somehow over 100 (due to the bug), display an error status
+            if (cumulativeAvg > 100.01) {
+                 return { text: 'DATA ERROR', bg: 'bg-red-200', text_color: 'text-red-800', bar_color: 'bg-red-700', score_color: 'text-red-800' };
             }
             if (cumulativeAvg >= 80) {
                 return { text: 'Excellent', bg: 'bg-green-100', text_color: 'text-green-700', bar_color: 'bg-green-500', score_color: 'text-green-700' };
@@ -737,7 +741,7 @@
                     let totalScore = 0;
                     let daysCount = 0;
                     let lastReportDate = '';
-                    let lastScoreContribution = 0; // NEW FIELD
+                    let lastScoreContribution = 0;
                     let updateRequired = false;
 
                     if (accumulatedDoc.exists()) {
@@ -745,7 +749,15 @@
                         totalScore = data.totalScore || 0;
                         daysCount = data.daysCount || 0;
                         lastReportDate = data.lastReportDate || '';
-                        lastScoreContribution = data.lastScoreContribution || 0; // Load NEW FIELD
+                        lastScoreContribution = data.lastScoreContribution || 0; 
+                        
+                        // *** CRITICAL PATCH FOR LEGACY DATA ***
+                        // If the document was created before the 'lastScoreContribution' field was added, 
+                        // and it's a same-day update, we must assume the existing totalScore is the value to subtract.
+                        if (lastReportDate === todayDateId && lastScoreContribution === 0 && totalScore > 0) {
+                            console.warn(`[LEGACY DATA FIX] Re-aligning lastScoreContribution from totalScore (${totalScore}) for same-day correction on ${classId}.`);
+                            lastScoreContribution = totalScore;
+                        }
                     }
                     
                     if (lastReportDate !== todayDateId) {
@@ -757,10 +769,16 @@
                         updateRequired = true;
                     } else if (newDailyScore !== lastScoreContribution) {
                         // CASE B: SAME DAY, SCORE CHANGED - Correct the score contribution
-                        // This handles the exact bug you reported!
-                        totalScore -= lastScoreContribution; // Subtract the old score
-                        totalScore += newDailyScore;        // Add the new score
-                        daysCount = daysCount;              // Day count remains the same
+                        
+                        // Subtract the old contribution (which is now correctly aligned, even for legacy docs)
+                        totalScore -= lastScoreContribution; 
+                        
+                        // Add the new score
+                        totalScore += newDailyScore;        
+                        
+                        // Day count remains the same
+                        daysCount = daysCount;              
+                        
                         message = `Report for ${classId} saved successfully. Cumulative score corrected from ${lastScoreContribution.toFixed(2)}% to ${newDailyScore.toFixed(2)}% for today.`;
                         updateRequired = true;
                     } else {
@@ -772,13 +790,16 @@
                         lastScoreContribution = newDailyScore; // Update the contribution to the new score
                         cumulativeUpdateSuccessful = true;
 
+                        // Ensure we don't save an average if daysCount somehow ended up 0
+                        const averageScore = daysCount > 0 ? totalScore / daysCount : 0;
+
                         transaction.set(accumulatedDocRef, {
                             classId: classId,
                             totalScore: totalScore,
                             daysCount: daysCount,
-                            averageScore: totalScore / daysCount,
+                            averageScore: averageScore,
                             lastReportDate: lastReportDate,
-                            lastScoreContribution: lastScoreContribution, // Save NEW FIELD
+                            lastScoreContribution: lastScoreContribution, 
                             lastUpdated: serverTimestamp()
                         }, { merge: true });
                     }
