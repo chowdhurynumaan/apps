@@ -67,10 +67,9 @@
     <!-- Main Content Area -->
     <main id="main-content-area" class="flex-grow overflow-hidden relative max-w-7xl mx-auto w-full min-h-0 p-2 flex flex-col">
         
-        <!-- Overall Scores View (The main, persistent grid view) -->
-        <div id="scores-view" class="flex-grow overflow-y-auto space-y-3 pb-2 min-h-0">
-            <!-- Loading/Initial Message - Now includes a spinner -->
-            <div id="initial-message" class="flex flex-col items-center justify-center p-8 bg-white rounded-xl shadow-lg mt-10 max-w-sm mx-auto">
+        <!-- Loading/Initial Message Overlay (Absolute position to cover the entire main area) -->
+        <div id="initial-message" class="absolute inset-0 z-10 flex flex-col items-center justify-center p-8 bg-f4f7f9/90 backdrop-blur-sm">
+            <div class="flex flex-col items-center justify-center p-8 bg-white rounded-xl shadow-2xl max-w-sm mx-auto">
                 <svg id="loading-spinner" class="animate-spin-slow h-8 w-8 text-indigo-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -78,6 +77,10 @@
                 <p id="initial-message-text" class="text-sm text-gray-600 font-semibold text-center">Connecting to database and authenticating user...</p>
                 <p id="error-details" class="text-xs text-red-500 mt-2 hidden text-center font-mono"></p>
             </div>
+        </div>
+        
+        <!-- Overall Scores View (The main, persistent grid view) -->
+        <div id="scores-view" class="flex-grow overflow-y-auto space-y-3 pb-2 min-h-0">
             <!-- Class sections will be rendered here -->
         </div>
 
@@ -203,6 +206,7 @@
          */
         const getDisplayDate = (dateId) => {
             const parts = dateId.split('-');
+            // Note: Months in Date() constructor are 0-indexed, so -1 is correct.
             const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); 
             const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
             const suffix = dateId === todayDateId ? ' (Today)' : '';
@@ -215,10 +219,14 @@
         window.handleDateChange = (newDateId) => {
             if (newDateId === selectedDateId) return;
             selectedDateId = newDateId;
+            // Show loading message when date changes
+            const initialMessage = document.getElementById('initial-message');
+            initialMessage.classList.remove('hidden');
+            document.getElementById('loading-spinner').classList.remove('hidden');
             document.getElementById('initial-message-text').textContent = `Fetching reports for ${getDisplayDate(selectedDateId)}...`;
-            document.getElementById('initial-message').classList.remove('hidden');
+            
+            // Re-setup listeners which will trigger a new renderClassList call
             setupFirestoreListeners();
-            renderClassList();
         };
 
         /**
@@ -238,7 +246,6 @@
         
         /**
          * Determines the color coding for the card border based on the CUMULATIVE average score.
-         * The card look must remain fixed.
          */
         const getPerformanceBorder = (cumulativeAvg, hasData) => {
             if (!hasData || cumulativeAvg === null) return 'border-gray-300';
@@ -249,7 +256,6 @@
 
         /**
          * Determines the performance label and associated Tailwind classes based on the CUMULATIVE average score.
-         * The card look must remain fixed.
          */
         const getPerformanceStatus = (cumulativeAvg, hasData) => {
             if (!hasData || cumulativeAvg === null) {
@@ -266,6 +272,24 @@
 
 
         // --- FIREBASE AND AUTHENTICATION ---
+        
+        const handleAppReady = () => {
+            document.getElementById('date-selector').value = todayDateId;
+            
+            const initialMessage = document.getElementById('initial-message');
+            document.getElementById('loading-spinner').classList.add('hidden');
+            document.getElementById('initial-message-text').textContent = "Authentication Complete! Fetching data...";
+            
+            setupFirestoreListeners();
+
+            // Set a small delay before hiding the loading overlay, ensuring data fetch is initiated
+            setTimeout(() => {
+                // CRITICAL: Render the initial empty/placeholder UI immediately
+                renderClassList();
+                initialMessage.classList.add('hidden'); // This is the only place we hide the overlay
+            }, 500);
+        };
+
 
         const initializeFirebase = () => {
             const initialMessageDiv = document.getElementById('initial-message');
@@ -288,9 +312,8 @@
                         userId = user.uid;
                         console.log("Authenticated as:", userId);
                         document.getElementById('user-id-display').textContent = `ID: ${userId}`;
-                        messageText.textContent = `Fetching reports for ${getDisplayDate(selectedDateId)}...`;
                         isAuthReady = true;
-                        setupFirestoreListeners();
+                        handleAppReady();
                         
                     } else {
                         // Attempt to sign in if not already authenticated
@@ -329,6 +352,7 @@
             // 1. Listener for the SELECTED DATE's Daily Reports (Changes with date selector)
             const dailyReportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', selectedDateId);
             
+            // Unsubscribe existing listener if present
             if (window.dailyReportUnsubscribe) {
                 window.dailyReportUnsubscribe();
             }
@@ -336,14 +360,18 @@
             window.dailyReportUnsubscribe = onSnapshot(dailyReportDocRef, (docSnapshot) => {
                 currentReports = docSnapshot.exists() ? docSnapshot.data() : {};
                 console.log(`Daily Reports updated for ${selectedDateId}:`, currentReports);
-                renderClassList();
+                renderClassList(); // Re-render when daily report data updates
+                
+                // Hide the loading overlay immediately after data is received
+                document.getElementById('initial-message').classList.add('hidden'); 
+                
                 if (selectedClassId && document.getElementById('report-modal').classList.contains('hidden') === false) {
                     renderModalContent(selectedClassId);
                 }
             }, (error) => {
                 console.error(`Error fetching daily report for ${selectedDateId}:`, error);
-                document.getElementById('initial-message-text').textContent = `Error: Failed to fetch daily reports for ${selectedDateId}.`;
-                document.getElementById('loading-spinner').classList.add('hidden');
+                // Note: We don't hide the whole UI on data fetch errors, just log and continue.
+                document.getElementById('initial-message').classList.add('hidden'); 
             });
 
 
@@ -358,11 +386,10 @@
                     });
                     currentAccumulatedScores = scores;
                     console.log("Accumulated Scores updated:", currentAccumulatedScores);
-                    renderClassList();
+                    renderClassList(); // Re-render when accumulated score data updates
                 }, (error) => {
                     console.error("Error fetching accumulated scores:", error);
-                    document.getElementById('initial-message-text').textContent = "Error: Failed to fetch accumulated scores.";
-                    document.getElementById('loading-spinner').classList.add('hidden');
+                    // Note: We don't hide the whole UI on data fetch errors, just log and continue.
                 });
             }
         };
@@ -375,13 +402,8 @@
         const renderClassList = () => {
             const container = document.getElementById('scores-view');
             
-            // Hide the initial loading message and spinner once data starts flowing
-            const initialMessage = document.getElementById('initial-message');
-            if (initialMessage) {
-                initialMessage.classList.add('hidden');
-            }
-            
-            // Clear existing content only if data is ready to be rendered
+            // CRITICAL FIX: The element that caused the error is no longer here.
+            // We clear the scores container to redraw the class list.
             container.innerHTML = '';
             
             const allClasses = CLASS_DEFINITIONS.map(classDef => {
@@ -477,6 +499,12 @@
 
             createSection('Girls Section', girlsClasses);
             createSection('Boys Section', boysClasses);
+
+            if (allClasses.length === 0) {
+                 container.innerHTML = `<p class="text-center text-gray-500 italic py-10">No class data found. Check definitions or initialization.</p>`;
+            } else if (allClasses.every(c => c.performance.text === 'No Data')) {
+                 container.insertAdjacentHTML('afterbegin', `<p class="text-center text-sm font-semibold text-gray-600 bg-yellow-50 p-2 rounded-lg mb-4">Database is empty. Click any class card to enter today's first report!</p>`);
+            }
         };
         
         /**
@@ -614,16 +642,19 @@
             const totalStudents = currentReports[classId].totalStudents || 0;
             const dependentKeys = ['presentToday', 'progressReportBrought', 'progressReportSigned'];
             
+            // Logic to ensure dependent counts do not exceed totalStudents
             if (key === 'totalStudents') {
                 dependentKeys.forEach(depKey => {
                     const depValue = currentReports[classId][depKey] || 0;
                     if (depValue > totalStudents) {
                         currentReports[classId][depKey] = totalStudents;
+                        
                         let inputId = null;
                         if (depKey === 'presentToday') inputId = 'presentToday';
                         else if (depKey === 'progressReportBrought') inputId = 'reportBrought';
                         else if (depKey === 'progressReportSigned') inputId = 'reportSigned';
                         
+                        // Must update the input element value to reflect the correction
                         const inputElement = document.getElementById(inputId);
                         if (inputElement) inputElement.value = totalStudents;
                     }
@@ -631,6 +662,7 @@
             } else if (dependentKeys.includes(key) && numValue > totalStudents) {
                 currentReports[classId][key] = totalStudents; 
                 
+                // Must update the input element value to reflect the correction
                 let inputId = null;
                 if (key === 'presentToday') inputId = 'presentToday';
                 else if (key === 'progressReportBrought') inputId = 'reportBrought';
@@ -739,7 +771,6 @@
         // --- INITIALIZATION ---
         
         window.onload = () => {
-            document.getElementById('date-selector').value = todayDateId;
             initializeFirebase();
         };
         
