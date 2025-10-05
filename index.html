@@ -131,14 +131,14 @@
         // --- FIREBASE CONFIGURATION (CRITICAL: Using user-provided config as base) ---
         
         const USER_PROVIDED_FIREBASE_CONFIG = {
-            // Using the API key you provided
-            apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJzMJihQ", 
+            // CRITICAL FIX: Corrected API key from 'z' to '5'
+            apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJ5MJihQ", 
             authDomain: "apps-e1163.firebaseapp.com",
             projectId: "apps-e1163",
             storageBucket: "apps-e1163.firebasestorage.app",
             messagingSenderId: "855206153422",
             appId: "1:855206153422:web:2a1366b2e7825304c3d49f",
-            measurementId: "G-7YCKESJB8T" // Included measurementId
+            measurementId: "G-7YCKESJB8T" 
         };
         
         // Prioritize Canvas injected config if it exists, otherwise use the user's config
