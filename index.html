@@ -88,7 +88,7 @@
         // --- GLOBAL STATE ---
         let db = null;
         let auth = null;
-        let userId = null;
+        let userId = null; // Still needed for authentication/session, but not for data pathing
         let todayDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
         let currentReportDate = todayDate;
         let currentReportData = {}; 
@@ -127,8 +127,12 @@
         // -----------------------------------------------------------------------------------------------
         
         // Utility Functions
+        /**
+         * IMPORTANT: This path is now PUBLIC, meaning all users share the same data.
+         * The structure is /artifacts/{appId}/public/data/{COLLECTION_NAME}/{reportDate}
+         */
         const getReportPath = (id = currentReportDate) => {
-            return `/artifacts/${appId}/users/${userId}/${COLLECTION_NAME}/${id}`;
+            return `/artifacts/${appId}/public/data/${COLLECTION_NAME}/${id}`;
         };
 
         const showMessage = (text, type = 'success') => {
@@ -153,7 +157,6 @@
         const getCurrentDateInput = () => document.getElementById('report-date-input');
         const getSaveButton = () => document.getElementById('save-button');
         const getDeleteButton = () => document.getElementById('delete-button');
-        // CRITICAL FIX: Get the new <dialog> element
         const getModal = () => document.getElementById('edit-modal'); 
         const getModalClassTitle = () => document.getElementById('modal-class-title');
         const getModalInputs = (metric) => document.getElementById(`modal-input-${metric}`);
@@ -188,11 +191,12 @@
                 if (initialAuthToken) {
                     await signInWithCustomToken(auth, initialAuthToken);
                 } else {
-                    await signInAnonymously(auth);
+                    // Sign in anonymously, allowing read/write access to public data.
+                    await signInAnonymously(auth); 
                 }
                 userId = auth.currentUser?.uid || crypto.randomUUID();
-                document.getElementById('user-id-display').textContent = `User ID: ${userId}`;
-                showMessage('Authentication successful. Ready to load/save data.', 'info');
+                
+                showMessage('Authentication successful. Data is now shared publicly.', 'info');
                 
                 getCurrentDateInput().value = todayDate;
                 
@@ -229,7 +233,7 @@
         };
 
         const loadReport = async (date) => {
-            if (!db || !userId) return;
+            if (!db) return;
 
             currentReportDate = date;
             getCurrentDateInput().value = date;
@@ -251,10 +255,11 @@
 
             currentReportData = { ...emptyReport };
 
-            showMessage(`Loading report for ${date}...`, 'info');
+            showMessage(`Loading public report for ${date}...`, 'info');
             
             try {
-                const docRef = doc(db, getReportPath(date));
+                // Use the new public path
+                const docRef = doc(db, getReportPath(date)); 
                 const docSnap = await getDoc(docRef);
 
                 if (docSnap.exists()) {
@@ -265,7 +270,7 @@
                          }
                     });
                     getSaveButton().textContent = "Update Report";
-                    showMessage(`Report for ${date} loaded successfully.`, 'success');
+                    showMessage(`Public report for ${date} loaded successfully.`, 'success');
 
                 } else {
                     if (date === todayDate) {
@@ -273,7 +278,7 @@
                          currentReportData = { ...DEFAULT_TODAY_DATA };
                          showMessage(`No saved data for today. Pre-filling with default data.`, 'info');
                     } else {
-                        showMessage(`No report found for ${date}. Click a row to enter data.`, 'info');
+                        showMessage(`No public report found for ${date}. Click a row to enter data.`, 'info');
                     }
                     getSaveButton().textContent = "Save Report";
                 }
@@ -288,13 +293,14 @@
         };
 
         const loadHistory = async () => {
-            if (!db || !userId) return;
+            if (!db) return;
 
             const historyList = document.getElementById('history-list');
             historyList.innerHTML = ''; 
 
             try {
-                const reportsRef = collection(db, `/artifacts/${appId}/users/${userId}/${COLLECTION_NAME}`);
+                // Use the collection path for public data
+                const reportsRef = collection(db, `/artifacts/${appId}/public/data/${COLLECTION_NAME}`);
                 const q = query(reportsRef); 
                 const querySnapshot = await getDocs(q);
                 
@@ -325,7 +331,7 @@
         };
         
         const saveData = async () => {
-            if (!db || !userId) {
+            if (!db) {
                 showMessage('App not initialized. Check Firebase connection.', 'error');
                 return;
             }
@@ -334,6 +340,7 @@
             getSaveButton().textContent = "Saving...";
 
             try {
+                // Use the new public path
                 const docRef = doc(db, getReportPath(currentReportDate));
                 
                 const classesToSave = {};
@@ -350,13 +357,12 @@
 
                 const dataToSave = {
                     date: currentReportDate,
-                    userId: userId,
                     classes: classesToSave,
                 };
 
                 await setDoc(docRef, dataToSave);
                 
-                showMessage(`Report for ${currentReportDate} saved successfully! ${totalRecords} classes updated.`, 'success');
+                showMessage(`Public Report for ${currentReportDate} saved successfully! ${totalRecords} classes updated.`, 'success');
                 getSaveButton().textContent = "Update Report";
                 getSaveButton().disabled = false;
 
@@ -370,7 +376,7 @@
             }
         };
 
-        // --- Modal Logic ---
+        // --- Modal Logic (Unchanged, as it deals with local data entry) ---
 
         const openEditModal = (classId) => {
             try {
@@ -392,10 +398,8 @@
                     input.value = data[metric] ?? 0;
                 });
                 
-                // CRITICAL FIX: Use the native showModal() method for <dialog>
                 getModal().showModal(); 
                 document.body.classList.add('overflow-hidden');
-                console.log("Edit Modal opened via showModal().");
 
             } catch (error) {
                 console.error("Error in openEditModal:", error);
@@ -406,7 +410,6 @@
         };
 
         const closeEditModal = () => {
-            // CRITICAL FIX: Use the native close() method for <dialog>
             getModal().close();
             currentModalClassId = null;
             document.body.classList.remove('overflow-hidden');
@@ -459,7 +462,7 @@
                 modal.className = 'bg-white p-6 rounded-lg shadow-2xl w-80';
                 modal.innerHTML = `
                     <p class="text-lg font-semibold mb-4">Confirm Deletion</p>
-                    <p class="mb-6">Are you sure you want to delete the report for <strong class="font-mono">${currentReportDate}</strong>?</p>
+                    <p class="mb-6">Are you sure you want to delete the public report for <strong class="font-mono">${currentReportDate}</strong>?</p>
                     <div class="flex justify-end space-x-3">
                         <button id="cancel-btn" class="px-4 py-2 bg-gray-300 rounded-md hover:bg-gray-400">Cancel</button>
                         <button id="delete-confirm-btn" class="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600">Delete</button>
@@ -483,8 +486,9 @@
             if (!confirmation) return;
             
             try {
-                await deleteDoc(doc(db, getReportPath(currentReportDate)));
-                showMessage(`Report for ${currentReportDate} deleted.`, 'success');
+                // Use the new public path
+                await deleteDoc(doc(db, getReportPath(currentReportDate))); 
+                showMessage(`Public report for ${currentReportDate} deleted.`, 'success');
                 
                 await changeDate(todayDate);
                 await loadHistory();
@@ -576,7 +580,7 @@
 
     <header class="mb-6 pb-4 border-b border-gray-300">
         <h1 class="text-3xl font-bold text-gray-800">Daily Class Metrics</h1>
-        <p id="user-id-display" class="text-xs text-gray-500 mt-1"></p>
+        <p class="text-sm text-gray-500 mt-1">Shared Public Report for all users.</p>
     </header>
 
     <main class="grid grid-cols-1 lg:grid-cols-4 gap-6 max-w-full">
@@ -641,7 +645,7 @@
         </div>
     </main>
 
-    <!-- Class Edit Modal (Now using <dialog> element for reliable centering) -->
+    <!-- Class Edit Modal -->
     <dialog id="edit-modal">
         <div class="p-6">
             <div class="flex justify-between items-center border-b pb-3 mb-4">
