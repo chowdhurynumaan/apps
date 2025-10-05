@@ -130,11 +130,11 @@
 
         // --- FIREBASE CONFIGURATION (CRITICAL: Populated with your actual config) ---
         // 
-        // This configuration allows the app to connect to your Firebase project 
-        // when deployed to a public host like GitHub Pages.
+        // This configuration allows the app to work both in the Canvas environment (using __vars) 
+        // and on public hosts (using MY_FIREBASE_CONFIG).
         // 
         const MY_FIREBASE_CONFIG = {
-            apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJpMJihQ", 
+            apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJvMJihQ", 
             authDomain: "apps-e1163.firebaseapp.com",
             projectId: "apps-e1163",
             storageBucket: "apps-e1163.firebasestorage.app",
@@ -408,13 +408,13 @@
         const renderClassList = () => {
             const container = document.getElementById('scores-view');
             
-            // CRITICAL FIX: The element that caused the error is no longer here.
             // We clear the scores container to redraw the class list.
             container.innerHTML = '';
             
             const allClasses = CLASS_DEFINITIONS.map(classDef => {
                 const report = currentReports[classDef.id] || {}; 
-                const accumulated = currentAccumulatedScores[classDef.id] || { totalScore: 0, daysCount: 0 };
+                // CRITICAL CHANGE: added lastScoreContribution to the default object
+                const accumulated = currentAccumulatedScores[classDef.id] || { totalScore: 0, daysCount: 0, lastScoreContribution: 0 }; 
                 
                 // 1. DAILY SCORE (Dynamic, changes with selectedDateId)
                 const dailyReportHasData = report.totalStudents !== undefined && report.totalStudents !== 0 && Object.keys(report).length > 1;
@@ -433,6 +433,11 @@
 
                 const cumulativeAvgText = averageScore.toFixed(2);
 
+                // Add a detailed title for inspection (Includes new field)
+                const cumulativeTitle = isCumulativeData 
+                    ? `Cumulative Breakdown:\nTotal Points: ${accumulated.totalScore.toFixed(2)}\nTotal Days: ${accumulated.daysCount}\nLast Score Added: ${accumulated.lastScoreContribution.toFixed(2)}\nLast Report Date: ${accumulated.lastReportDate || 'Unknown'}`
+                    : `No previous reports recorded.`;
+
                 // --- CRITICAL FIX: Use CUMULATIVE AVERAGE for Card Look ---
                 const borderColorClass = getPerformanceBorder(averageScore, isCumulativeData);
                 const performance = getPerformanceStatus(averageScore, isCumulativeData);
@@ -443,7 +448,8 @@
                     dailyScoreText,
                     averageScore: cumulativeAvgText, // Used for the big text display
                     borderColorClass, // Used for the fixed border
-                    performance // Used for the fixed status pill
+                    performance, // Used for the fixed status pill
+                    cumulativeTitle // New tooltip text
                 };
             });
 
@@ -474,7 +480,8 @@
                                 <!-- MANDATED CARD STRUCTURE AND HOVER EFFECT -->
                                 <div class="p-2 bg-white rounded-xl shadow-md transition transform duration-300 ease-in-out hover:scale-[1.03] hover:shadow-xl h-full cursor-pointer
                                              border-l-4 ${c.borderColorClass}" 
-                                     onclick="selectClass('${c.id}')">
+                                     onclick="selectClass('${c.id}')"
+                                     title="${c.cumulativeTitle.replace(/"/g, '&quot;')}"> <!-- Added Tooltip Here -->
                                     
                                     <div class="flex justify-between items-start mb-1">
                                         <!-- Class Name -->
@@ -722,6 +729,7 @@
                 const newDailyScore = calculateDailyScore(report);
                 const accumulatedDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'accumulated_class_scores', classId);
                 let cumulativeUpdateSuccessful = false;
+                let message = '';
 
                 await runTransaction(db, async (transaction) => {
                     const accumulatedDoc = await transaction.get(accumulatedDocRef);
@@ -729,19 +737,39 @@
                     let totalScore = 0;
                     let daysCount = 0;
                     let lastReportDate = '';
+                    let lastScoreContribution = 0; // NEW FIELD
+                    let updateRequired = false;
 
                     if (accumulatedDoc.exists()) {
                         const data = accumulatedDoc.data();
                         totalScore = data.totalScore || 0;
                         daysCount = data.daysCount || 0;
                         lastReportDate = data.lastReportDate || '';
+                        lastScoreContribution = data.lastScoreContribution || 0; // Load NEW FIELD
                     }
                     
-                    // Only update cumulative score if this is the first report saved for the current day
                     if (lastReportDate !== todayDateId) {
+                        // CASE A: NEW DAY - Add new score and increment day count
                         totalScore += newDailyScore;
                         daysCount += 1;
                         lastReportDate = todayDateId;
+                        message = `Report for ${classId} saved successfully, and cumulative score added for a new day.`;
+                        updateRequired = true;
+                    } else if (newDailyScore !== lastScoreContribution) {
+                        // CASE B: SAME DAY, SCORE CHANGED - Correct the score contribution
+                        // This handles the exact bug you reported!
+                        totalScore -= lastScoreContribution; // Subtract the old score
+                        totalScore += newDailyScore;        // Add the new score
+                        daysCount = daysCount;              // Day count remains the same
+                        message = `Report for ${classId} saved successfully. Cumulative score corrected from ${lastScoreContribution.toFixed(2)}% to ${newDailyScore.toFixed(2)}% for today.`;
+                        updateRequired = true;
+                    } else {
+                        // CASE C: SAME DAY, NO CHANGE
+                        message = `Report for ${classId} saved successfully. Cumulative score was already counted for today with the same value.`;
+                    }
+                    
+                    if (updateRequired) {
+                        lastScoreContribution = newDailyScore; // Update the contribution to the new score
                         cumulativeUpdateSuccessful = true;
 
                         transaction.set(accumulatedDocRef, {
@@ -750,15 +778,12 @@
                             daysCount: daysCount,
                             averageScore: totalScore / daysCount,
                             lastReportDate: lastReportDate,
+                            lastScoreContribution: lastScoreContribution, // Save NEW FIELD
                             lastUpdated: serverTimestamp()
                         }, { merge: true });
                     }
                 });
                 
-                const message = cumulativeUpdateSuccessful 
-                    ? `Report for ${classId} saved successfully, and cumulative score updated.`
-                    : `Report for ${classId} saved successfully. Cumulative score was already counted for today.`;
-
                 showMessage('Success!', message);
                 renderClassList();
                 closeModal();
