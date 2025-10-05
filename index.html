@@ -67,11 +67,17 @@
     <!-- Main Content Area -->
     <main id="main-content-area" class="flex-grow overflow-hidden relative max-w-7xl mx-auto w-full min-h-0 p-2 flex flex-col">
         
-        <!-- Loading/Initial Message -->
-        <p id="initial-message" class="flex-shrink-0 text-center text-xs text-gray-500 italic mt-3 mb-4">Loading class data and authenticating...</p>
-        
         <!-- Overall Scores View (The main, persistent grid view) -->
         <div id="scores-view" class="flex-grow overflow-y-auto space-y-3 pb-2 min-h-0">
+            <!-- Loading/Initial Message - Now includes a spinner -->
+            <div id="initial-message" class="flex flex-col items-center justify-center p-8 bg-white rounded-xl shadow-lg mt-10 max-w-sm mx-auto">
+                <svg id="loading-spinner" class="animate-spin-slow h-8 w-8 text-indigo-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p id="initial-message-text" class="text-sm text-gray-600 font-semibold text-center">Connecting to database and authenticating user...</p>
+                <p id="error-details" class="text-xs text-red-500 mt-2 hidden text-center font-mono"></p>
+            </div>
             <!-- Class sections will be rendered here -->
         </div>
 
@@ -121,7 +127,8 @@
 
         // --- FIREBASE CONFIGURATION (CRITICAL: Replace with your actual config) ---
         const MY_FIREBASE_CONFIG = {
-            apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJzMJihQ", // Placeholder - Canvas replaces this
+            // These values are placeholders and will be overwritten by the Canvas environment variables.
+            apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJzMJihQ", 
             authDomain: "apps-e1163.firebaseapp.com",
             projectId: "apps-e1163",
             storageBucket: "apps-e1163.firebasestorage.app",
@@ -208,7 +215,7 @@
         window.handleDateChange = (newDateId) => {
             if (newDateId === selectedDateId) return;
             selectedDateId = newDateId;
-            document.getElementById('initial-message').textContent = `Fetching reports for ${getDisplayDate(selectedDateId)}...`;
+            document.getElementById('initial-message-text').textContent = `Fetching reports for ${getDisplayDate(selectedDateId)}...`;
             document.getElementById('initial-message').classList.remove('hidden');
             setupFirestoreListeners();
             renderClassList();
@@ -261,6 +268,16 @@
         // --- FIREBASE AND AUTHENTICATION ---
 
         const initializeFirebase = () => {
+            const initialMessageDiv = document.getElementById('initial-message');
+            const messageText = document.getElementById('initial-message-text');
+            const spinner = document.getElementById('loading-spinner');
+            const errorDetails = document.getElementById('error-details');
+
+            messageText.textContent = "Connecting to database and authenticating user...";
+            initialMessageDiv.classList.remove('hidden');
+            spinner.classList.remove('hidden');
+            errorDetails.classList.add('hidden');
+
             try {
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
@@ -271,21 +288,35 @@
                         userId = user.uid;
                         console.log("Authenticated as:", userId);
                         document.getElementById('user-id-display').textContent = `ID: ${userId}`;
-                        document.getElementById('initial-message').textContent = `Fetching reports for ${getDisplayDate(selectedDateId)}...`;
+                        messageText.textContent = `Fetching reports for ${getDisplayDate(selectedDateId)}...`;
                         isAuthReady = true;
                         setupFirestoreListeners();
                         
                     } else {
-                        if (initialAuthToken) {
-                            await signInWithCustomToken(auth, initialAuthToken);
-                        } else {
-                            await signInAnonymously(auth);
+                        // Attempt to sign in if not already authenticated
+                        try {
+                            if (initialAuthToken) {
+                                await signInWithCustomToken(auth, initialAuthToken);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                            // onAuthStateChanged should fire again with the user
+                        } catch (error) {
+                            console.error("Authentication failed:", error);
+                            spinner.classList.add('hidden');
+                            messageText.textContent = "Authentication Failed. Access Denied.";
+                            errorDetails.textContent = `Error: ${error.message}`;
+                            errorDetails.classList.remove('hidden');
+                            showMessage('Authentication Error', 'Could not sign in to the database. Please check console for details.');
                         }
                     }
                 });
             } catch (error) {
                 console.error("Firebase initialization failed:", error);
-                document.getElementById('initial-message').textContent = 'Error: Failed to initialize Firebase. Check console for details.';
+                spinner.classList.add('hidden');
+                messageText.textContent = 'Error: Failed to initialize Firebase.';
+                errorDetails.textContent = `Check config and console. Error: ${error.message}`;
+                errorDetails.classList.remove('hidden');
                 showMessage('Initialization Error', 'The app could not connect to the database. See console for details.');
             }
         };
@@ -311,7 +342,8 @@
                 }
             }, (error) => {
                 console.error(`Error fetching daily report for ${selectedDateId}:`, error);
-                document.getElementById('initial-message').textContent = `Error: Failed to fetch daily reports for ${selectedDateId}.`;
+                document.getElementById('initial-message-text').textContent = `Error: Failed to fetch daily reports for ${selectedDateId}.`;
+                document.getElementById('loading-spinner').classList.add('hidden');
             });
 
 
@@ -329,6 +361,8 @@
                     renderClassList();
                 }, (error) => {
                     console.error("Error fetching accumulated scores:", error);
+                    document.getElementById('initial-message-text').textContent = "Error: Failed to fetch accumulated scores.";
+                    document.getElementById('loading-spinner').classList.add('hidden');
                 });
             }
         };
@@ -340,19 +374,21 @@
          */
         const renderClassList = () => {
             const container = document.getElementById('scores-view');
-            container.innerHTML = '';
             
+            // Hide the initial loading message and spinner once data starts flowing
             const initialMessage = document.getElementById('initial-message');
             if (initialMessage) {
                 initialMessage.classList.add('hidden');
             }
+            
+            // Clear existing content only if data is ready to be rendered
+            container.innerHTML = '';
             
             const allClasses = CLASS_DEFINITIONS.map(classDef => {
                 const report = currentReports[classDef.id] || {}; 
                 const accumulated = currentAccumulatedScores[classDef.id] || { totalScore: 0, daysCount: 0 };
                 
                 // 1. DAILY SCORE (Dynamic, changes with selectedDateId)
-                // dailyReportHasData checks if a report exists for the SELECTED DATE
                 const dailyReportHasData = report.totalStudents !== undefined && report.totalStudents !== 0 && Object.keys(report).length > 1;
 
                 const dailyScore = dailyReportHasData 
@@ -663,6 +699,7 @@
                         lastReportDate = data.lastReportDate || '';
                     }
                     
+                    // Only update cumulative score if this is the first report saved for the current day
                     if (lastReportDate !== todayDateId) {
                         totalScore += newDailyScore;
                         daysCount += 1;
