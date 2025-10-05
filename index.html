@@ -128,10 +128,13 @@
             setLogLevel
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- FIREBASE CONFIGURATION (CRITICAL: Replace with your actual config) ---
+        // --- FIREBASE CONFIGURATION (CRITICAL: Populated with your actual config) ---
+        // 
+        // This configuration allows the app to connect to your Firebase project 
+        // when deployed to a public host like GitHub Pages.
+        // 
         const MY_FIREBASE_CONFIG = {
-            // These values are placeholders and will be overwritten by the Canvas environment variables.
-            apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJzMJihQ", 
+            apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJpMJihQ", 
             authDomain: "apps-e1163.firebaseapp.com",
             projectId: "apps-e1163",
             storageBucket: "apps-e1163.firebasestorage.app",
@@ -139,6 +142,8 @@
             appId: "1:855206153422:web:2a1366b2e7825304c3d49f" 
         };
         
+        // This logic allows the app to work both in the Canvas environment (using __vars) 
+        // and on public hosts (using MY_FIREBASE_CONFIG).
         const appId = typeof __app_id !== 'undefined' ? __app_id : MY_FIREBASE_CONFIG.projectId; 
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : MY_FIREBASE_CONFIG;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
@@ -318,6 +323,7 @@
                     } else {
                         // Attempt to sign in if not already authenticated
                         try {
+                            // On public hosts, initialAuthToken will be null, so we fall back to anonymous sign-in.
                             if (initialAuthToken) {
                                 await signInWithCustomToken(auth, initialAuthToken);
                             } else {
@@ -330,7 +336,7 @@
                             messageText.textContent = "Authentication Failed. Access Denied.";
                             errorDetails.textContent = `Error: ${error.message}`;
                             errorDetails.classList.remove('hidden');
-                            showMessage('Authentication Error', 'Could not sign in to the database. Please check console for details.');
+                            showMessage('Authentication Error', `Could not sign in to the database. ${error.message}`);
                         }
                     }
                 });
