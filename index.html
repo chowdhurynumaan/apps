@@ -110,13 +110,17 @@
 
     <!-- Firebase SDK Imports -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        // Use a consistent major version for all Firebase SDK components to prevent console warnings.
+        // We use static strings in the imports to avoid the SyntaxError: Unexpected template string.
+        const FIREBASE_VERSION = "10.10.0"; 
+
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
         import { 
             getAuth, 
             signInAnonymously, 
             signInWithCustomToken, 
             onAuthStateChanged 
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js";
         import { 
             getFirestore, 
             doc, 
@@ -126,7 +130,7 @@
             serverTimestamp,
             runTransaction,
             setLogLevel
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
 
         // --- FIREBASE CONFIGURATION (CRITICAL: Using user-provided config as base) ---
         
