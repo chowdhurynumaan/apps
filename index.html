@@ -476,13 +476,78 @@
         /**
          * Renders the overall class list with Daily and Accumulated Scores using the high-density grid.
          */
+
+         // --- START RANKING UTILITIES (NEW) ---
+        
+        /**
+         * Calculates ranks based on dailyScoreValue, ignoring any class with a score of -1 (N/A).
+         * @param {Array<Object>} classes - Array of class objects, each with a 'dailyScoreValue' property.
+         * @returns {Map<string, number>} A map where key is classId and value is the rank (1, 2, or 3).
+         */
+        const calculateRanks = (classes) => {
+            // 1. Filter out classes with no score (-1 or null/undefined) and sort descending
+            const rankedClasses = classes
+                .filter(c => c.dailyScoreValue !== null && c.dailyScoreValue !== -1)
+                .sort((a, b) => b.dailyScoreValue - a.dailyScoreValue);
+
+            const rankMap = new Map();
+            let currentRank = 1;
+            let lastScore = null;
+
+            for (let i = 0; i < rankedClasses.length && currentRank <= 3; i++) {
+                const classItem = rankedClasses[i];
+
+                if (lastScore === null || classItem.dailyScoreValue < lastScore) {
+                    // This is a new, lower score, so the rank is i + 1.
+                    currentRank = i + 1;
+                }
+                
+                // Only assign if we are 1st, 2nd, or 3rd
+                if (currentRank <= 3) {
+                    rankMap.set(classItem.id, currentRank);
+                }
+                
+                lastScore = classItem.dailyScoreValue;
+            }
+
+            return rankMap;
+        };
+
+        /**
+         * Helper function to generate the Trophy HTML based on rank using emojis.
+         * @param {number} rank - The rank (1, 2, or 3).
+         * @returns {string} HTML string for the rank badge.
+         */
+        const getTrophyHtml = (rank) => {
+            let emoji = '';
+            let colorClass = 'ml-1 text-sm leading-none'; // Add minor spacing and adjust size
+
+            if (rank === 1) {
+                emoji = '🥇';
+            } else if (rank === 2) {
+                emoji = '🥈';
+            } else if (rank === 3) {
+                emoji = '🥉';
+            } else {
+                return ''; // No badge for unranked classes
+            }
+            
+            // The emoji replaces the colored badge HTML
+            return `<span class="${colorClass}">${emoji}</span>`;
+        };
+
+        // --- END RANKING UTILITIES ---
+        /**
+         * Renders the overall class list with Daily and Accumulated Scores using the high-density grid.
+         */
         const renderClassList = () => {
             const container = document.getElementById('scores-view');
             
             // We clear the scores container to redraw the class list.
             container.innerHTML = '';
             
-            const allClasses = CLASS_DEFINITIONS.map(classDef => {
+            // Step 1: Map all class data, including a numeric score value for ranking
+            const allClassesInitial = CLASS_DEFINITIONS.map(classDef => {
                 const report = currentReports[classDef.id] || {}; 
                 const rawAccumulated = currentAccumulatedScores[classDef.id] || {};
                 
@@ -497,20 +562,19 @@
                 // 1. DAILY SCORE (Dynamic, changes with selectedDateId)
                 const dailyReportHasData = report.totalStudents !== undefined && report.totalStudents !== 0 && Object.keys(report).length > 1;
 
-                const dailyScore = dailyReportHasData 
+                const dailyScoreValue = dailyReportHasData 
                     ? calculateDailyScore(report) 
-                    : null; 
+                    : -1; // Use -1 as a numeric value for 'N/A' to allow for sorting (and exclusion)
 
-                const dailyScoreText = dailyReportHasData ? `${dailyScore.toFixed(2)}` : 'N/A';
+                const dailyScoreText = dailyReportHasData ? `${dailyScoreValue.toFixed(2)}` : 'N/A';
                 
                 // 2. CUMULATIVE AVERAGE
-                // Since totalScore and daysCount are now guaranteed to be numbers (0 or from DB), this is safe.
                 const isCumulativeData = accumulated.daysCount > 0;
                 const averageScore = isCumulativeData 
                     ? (accumulated.totalScore / accumulated.daysCount)
                     : 0;
 
-                const cumulativeAvgText = averageScore.toFixed(2); // CRITICAL: This is now called on a guaranteed number (0 or calculated float)
+                const cumulativeAvgText = averageScore.toFixed(2); 
 
                 // Add a detailed title for inspection (Includes new field)
                 const cumulativeTitle = isCumulativeData 
@@ -522,7 +586,7 @@
                 const performance = getPerformanceStatus(averageScore, isCumulativeData);
                 // -----------------------------------------------------------
                 
-                // --- NEW: EXTRACT THE FOUR METRICS FROM THE DAILY REPORT ---
+                // --- EXTRACT THE FOUR METRICS FROM THE DAILY REPORT ---
                 const totalStudents = report.totalStudents || 0;
                 const presentToday = report.presentToday || 0;
                 const reportBrought = report.progressReportBrought || 0;
@@ -531,19 +595,27 @@
                 
                 return {
                     ...classDef,
+                    dailyScoreValue, // Added for rank calculation
                     dailyScoreText,
-                    averageScore: cumulativeAvgText, // Used for the big text display
-                    borderColorClass, // Used for the fixed border
-                    performance, // Used for the fixed status pill
-                    cumulativeTitle, // New tooltip text
-                    
-                    // Add the four metrics to the object passed to the template
+                    averageScore: cumulativeAvgText, 
+                    borderColorClass, 
+                    performance, 
+                    cumulativeTitle, 
                     totalStudents,
                     presentToday,
                     reportBrought,
                     reportSigned
                 };
             });
+
+            // Step 2: Determine Ranks for the Top 3
+            const rankMap = calculateRanks(allClassesInitial);
+            
+            // Step 3: Re-map to add the 'rank' property to each class object
+            let allClasses = allClassesInitial.map(c => ({
+                ...c,
+                rank: rankMap.get(c.id) || 0 // 0 means no rank
+            }));
 
             const girlsClasses = allClasses.filter(c => c.id.startsWith('Girls'));
             const boysClasses = allClasses.filter(c => c.id.startsWith('Boys'));
@@ -561,7 +633,7 @@
                     <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
                         ${classes.map(c => {
                             // Calculate width for the progress bar based on daily score
-                            const dailyScoreValue = c.dailyScoreText === 'N/A' ? 0 : parseFloat(c.dailyScoreText);
+                            const dailyScoreValue = c.dailyScoreValue !== -1 ? c.dailyScoreValue : 0;
                             const dailyScoreWidth = dailyScoreValue > 0 ? Math.min(dailyScoreValue, 100).toFixed(0) : '0';
                             
                             // The daily score needs its own temporary color for the progress bar
@@ -569,13 +641,21 @@
 
                             // --- Determine Color for Present Count (Green if high, Red if low) ---
                             const presentColor = c.presentToday >= (c.totalStudents * 0.9) ? 'text-green-600' : 'text-red-500';
+
+                            // --- Step 4: Calculate Trophy HTML ---
+                            const trophyHtml = getTrophyHtml(c.rank);
                             
                             return `
                                 <div class="p-2 bg-white rounded-xl shadow-md transition transform duration-300 ease-in-out hover:scale-[1.03] hover:shadow-xl h-full cursor-pointer
                                              border-l-4 ${c.borderColorClass}" 
                                      onclick="selectClass('${c.id}')"
-                                     title="${c.cumulativeTitle.replace(/"/g, '&quot;')}"> <div class="flex justify-between items-start">
-                                        <span class="font-extrabold text-sm text-gray-900 leading-tight">${c.name}</span>
+                                     title="${c.cumulativeTitle.replace(/"/g, '&quot;')}"> 
+                                        
+                                    <div class="flex justify-between items-start mb-1">
+                                        <div class="flex items-center">
+                                            <span class="font-extrabold text-sm text-gray-900 leading-tight">${c.name}</span>
+                                            ${trophyHtml}
+                                        </div>
                                         <span class="text-2xs font-semibold px-1 py-0.5 rounded-full ${c.performance.bg} ${c.performance.text_color} whitespace-nowrap">
                                             ${c.performance.text}
                                         </span>
@@ -593,7 +673,7 @@
 
                                         <div class="flex-1 flex flex-col px-1">
                                             <span class="text-2xs text-gray-500 font-medium leading-none">Prt</span>
-                                            <span class="text-xs font-bold ${c.presentToday >= (c.totalStudents * 0.9) ? 'text-green-600' : 'text-red-500'} leading-snug">${c.presentToday}</span>
+                                            <span class="text-xs font-bold ${presentColor} leading-snug">${c.presentToday}</span>
                                         </div>
 
                                         <div class="flex-1 flex flex-col px-1">
