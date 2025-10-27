@@ -42,47 +42,50 @@
 </head>
 <body class="flex flex-col h-full">
     <!-- Header Section -->
-    <header class="flex-shrink-0 bg-white shadow-lg p-3 border-b border-gray-200 sticky top-0 z-20">
-        <div class="max-w-7xl mx-auto flex justify-between items-center h-8">
-            
-            <button id="menu-toggle" aria-label="Toggle navigation menu" 
-                    class="p-2 -ml-2 text-indigo-700 hover:text-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded sm:hidden">
-                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
-                </svg>
-            </button>
-            
-            <h1 class="text-xl font-extrabold text-indigo-700 flex-grow text-center sm:text-left">
-                <span class="mr-1">📚</span> Class Tracker
-            </h1>
-            
-            <div class="flex items-center space-x-2 flex-shrink-0">
-                
-                <input type="date" id="date-selector" onchange="handleDateChange(this.value)"
-                       class="px-2 py-1 border border-indigo-300 rounded-lg text-xs font-semibold text-gray-700 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition duration-150 w-28">
-                
-                <div id="user-id-display" class="hidden sm:block text-2xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full truncate max-w-[100px] cursor-pointer" 
-                     title="User ID. Click to Copy">
-                     ID: ...
-                </div>
-            </div>
-        </div>
+<header class="flex-shrink-0 bg-white shadow-lg p-3 border-b border-gray-200 sticky top-0 z-20">
+    <div class="max-w-7xl mx-auto flex justify-between items-center h-8">
         
-        <div id="mobile-nav-menu" class="hidden bg-white border-t border-gray-200 py-2 sm:hidden absolute w-full left-0 shadow-xl z-10">
-            <div class="flex flex-col space-y-2 px-4">
-                <a href="abc.html" class="px-3 py-2 text-sm text-center bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold shadow-md">
-                    About Us
-                </a>
-                <a href="contact.html" class="px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
-                    Contact
-                </a>
-                <div id="user-id-display-mobile" class="text-xs text-gray-500 bg-gray-50 px-3 py-1 rounded-lg text-center mt-2 cursor-pointer border border-gray-200" 
-                     title="User ID. Click to Copy">
-                     ID: ...
-                </div>
-            </div>
+        <button id="menu-toggle" aria-label="Toggle navigation menu" 
+        class="p-2 -ml-2 text-indigo-700 hover:text-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded flex-shrink-0">
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+            </svg>
+        </button>
+        
+        <h1 class="text-xl font-extrabold text-indigo-700 flex-grow text-center sm:text-left">
+            <span class="mr-1">📚</span> Tracker
+        </h1>
+
+        <nav class="hidden sm:hidden items-center space-x-3 mx-4">
+    <a href="abc.html" class="inline-block ...">About Us</a>
+    <a href="contact.html" class="inline-block ...">Contact</a>
+</nav>
+        
+        <div class="flex items-center space-x-2 flex-shrink-0">
+            
+            <input type="date" id="date-selector" onchange="handleDateChange(this.value)"
+                   class="px-2 py-1 border border-indigo-300 rounded-lg text-xs font-semibold text-gray-700 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition duration-150 w-28">
         </div>
-    </header>
+    <div id="user-id-display" class="hidden text-2xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full truncate max-w-[100px] cursor-pointer" 
+     title="User ID. Click to Copy">
+     ID: ...
+</div>
+    
+<div id="mobile-nav-menu" class="hidden bg-white border-t border-gray-200 py-2 absolute w-full left-0 top-full shadow-xl z-10">
+        <div class="flex flex-col space-y-2 px-4">
+            <a href="abc.html" class="px-3 py-2 text-sm text-center bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold shadow-md">
+                About Us
+            </a>
+            <a href="contact.html" class="px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
+                Contact
+            </a>
+            <div id="user-id-display-mobile" class="text-xs text-gray-500 bg-gray-50 px-3 py-1 rounded-lg text-center mt-2 cursor-pointer border border-gray-200" 
+     title="User ID. Click to Copy">
+     ID: ...
+</div>
+        </div>
+    </div>
+</header>
     <!-- Main Content Area -->
     <main id="main-content-area" class="flex-grow overflow-hidden relative max-w-7xl mx-auto w-full min-h-0 p-2 flex flex-col">
         
@@ -867,7 +870,46 @@
         };
         
         // Copy user ID utility
-        document.getElementById('user-id-display').addEventListener('click', () => {
+document.getElementById('user-id-display-mobile').addEventListener('click', () => {
+    const idText = document.getElementById('user-id-display-mobile').textContent;
+    const id = idText.replace('ID: ', '');
+    try {
+        const tempInput = document.createElement('textarea');
+        tempInput.value = id;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand('copy');
+        document.body.removeChild(tempInput);
+        showMessage('Copied!', `User ID: ${id} has been copied to your clipboard.`);
+    } catch (err) {
+        console.error('Could not copy text: ', err);
+        showMessage('Error', 'Failed to copy User ID to clipboard.');
+    }
+});
+    </script>
+    <script>
+        // ... all your other existing functions (initializeFirebase, handleDateChange, showMessage, etc.) ...
+        
+        // --- MOBILE MENU LOGIC ---
+        document.getElementById('menu-toggle').addEventListener('click', () => {
+            const menu = document.getElementById('mobile-nav-menu');
+            menu.classList.toggle('hidden');
+            
+            // Sync user ID display in the mobile menu when opened
+            const userIdDisplay = document.getElementById('user-id-display').textContent;
+            document.getElementById('user-id-display-mobile').textContent = userIdDisplay;
+        });
+
+        // Update the mobile user ID on initial load
+        document.addEventListener('DOMContentLoaded', () => {
+             // Pulls the ID from the hidden element (source of truth) and pushes it to the visible element
+             const userIdDisplay = document.getElementById('user-id-display').textContent;
+             document.getElementById('user-id-display-mobile').textContent = userIdDisplay;
+        });
+        
+        // Copy user ID utility - The user clicks the visible element in the menu
+        document.getElementById('user-id-display-mobile').addEventListener('click', () => {
+            // We copy the text from the hidden element, which holds the authentic ID
             const idText = document.getElementById('user-id-display').textContent;
             const id = idText.replace('ID: ', '');
             try {
@@ -883,23 +925,15 @@
                 showMessage('Error', 'Failed to copy User ID to clipboard.');
             }
         });
-        </script>
-    <script>
-        // --- MOBILE MENU LOGIC ---
-        document.getElementById('menu-toggle').addEventListener('click', () => {
-            const menu = document.getElementById('mobile-nav-menu');
-            menu.classList.toggle('hidden');
-            
-            // Sync user ID display in the mobile menu
-            const userIdDisplay = document.getElementById('user-id-display').textContent;
-            document.getElementById('user-id-display-mobile').textContent = userIdDisplay;
-        });
         
-        // Update the mobile user ID on initial load
-        document.addEventListener('DOMContentLoaded', () => {
-             const userIdDisplay = document.getElementById('user-id-display').textContent;
-             document.getElementById('user-id-display-mobile').textContent = userIdDisplay;
-        });
+        // --- INITIALIZATION (Ensure this is at the end) ---
+        window.onload = () => {
+            initializeFirebase();
+        };
+
+    </script>
+</body>
+</html>
     </script>
 </body>
 </html>
