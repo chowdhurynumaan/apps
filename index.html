@@ -108,7 +108,14 @@
 
         <!-- MODAL for Daily Report Entry (New) -->
         <div id="report-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-80 z-40 flex items-center justify-center p-4" onclick="closeModal()">
-            <div class="bg-white p-4 rounded-xl shadow-lg flex flex-col items-center justify-between min-h-[150px] hover:shadow-xl transition duration-200 cursor-pointer">
+            <div class="bg-white p-4 rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+                <div id="details-panel-content">
+                    <p class="text-center text-gray-500 italic py-10">Select a class to load the report entry form.</p>
+                </div>
+                <div id="modal-footer" class="mt-4 flex justify-center">
+                    </div>
+            </div>
+        </div>
     
     <div class="text-center w-full mb-2">
         <h2 class="text-md font-extrabold text-gray-800 truncate">Calculus I</h2>
@@ -341,6 +348,249 @@
             return { text: 'Poor', bg: 'bg-red-100', text_color: 'text-red-700', bar_color: 'bg-red-500', score_color: 'text-red-700' };
         };
 
+        /**
+         * Helper function to hide the modal. It must be a global function for the HTML onclick to work.
+         */
+        window.closeModal = () => {
+            document.getElementById('report-modal').classList.add('hidden');
+            selectedClassId = null; 
+        };
+
+        /**
+         * Generates the HTML form for data entry inside the modal.
+         * @param {object} classDef - The class definition object.
+         * @param {object} report - The current daily report data for this class/day.
+         * @returns {string} The full HTML string for the form.
+         */
+        const renderReportForm = (classDef, report) => {
+            const isReportEntered = report.totalStudents !== undefined && report.totalStudents !== 0;
+
+            // Default values
+            const defaultTotal = report.totalStudents || '';
+            const defaultPresent = report.presentToday || '';
+            const defaultBrought = report.progressReportBrought || '';
+            const defaultSigned = report.progressReportSigned || '';
+
+            const sectionType = classDef.id.startsWith('Girls') ? 'Girls' : 'Boys';
+            const cardBgColor = sectionType === 'Girls' ? 'bg-pink-50' : 'bg-blue-50';
+
+            // --- Form Inputs ---
+            const createInput = (id, label, placeholder, value, isRequired = true) => `
+                <div class="flex flex-col space-y-1">
+                    <label for="${id}" class="text-sm font-medium text-gray-700">${label} ${isRequired ? '<span class="text-red-500">*</span>' : ''}</label>
+                    <input type="number" id="${id}" placeholder="${placeholder}" value="${value}" 
+                           min="0" ${isRequired ? 'required' : ''}
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 transition duration-150">
+                </div>
+            `;
+
+            // --- Main HTML Structure ---
+            return `
+                <h2 class="text-2xl font-extrabold text-gray-900 mb-2">${classDef.name} Report Entry</h2>
+                <p class="text-sm text-gray-500 mb-4 border-b pb-2">Reports for: <span class="font-semibold text-indigo-600">${getDisplayDate(selectedDateId)}</span></p>
+
+                <div class="grid grid-cols-2 gap-4 p-4 ${cardBgColor} rounded-xl">
+                    ${createInput('input-totalStudents', 'Total Students in Class', 'e.g., 30', defaultTotal)}
+                    ${createInput('input-presentToday', 'Students Present Today', 'e.g., 28', defaultPresent)}
+                    ${createInput('input-progressReportBrought', 'Progress Reports Brought', 'e.g., 25', defaultBrought)}
+                    ${createInput('input-progressReportSigned', 'Progress Reports Signed', 'e.g., 22', defaultSigned)}
+                </div>
+                
+                <p class="text-xs text-red-500 mt-3 text-center">Note: All fields are required and must be non-negative integers.</p>
+                
+                <div class="mt-4 p-3 bg-gray-100 rounded-lg shadow-inner flex justify-between items-center text-sm text-gray-700 font-medium">
+                    <span class="text-2xs sm:text-sm">Score calculation is automatic upon saving.</span>
+                    ${isReportEntered ? '<span class="text-red-600 font-bold">REPORT ALREADY ENTERED</span>' : '<span class="text-green-600 font-bold">AWAITING ENTRY</span>'}
+                </div>
+            `;
+        };
+        
+        /**
+         * Checks the validity of the input fields and returns the report object or null.
+         */
+        const checkInputValidity = (classId) => {
+            const totalStudents = parseInt(document.getElementById('input-totalStudents').value.trim());
+            const presentToday = parseInt(document.getElementById('input-presentToday').value.trim());
+            const progressReportBrought = parseInt(document.getElementById('input-progressReportBrought').value.trim());
+            const progressReportSigned = parseInt(document.getElementById('input-progressReportSigned').value.trim());
+
+            if (isNaN(totalStudents) || isNaN(presentToday) || isNaN(progressReportBrought) || isNaN(progressReportSigned) ||
+                totalStudents < 0 || presentToday < 0 || progressReportBrought < 0 || progressReportSigned < 0) {
+                showMessage('Input Error', 'Please ensure all fields are filled with non-negative numbers.');
+                return null;
+            }
+
+            if (presentToday > totalStudents) {
+                showMessage('Input Error', 'Students Present Today cannot exceed Total Students in Class.');
+                return null;
+            }
+            if (progressReportBrought > totalStudents) {
+                showMessage('Input Error', 'Reports Brought cannot exceed Total Students in Class.');
+                return null;
+            }
+            if (progressReportSigned > progressReportBrought) {
+                showMessage('Input Error', 'Reports Signed cannot exceed Reports Brought.');
+                return null;
+            }
+            
+            const classDef = CLASS_DEFINITIONS.find(c => c.id === classId);
+
+            return {
+                classId: classId,
+                className: classDef.name,
+                totalStudents: totalStudents,
+                presentToday: presentToday,
+                progressReportBrought: progressReportBrought,
+                progressReportSigned: progressReportSigned,
+                // Server timestamp will be added on save
+                // userId and dateId are available globally/contextually
+            };
+        };
+        
+        /**
+         * Opens the modal and populates the form for the selected class.
+         * This function is called by the onclick handler on each class card.
+         * @param {string} classId - The ID of the class card clicked.
+         */
+        window.selectClass = (classId) => {
+            // Find the class definition
+            const classDef = CLASS_DEFINITIONS.find(c => c.id === classId);
+            if (!classDef) {
+                showMessage('Error', `Class ID ${classId} not found.`);
+                return;
+            }
+
+            // Get the existing report data for the selected date
+            const report = currentReports[classId] || {};
+            
+            // Set global state
+            selectedClassId = classId;
+
+            // 1. Render the form
+            const contentContainer = document.getElementById('details-panel-content');
+            contentContainer.innerHTML = renderReportForm(classDef, report);
+            
+            // 2. Render the footer buttons (Save/Close)
+            const footerContainer = document.getElementById('modal-footer');
+            footerContainer.innerHTML = `
+                <button id="save-report-btn" onclick="saveReport('${classId}')" 
+                        class="flex items-center justify-center bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition duration-150 shadow-md mr-2 w-full max-w-[200px] disabled:opacity-50 disabled:cursor-not-allowed">
+                    <svg id="save-spinner" class="animate-spin-slow h-5 w-5 text-white mr-3 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span id="save-button-text">Save and Close Report</span>
+                </button>
+                <button onclick="closeModal()" 
+                        class="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-400 transition duration-150 shadow-md w-full max-w-[200px]">
+                    Cancel
+                </button>
+            `;
+
+            // 3. Show the modal
+            document.getElementById('report-modal').classList.remove('hidden');
+        };
+
+        /**
+         * Saves the daily report data to Firestore.
+         * This function is passed the classId from the button's onclick handler.
+         * NOTE: This function requires Firebase imports (doc, runTransaction, serverTimestamp)
+         */
+        window.saveReport = async (classId) => {
+            if (isSaving || !userId) return; 
+
+            const saveButton = document.getElementById('save-report-btn');
+            const spinner = document.getElementById('save-spinner');
+            const buttonText = document.getElementById('save-button-text');
+            
+            // 1. Validate inputs and get the report object
+            const newReport = checkInputValidity(classId);
+            if (!newReport) {
+                return; // checkInputValidity already showed the error message
+            }
+
+            // 2. Set UI to saving state
+            isSaving = true;
+            saveButton.disabled = true;
+            buttonText.textContent = 'Saving...';
+            spinner.classList.remove('hidden');
+
+            try {
+                // Determine the document ID for the daily report
+                const dailyReportDocRef = doc(db, 'users', userId, 'dailyReports', selectedDateId, 'classes', classId);
+                
+                // Add metadata for the database record
+                const dataToSave = {
+                    ...newReport,
+                    dateId: selectedDateId,
+                    userId: userId,
+                    timestamp: serverTimestamp(), // Use server timestamp for accurate ordering/timing
+                };
+
+                // --- TRANSACTION to Update Daily Report and Accumulated Scores ---
+                await runTransaction(db, async (transaction) => {
+                    
+                    // A. Update the Daily Report
+                    transaction.set(dailyReportDocRef, dataToSave);
+                    
+                    // B. Update/Create Accumulated Score
+                    const accumulatedScoreDocRef = doc(db, 'users', userId, 'accumulatedScores', classId);
+                    
+                    // Calculate the new daily score
+                    const dailyScore = calculateDailyScore(newReport);
+                    
+                    // Get the current accumulated score 
+                    const accumulatedDoc = await transaction.get(accumulatedScoreDocRef);
+                    const accumulatedData = accumulatedDoc.exists() ? accumulatedDoc.data() : {
+                        totalScore: 0,
+                        daysCount: 0,
+                        lastReportDate: null,
+                        lastScoreContribution: 0
+                    };
+                    
+                    let newTotalScore = accumulatedData.totalScore;
+                    let newDaysCount = accumulatedData.daysCount;
+                    let scoreContribution = dailyScore;
+
+                    // CHECK: Is the user re-saving an existing report for a date that already contributed?
+                    if (accumulatedData.lastReportDate === selectedDateId) {
+                        // Subtract the old score contribution
+                        newTotalScore -= accumulatedData.lastScoreContribution;
+                        // daysCount remains the same 
+                    } else {
+                        // This is a NEW report for a new date.
+                        newDaysCount += 1;
+                    }
+                    
+                    // Add the new score contribution
+                    newTotalScore += scoreContribution;
+                    
+                    // Final update of the accumulated score document
+                    transaction.set(accumulatedScoreDocRef, {
+                        totalScore: newTotalScore,
+                        daysCount: newDaysCount,
+                        lastReportDate: selectedDateId, 
+                        lastScoreContribution: scoreContribution 
+                    });
+
+                }); // End of transaction
+
+                showMessage('Success!', `Report for ${classId} on ${getDisplayDate(selectedDateId)} saved successfully!`);
+                
+                // Close the modal after successful save
+                closeModal();
+
+            } catch (error) {
+                console.error(`Error saving report for ${classId}:`, error);
+                showMessage('Error', `Failed to save report for ${classId}: ${error.message}`);
+                
+            } finally {
+                isSaving = false;
+                saveButton.disabled = false;
+                buttonText.textContent = 'Save and Close Report';
+                spinner.classList.add('hidden');
+            }
+        };
 
         // --- FIREBASE AND AUTHENTICATION ---
         
