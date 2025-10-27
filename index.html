@@ -520,7 +520,7 @@
          */
         const getTrophyHtml = (rank) => {
             let emoji = '';
-            let colorClass = 'ml-1 text-sm leading-none'; // Add minor spacing and adjust size
+            let colorClass = 'ml-1 text-sm leading-none'; 
 
             if (rank === 1) {
                 emoji = '🥇';
@@ -529,14 +529,19 @@
             } else if (rank === 3) {
                 emoji = '🥉';
             } else {
-                return ''; // No badge for unranked classes
+                return ''; 
             }
             
-            // The emoji replaces the colored badge HTML
             return `<span class="${colorClass}">${emoji}</span>`;
         };
 
         // --- END RANKING UTILITIES ---
+        /**
+         * Renders the overall class list with Daily and Accumulated Scores using the high-density grid.
+         */
+        /**
+         * Renders the overall class list with Daily and Accumulated Scores using the high-density grid.
+         */
         /**
          * Renders the overall class list with Daily and Accumulated Scores using the high-density grid.
          */
@@ -617,90 +622,83 @@
                 rank: rankMap.get(c.id) || 0 // 0 means no rank
             }));
 
-            const girlsClasses = allClasses.filter(c => c.id.startsWith('Girls'));
-            const boysClasses = allClasses.filter(c => c.id.startsWith('Boys'));
+            // --- START: SINGLE GRID RENDER (No Header) ---
             
-            const selectedDateDisplay = getDisplayDate(selectedDateId);
-            
-            const createSection = (title, classes) => {
-                const section = document.createElement('div');
-                section.className = 'mb-3';
-                section.innerHTML = `
-                    <h2 class="text-base font-extrabold text-gray-800 mb-2 border-b-2 border-indigo-200 pb-0.5 flex justify-between items-center">
-                        <span>${title}</span>
-                        <span class="text-2xs font-semibold text-gray-500 italic">Reports for ${selectedDateDisplay}</span>
-                    </h2>
-                    <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                        ${classes.map(c => {
-                            // Calculate width for the progress bar based on daily score
-                            const dailyScoreValue = c.dailyScoreValue !== -1 ? c.dailyScoreValue : 0;
-                            const dailyScoreWidth = dailyScoreValue > 0 ? Math.min(dailyScoreValue, 100).toFixed(0) : '0';
-                            
-                            // The daily score needs its own temporary color for the progress bar
-                            const dailyProgressBarColor = dailyScoreValue >= 80 ? 'bg-indigo-500' : dailyScoreValue >= 50 ? 'bg-orange-500' : 'bg-red-500';
+            // The container is now set directly to the grid div content
+            container.innerHTML = `
+                <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                    ${allClasses.map(c => {
+                        // Determine card color
+                        const cardBgColor = c.id.startsWith('Girls') ? 'bg-pink-50' : 'bg-blue-50';
 
-                            // --- Determine Color for Present Count (Green if high, Red if low) ---
-                            const presentColor = c.presentToday >= (c.totalStudents * 0.9) ? 'text-green-600' : 'text-red-500';
+                        // Calculate width for the progress bar based on daily score
+                        const dailyScoreValue = c.dailyScoreValue !== -1 ? c.dailyScoreValue : 0;
+                        const dailyScoreWidth = dailyScoreValue > 0 ? Math.min(dailyScoreValue, 100).toFixed(0) : '0';
+                        
+                        // The daily score needs its own temporary color for the progress bar
+                        const dailyProgressBarColor = dailyScoreValue >= 80 ? 'bg-indigo-500' : dailyScoreValue >= 50 ? 'bg-orange-500' : 'bg-red-500';
 
-                            // --- Step 4: Calculate Trophy HTML ---
-                            const trophyHtml = getTrophyHtml(c.rank);
-                            
-                            return `
-                                <div class="p-2 bg-white rounded-xl shadow-md transition transform duration-300 ease-in-out hover:scale-[1.03] hover:shadow-xl h-full cursor-pointer
-                                             border-l-4 ${c.borderColorClass}" 
-                                     onclick="selectClass('${c.id}')"
-                                     title="${c.cumulativeTitle.replace(/"/g, '&quot;')}"> 
-                                        
-                                    <div class="flex justify-between items-start mb-1">
-                                        <div class="flex items-center">
-                                            <span class="font-extrabold text-sm text-gray-900 leading-tight">${c.name}</span>
-                                            ${trophyHtml}
-                                        </div>
-                                        <span class="text-2xs font-semibold px-1 py-0.5 rounded-full ${c.performance.bg} ${c.performance.text_color} whitespace-nowrap">
-                                            ${c.performance.text}
-                                        </span>
-                                    </div>
+                        // --- Determine Color for Present Count (Green if high, Red if low) ---
+                        const presentColor = c.presentToday >= (c.totalStudents * 0.9) ? 'text-green-600' : 'text-red-500';
+
+                        // --- Calculate Trophy HTML ---
+                        const trophyHtml = getTrophyHtml(c.rank);
+                        
+                        return `
+                            <div class="p-2 ${cardBgColor} rounded-xl shadow-md transition transform duration-300 ease-in-out hover:scale-[1.03] hover:shadow-xl h-full cursor-pointer
+                                         border-l-4 ${c.borderColorClass}" 
+                                 onclick="selectClass('${c.id}')"
+                                 title="${c.cumulativeTitle.replace(/"/g, '&quot;')}"> 
                                     
-                                    <p class="text-2xs text-gray-500 leading-none">Score (Daily):</p>
-                                    <p class="font-extrabold text-lg text-indigo-700 leading-snug mb-2">${c.dailyScoreText}%</p>
-                                    
-                                    <div class="flex justify-between items-center text-center w-full pb-1 border-b border-gray-100 divide-x divide-gray-200">
-                                        
-                                        <div class="flex-1 flex flex-col px-1">
-                                            <span class="text-2xs text-gray-500 font-medium leading-none">Tot</span>
-                                            <span class="text-xs font-bold text-gray-800 leading-snug">${c.totalStudents}</span>
-                                        </div>
-
-                                        <div class="flex-1 flex flex-col px-1">
-                                            <span class="text-2xs text-gray-500 font-medium leading-none">Prt</span>
-                                            <span class="text-xs font-bold ${presentColor} leading-snug">${c.presentToday}</span>
-                                        </div>
-
-                                        <div class="flex-1 flex flex-col px-1">
-                                            <span class="text-2xs text-gray-500 font-medium leading-none">Rpt</span>
-                                            <span class="text-xs font-bold text-gray-800 leading-snug">${c.reportBrought}</span>
-                                        </div>
-
-                                        <div class="flex-1 flex flex-col px-1">
-                                            <span class="text-2xs text-gray-500 font-medium leading-none">Sig</span>
-                                            <span class="text-xs font-bold text-gray-800 leading-snug">${c.reportSigned}</span>
-                                        </div>
+                                <div class="flex justify-between items-start mb-1">
+                                    <div class="flex items-center">
+                                        <span class="font-extrabold text-sm text-gray-900 leading-tight">${c.name}</span>
+                                        ${trophyHtml}
                                     </div>
-                                    <p class="text-2xs text-gray-500 leading-none mt-2">Avg (Cumul. ${c.averageScore}%):</p>
-                                    <div class="h-1 bg-gray-200 rounded-full">
-                                        <div class="h-1 bg-blue-500 rounded-full transition-all duration-300" style="width: ${Math.min(parseFloat(c.averageScore), 100).toFixed(0)}%;"></div>
+                                    <span class="text-2xs font-semibold px-1 py-0.5 rounded-full ${c.performance.bg} ${c.performance.text_color} whitespace-nowrap">
+                                        ${c.performance.text}
+                                    </span>
+                                </div>
+                                
+                                <div class="flex items-end mb-2">
+                                    <p class="text-2xs text-gray-500 font-semibold mr-1 leading-none">Score (Daily):</p>
+                                    <p class="font-extrabold text-base text-indigo-700 leading-none">${c.dailyScoreText}%</p>
+                                </div>
+                                <div class="flex justify-between items-center text-center w-full pb-1 border-b border-gray-100 divide-x divide-gray-200">
+                                    
+                                    <div class="flex-1 flex flex-col px-1">
+                                        <span class="text-2xs text-gray-500 font-medium leading-none">Tot</span>
+                                        <span class="text-xs font-bold text-gray-800 leading-snug">${c.totalStudents}</span>
+                                    </div>
+
+                                    <div class="flex-1 flex flex-col px-1">
+                                        <span class="text-2xs text-gray-500 font-medium leading-none">Prt</span>
+                                        <span class="text-xs font-bold ${presentColor} leading-snug">${c.presentToday}</span>
+                                    </div>
+
+                                    <div class="flex-1 flex flex-col px-1">
+                                        <span class="text-2xs text-gray-500 font-medium leading-none">Rpt</span>
+                                        <span class="text-xs font-bold text-gray-800 leading-snug">${c.reportBrought}</span>
+                                    </div>
+
+                                    <div class="flex-1 flex flex-col px-1">
+                                        <span class="text-2xs text-gray-500 font-medium leading-none">Sig</span>
+                                        <span class="text-xs font-bold text-gray-800 leading-snug">${c.reportSigned}</span>
                                     </div>
                                 </div>
-                            `;
-                        }).join('')}
-                    </div>
-                `;
-                container.appendChild(section);
-            };
+                                
+                                <p class="text-2xs text-gray-500 leading-none mt-2">Avg (${c.averageScore}%):</p>
+                                <div class="h-1 bg-gray-200 rounded-full">
+                                    <div class="h-1 bg-blue-500 rounded-full transition-all duration-300" style="width: ${Math.min(parseFloat(c.averageScore), 100).toFixed(0)}%;"></div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+            // --- END: SINGLE GRID RENDER ---
 
-            createSection('Girls Section', girlsClasses);
-            createSection('Boys Section', boysClasses);
-
+            // --- EMPTY/INFO MESSAGE LOGIC ---
             if (allClasses.length === 0) {
                  container.innerHTML = `<p class="text-center text-gray-500 italic py-10">No class data found. Check definitions or initialization.</p>`;
             } else if (allClasses.every(c => c.performance.text === 'No Data')) {
