@@ -83,30 +83,6 @@
             </div>
         </div>
     </header>
-
-    ```
-
-### Required JavaScript Addition
-
-You'll need a tiny bit of JavaScript to make the hamburger menu toggle. Add this right before the `</script>` tag at the end of your file:
-
-```javascript
-        // --- MOBILE MENU LOGIC ---
-        document.getElementById('menu-toggle').addEventListener('click', () => {
-            const menu = document.getElementById('mobile-nav-menu');
-            menu.classList.toggle('hidden');
-            
-            // Sync user ID display in the mobile menu
-            const userIdDisplay = document.getElementById('user-id-display').textContent;
-            document.getElementById('user-id-display-mobile').textContent = userIdDisplay;
-        });
-        
-        // Update the mobile user ID on initial load
-        document.addEventListener('DOMContentLoaded', () => {
-             const userIdDisplay = document.getElementById('user-id-display').textContent;
-             document.getElementById('user-id-display-mobile').textContent = userIdDisplay;
-        });
-
     <!-- Main Content Area -->
     <main id="main-content-area" class="flex-grow overflow-hidden relative max-w-7xl mx-auto w-full min-h-0 p-2 flex flex-col">
         
