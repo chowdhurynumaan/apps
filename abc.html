@@ -1,0 +1,449 @@
+// PresentationDeck.jsx - Single-File React Presentation Deck Component
+
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  TrendingDown,
+  Lightbulb,
+  Shield,
+  BarChart,
+  Users,
+  MessageSquare,
+  Zap,
+  CheckCircle,
+  ClipboardCheck,
+  Layout,
+  Globe,
+  Monitor,
+  Target,
+  Send,
+  ArrowLeft,
+  ArrowRight,
+  Download,
+} from 'lucide-react';
+
+// --- 1. Data Structure and Content ---
+const slides = [
+  {
+    id: 0,
+    title: 'The Future of Remote Work',
+    subtitle: 'Navigating the New Digital Frontier',
+    icon: Globe,
+    points: [
+      'The shift to remote work has accelerated, creating a **complex set of challenges** for companies.',
+      'We must move beyond temporary fixes and establish **sustainable, digital-first operating models**.',
+      'This deck outlines the key friction points and presents a **unified solution framework** for modern productivity.',
+    ],
+    color: 'text-indigo-600',
+  },
+  {
+    id: 1,
+    title: 'Five Areas of Friction',
+    subtitle: 'Where Traditional Models Fail',
+    icon: TrendingDown,
+    points: [
+      '**Communication Overload**: Constant notifications leading to fatigue and reduced focus.',
+      '**Siloed Knowledge**: Critical information is hard to find, impacting team velocity and trust.',
+      '**Productivity Drag**: Difficulty in measuring and maintaining high-quality output remotely.',
+      '**Isolation & Burnout**: Lack of organic interaction harming team cohesion and mental health.',
+      '**Security Vulnerabilities**: Increased attack surface from disparate home networks and devices.',
+    ],
+    color: 'text-red-600',
+  },
+  {
+    id: 2,
+    title: 'Problem: Communication Overload',
+    subtitle: 'The Tyranny of the Inbox',
+    icon: MessageSquare,
+    points: [
+      'The average employee spends **3.1 hours a day** on email and chat, a major drain on deep work time.',
+      'The **"always on" culture** creates pressure to respond instantly, damaging work-life boundaries.',
+      'Project status updates are scattered across multiple platforms, leading to **critical context switching**.',
+      'Solution requires **asynchronous-first protocols** and clear channel separation.',
+    ],
+    color: 'text-red-600',
+  },
+  {
+    id: 3,
+    title: 'Problem: Siloed Knowledge',
+    subtitle: 'The Information Black Hole',
+    icon: Layout,
+    points: [
+      'Company knowledge is trapped in **personal drives and local files**, not centralized repositories.',
+      'New hires take **40% longer to ramp up** due to the difficulty in finding historical context and documentation.',
+      'Decision-making slows down when data is **inaccessible or inconsistent** across departments.',
+      'The focus must shift to **proactive documentation** as a core deliverable, not an afterthought.',
+    ],
+    color: 'text-red-600',
+  },
+  {
+    id: 4,
+    title: 'Problem: Productivity Drag',
+    subtitle: 'Measuring Output, Not Input',
+    icon: BarChart,
+    points: [
+      'Reliance on **"active time" metrics** over demonstrable results creates a culture of "performative work".',
+      'Misaligned goals lead to teams working hard, but not on the **highest-impact business priorities**.',
+      'Lack of clear **deliverable definitions** makes performance reviews subjective and frustrating.',
+      'We need standardized, cross-functional OKRs that are **transparent and traceable**.',
+    ],
+    color: 'text-red-600',
+  },
+  {
+    id: 5,
+    title: 'Problem: Isolation & Burnout',
+    subtitle: 'The Hidden Cost of WFH',
+    icon: Users,
+    points: [
+      '**65% of remote workers** report feeling less connected to their colleagues and company culture.',
+      'The inability to mentally "leave the office" results in **higher rates of stress and fatigue**.',
+      'Managers often miss early signs of burnout, leading to **unplanned attrition and disruption**.',
+      'We must implement **structured social programs** and mandatory "no meeting" blocks.',
+    ],
+    color: 'text-red-600',
+  },
+  {
+    id: 6,
+    title: 'Problem: Security Vulnerabilities',
+    subtitle: 'The Expanding Attack Surface',
+    icon: Shield,
+    points: [
+      'Remote teams face an **increased risk of phishing and malware** due to less controlled environments.',
+      'Personal devices and unsecured home networks create **major compliance headaches** for IT.',
+      'Failure to enforce strong **multi-factor authentication (MFA)** is the most common entry point for breaches.',
+      'A **Zero-Trust architecture** must become the new security baseline for all remote operations.',
+    ],
+    color: 'text-red-600',
+  },
+  {
+    id: 7,
+    title: 'Solution: The New Pillars',
+    subtitle: 'Building a Resilient Remote Future',
+    icon: Lightbulb,
+    points: [
+      '**Asynchronous Communication**: Prioritize focused, documented communication over real-time chatter.',
+      '**Centralized Knowledge Base**: Make finding information as easy as searching Google.',
+      '**Outcome-Based Metrics**: Shift focus from hours logged to measurable, high-impact deliverables.',
+      '**Culture-by-Design**: Intentionally create virtual spaces for connection and mental well-being.',
+      '**Advanced Security**: Implement a blanket Zero-Trust policy across all devices and networks.',
+    ],
+    color: 'text-green-700',
+  },
+  {
+    id: 8,
+    title: 'Solution: Asynchronous Workflows',
+    subtitle: 'Unlocking Deep Focus',
+    icon: Zap,
+    points: [
+      'Implement a **"SLA for internal response"** where instant replies aren\'t the default expectation.',
+      'Use dedicated tools for project updates that are **structured and easy to digest**.',
+      'Schedule **mandatory "Focus Blocks"** in the calendar where meetings are strictly forbidden.',
+      'This shift can lead to a **25% reduction in meeting time** and a 15% boost in documented output.',
+    ],
+    color: 'text-green-700',
+  },
+  {
+    id: 9,
+    title: 'Solution: Centralized Knowledge',
+    subtitle: 'The Single Source of Truth',
+    icon: Monitor,
+    points: [
+      'Adopt a single, company-wide **documentation platform** (e.g., Notion, Confluence).',
+      'Mandate that **all major decisions and processes** be documented before execution.',
+      'Run a quarterly **"Documentation Drive"** to audit and refresh outdated content.',
+      'This reduces knowledge "asks" by **18%** and empowers self-service resolution of issues.',
+    ],
+    color: 'text-green-700',
+  },
+  {
+    id: 10,
+    title: 'Solution: Outcome-Based Metrics',
+    subtitle: 'Focusing on Impact',
+    icon: Target,
+    points: [
+      'Transition from tasks-completed to **Key Results (KRs)** that directly impact company goals.',
+      'Implement weekly **"High-Impact Review"** meetings focused solely on KR progress, not general activity.',
+      'Empower teams with the **autonomy** to achieve results using their preferred methods.',
+      'Clear, measurable outcomes improve team morale and result in **higher-quality deliverables**.',
+    ],
+    color: 'text-green-700',
+  },
+  {
+    id: 11,
+    title: 'Solution: Culture by Design',
+    subtitle: 'Fostering Connection',
+    icon: Users,
+    points: [
+      'Introduce **"Virtual Water Cooler"** slots with pre-set, non-work-related topics.',
+      'Provide stipends for **"In-Home Office"** improvements to enhance employee comfort and professionalism.',
+      'Conduct regular, **confidential check-ins** on mental health and work-life balance.',
+      'Investing in virtual connection **reduces voluntary turnover** by up to 10%.',
+    ],
+    color: 'text-green-700',
+  },
+  {
+    id: 12,
+    title: 'Solution: Zero-Trust Security',
+    subtitle: 'Securing the Perimeterless Office',
+    icon: Shield,
+    points: [
+      'Enforce **MFA on all applications** and services, without exception.',
+      'Use **Endpoint Detection and Response (EDR)** tools to monitor and manage all company devices.',
+      'Provide secure, **company-managed VPN** access for all critical internal resources.',
+      'Zero-Trust is not just security; it\'s a foundation for **trustworthy and scalable remote operations**.',
+    ],
+    color: 'text-green-700',
+  },
+  {
+    id: 13,
+    title: 'Action Plan Summary',
+    subtitle: 'The Next 90 Days',
+    icon: Send,
+    points: [
+      '**Phase 1 (Month 1):** Audit and select the core **Centralized Knowledge** platform.',
+      '**Phase 2 (Month 2):** Roll out the **Asynchronous Communication** guidelines and Focus Blocks.',
+      '**Phase 3 (Month 3):** Finalize and communicate the new **Outcome-Based Metrics (OKRs)**.',
+      'This deliberate transition ensures **minimal disruption** and maximum long-term benefit.',
+    ],
+    color: 'text-indigo-600',
+  },
+];
+
+// --- 2. Utility Functions ---
+
+/**
+ * Parses the point text to apply a specific color to text enclosed in **double asterisks**.
+ * @param {string} text - The bullet point string.
+ * @param {string} colorClass - The Tailwind color class to apply (e.g., 'text-red-600').
+ * @returns {React.ReactNode[]} Array of React nodes (strings and spans).
+ */
+const processPointText = (text, colorClass) => {
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      const boldText = part.slice(2, -2);
+      return (
+        <span key={index} className={`font-semibold ${colorClass}`}>
+          {boldText}
+        </span>
+      );
+    }
+    return part;
+  });
+};
+
+// --- 3. Main Component ---
+
+export function PresentationDeck() {
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  const [isScriptLoaded, setIsScriptLoaded] = useState(false);
+  const [html2canvas, setHtml2canvas] = useState(null);
+
+  const totalSlides = slides.length;
+  const currentSlide = slides[currentSlideIndex];
+
+  // --- Navigation Logic (Keyboard & Buttons) ---
+
+  const goToPrev = useCallback(() => {
+    setCurrentSlideIndex((prev) => Math.max(0, prev - 1));
+  }, []);
+
+  const goToNext = useCallback(() => {
+    setCurrentSlideIndex((prev) => Math.min(totalSlides - 1, prev + 1));
+  }, [totalSlides]);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'ArrowLeft') {
+        goToPrev();
+      } else if (event.key === 'ArrowRight') {
+        goToNext();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [goToPrev, goToNext]);
+
+  // --- Dynamic html2canvas Script Loading (CRITICAL FIX) ---
+
+  useEffect(() => {
+    // Check if html2canvas is already available (e.g., in development environment)
+    if (window.html2canvas) {
+      setHtml2canvas(() => window.html2canvas);
+      setIsScriptLoaded(true);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    script.async = true;
+
+    const onScriptLoad = () => {
+      // CRITICAL FIX: Update state only inside the onload handler
+      setHtml2canvas(() => window.html2canvas);
+      setIsScriptLoaded(true);
+      console.log('html2canvas script loaded successfully.');
+    };
+
+    script.onload = onScriptLoad;
+    script.onerror = () => console.error('Error loading html2canvas script.');
+
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  // --- Export Function ---
+
+  const exportCardAsImage = async () => {
+    if (!html2canvas) {
+      console.error('html2canvas is not loaded yet.');
+      return;
+    }
+
+    const cardElement = document.getElementById('presentation-card');
+    if (!cardElement) return;
+
+    // Use a scale factor for high-resolution output
+    const scale = 2;
+    const canvas = await html2canvas(cardElement, {
+      scale: scale,
+      logging: false,
+      useCORS: true,
+      backgroundColor: null, // Transparent background
+    });
+
+    const image = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.href = image;
+    link.download = `slide-${currentSlide.id}-${currentSlide.title.replace(/\s/g, '_')}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // --- Styling and Theme Logic ---
+
+  const themeClasses = useMemo(() => {
+    const isProblem = currentSlide.id < 7;
+    const cardBg = isProblem ? 'bg-white' : 'bg-green-50';
+    const pointsBg = isProblem ? 'bg-gray-100' : 'bg-white';
+    const borderColor = isProblem ? 'border-gray-300' : 'border-green-400';
+
+    return { cardBg, pointsBg, borderColor };
+  }, [currentSlide.id]);
+
+  const { cardBg, pointsBg, borderColor } = themeClasses;
+
+  const NavigationButton = ({ children, onClick, disabled }) => (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`p-3 rounded-full shadow-lg transition-all duration-200 ${
+        disabled
+          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+          : 'bg-white text-indigo-600 hover:bg-indigo-50 hover:shadow-xl'
+      }`}
+    >
+      {children}
+    </button>
+  );
+
+  const ExportButton = () => (
+    <button
+      onClick={exportCardAsImage}
+      disabled={!isScriptLoaded}
+      className={`flex items-center space-x-2 px-4 py-2 rounded-lg shadow-md transition-all duration-200 text-sm ${
+        isScriptLoaded
+          ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-xl'
+          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+      }`}
+    >
+      <Download className="w-5 h-5" />
+      <span>{isScriptLoaded ? 'Export Card as Image' : 'Loading Export Module...'}</span>
+    </button>
+  );
+
+  const SlideIcon = currentSlide.icon;
+
+  // --- JSX Rendering ---
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-8 flex flex-col items-center justify-center font-sans">
+      <div className="w-full max-w-6xl space-y-6">
+        {/* Card Container with Fixed 16:9 Aspect Ratio */}
+        <div
+          id="presentation-card"
+          className={`w-full shadow-2xl rounded-xl border-4 ${borderColor} ${cardBg} transition-colors duration-500`}
+          // Fixed 16:9 Aspect Ratio logic
+          style={{ paddingBottom: '56.25%', position: 'relative' }}
+        >
+          <div className="absolute inset-0 p-6 sm:p-10 lg:p-16 flex flex-col lg:flex-row">
+            {/* Left Column (Title/Icon) */}
+            <div className="lg:w-1/3 flex flex-col items-center justify-center p-4 lg:p-0 mb-6 lg:mb-0 border-b lg:border-b-0 lg:border-r border-gray-200/50">
+              <SlideIcon className={`w-32 h-32 sm:w-40 sm:h-40 ${currentSlide.color} mb-6`} />
+              <h1 className={`text-3xl sm:text-4xl font-extrabold text-center mb-2 ${currentSlide.color}`}>
+                {currentSlide.title}
+              </h1>
+              <p className="text-xl font-light text-gray-500 text-center">
+                {currentSlide.subtitle}
+              </p>
+            </div>
+
+            {/* Right Column (Points) */}
+            <div className="lg:w-2/3 flex items-center p-0 lg:pl-10">
+              <div className={`w-full h-full rounded-lg ${pointsBg} p-4 sm:p-6 shadow-inner transition-colors duration-500`}>
+                <ul className="space-y-4 px-4 sm:px-8 py-4 text-gray-700">
+                  {currentSlide.points.map((point, index) => (
+                    <li key={index} className="flex items-start space-x-3">
+                      {/* CRITICAL FIX: Icon size and flex-shrink-0 for correct wrapping */}
+                      <ClipboardCheck className={`w-5 h-5 flex-shrink-0 mt-1 ${currentSlide.color}`} />
+                      <p className="text-base lg:text-base leading-relaxed">
+                        {processPointText(point, currentSlide.color)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation and Export Controls */}
+        <div className="flex justify-between items-center w-full max-w-4xl mx-auto">
+          {/* Left Controls */}
+          <div className="flex items-center space-x-3">
+            <NavigationButton onClick={goToPrev} disabled={currentSlideIndex === 0}>
+              <ArrowLeft className="w-6 h-6" />
+            </NavigationButton>
+            <span className="text-gray-600 font-medium text-lg">
+              {currentSlideIndex + 1} / {totalSlides}
+            </span>
+            <NavigationButton onClick={goToNext} disabled={currentSlideIndex === totalSlides - 1}>
+              <ArrowRight className="w-6 h-6" />
+            </NavigationButton>
+          </div>
+
+          {/* Right Controls (Export Button) */}
+          <ExportButton />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Example of how to use this component (requires a Tailwind CSS setup)
+/*
+// In your main index file:
+import ReactDOM from 'react-dom/client';
+import { PresentationDeck } from './PresentationDeck';
+// import './index.css'; // Your Tailwind imports
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <PresentationDeck />
+  </React.StrictMode>,
+);
+*/
