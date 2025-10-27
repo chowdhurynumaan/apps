@@ -873,18 +873,17 @@
                                  onclick="selectClass('${c.id}')"
                                  title="${c.cumulativeTitle.replace(/"/g, '&quot;')}"> 
                                     
-                                <div class="flex justify-between items-start mb-1">
+                                <div class="flex justify-between items-center mb-1">
                                     <div class="flex items-center">
                                         <span class="font-extrabold text-sm text-gray-900 leading-tight">${c.name}</span>
                                         ${trophyHtml}
                                     </div>
                                     <span class="w-2.5 h-2.5 rounded-full ${c.performance.bg} block" title="Cumulative Status: ${c.performance.text}"></span>
-
                                     </span>
                                 </div>
                                 
                                 <div class="flex items-end mb-2">
-                                    <p class="text-2xs text-gray-500 font-semibold mr-1 leading-none">Score (Daily):</p>
+                                    <p class="text-2xs text-gray-500 font-semibold mr-1 leading-none">Daily:</p>
                                     <p class="font-extrabold text-base text-indigo-700 leading-none">${c.dailyScoreText}%</p>
                                 </div>
                                 <div class="flex justify-between items-center text-center w-full pb-1 border-b border-gray-100 divide-x divide-gray-200">
@@ -1293,5 +1292,4 @@ document.getElementById('user-id-display-mobile').addEventListener('click', () =
 </html>
     </script>
 </body>
-
 </html>
