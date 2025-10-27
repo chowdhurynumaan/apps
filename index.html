@@ -108,14 +108,38 @@
 
         <!-- MODAL for Daily Report Entry (New) -->
         <div id="report-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-80 z-40 flex items-center justify-center p-4" onclick="closeModal()">
-            <div class="bg-white p-4 rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
-                <div id="details-panel-content">
-                    <p class="text-center text-gray-500 italic py-10">Select a class to load the report entry form.</p>
-                </div>
-                <div id="modal-footer" class="mt-4 flex justify-center">
-                    <!-- Content will be dynamically inserted here -->
-                </div>
-            </div>
+            <div class="bg-white p-4 rounded-xl shadow-lg flex flex-col items-center justify-between min-h-[150px] hover:shadow-xl transition duration-200 cursor-pointer">
+    
+    <div class="text-center w-full mb-2">
+        <h2 class="text-md font-extrabold text-gray-800 truncate">Calculus I</h2>
+        <p class="text-xs font-medium text-indigo-600 truncate">MTH-401</p>
+    </div>
+
+    <div class="grid grid-cols-2 gap-y-1 gap-x-3 text-left w-full">
+        
+        <div class="flex flex-col">
+            <span class="text-2xs text-gray-500 font-semibold truncate">Total Students:</span>
+            <span class="text-sm font-bold text-gray-800 leading-none">32</span>
+        </div>
+
+        <div class="flex flex-col">
+            <span class="text-2xs text-gray-500 font-semibold truncate">Present Today:</span>
+            <span class="text-sm font-bold text-green-600 leading-none">30</span>
+        </div>
+
+        <div class="flex flex-col">
+            <span class="text-2xs text-gray-500 font-semibold truncate">Brought Report:</span>
+            <span class="text-sm font-bold text-gray-800 leading-none">25</span>
+        </div>
+
+        <div class="flex flex-col">
+            <span class="text-2xs text-gray-500 font-semibold truncate">Signed Report:</span>
+            <span class="text-sm font-bold text-gray-800 leading-none">22</span>
+        </div>
+    </div>
+    
+    <div class="h-2"></div>
+</div>
         </div>
         
         <!-- Message Box for Confirmation/Errors (Replaces alert()) -->
@@ -449,6 +473,9 @@
         /**
          * Renders the overall class list with Daily and Accumulated Scores using the high-density grid.
          */
+        /**
+         * Renders the overall class list with Daily and Accumulated Scores using the high-density grid.
+         */
         const renderClassList = () => {
             const container = document.getElementById('scores-view');
             
@@ -495,13 +522,26 @@
                 const performance = getPerformanceStatus(averageScore, isCumulativeData);
                 // -----------------------------------------------------------
                 
+                // --- NEW: EXTRACT THE FOUR METRICS FROM THE DAILY REPORT ---
+                const totalStudents = report.totalStudents || 0;
+                const presentToday = report.presentToday || 0;
+                const reportBrought = report.progressReportBrought || 0;
+                const reportSigned = report.progressReportSigned || 0;
+                // ----------------------------------------------------------
+                
                 return {
                     ...classDef,
                     dailyScoreText,
                     averageScore: cumulativeAvgText, // Used for the big text display
                     borderColorClass, // Used for the fixed border
                     performance, // Used for the fixed status pill
-                    cumulativeTitle // New tooltip text
+                    cumulativeTitle, // New tooltip text
+                    
+                    // Add the four metrics to the object passed to the template
+                    totalStudents,
+                    presentToday,
+                    reportBrought,
+                    reportSigned
                 };
             });
 
@@ -518,7 +558,6 @@
                         <span>${title}</span>
                         <span class="text-2xs font-semibold text-gray-500 italic">Reports for ${selectedDateDisplay}</span>
                     </h2>
-                    <!-- LAYOUT CONSTRAINT: md:grid-cols-6 ensures 6-in-a-row on desktop/tablet -->
                     <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
                         ${classes.map(c => {
                             // Calculate width for the progress bar based on daily score
@@ -528,31 +567,48 @@
                             // The daily score needs its own temporary color for the progress bar
                             const dailyProgressBarColor = dailyScoreValue >= 80 ? 'bg-indigo-500' : dailyScoreValue >= 50 ? 'bg-orange-500' : 'bg-red-500';
 
+                            // --- Determine Color for Present Count (Green if high, Red if low) ---
+                            const presentColor = c.presentToday >= (c.totalStudents * 0.9) ? 'text-green-600' : 'text-red-500';
+                            
                             return `
-                                <!-- MANDATED CARD STRUCTURE AND HOVER EFFECT -->
                                 <div class="p-2 bg-white rounded-xl shadow-md transition transform duration-300 ease-in-out hover:scale-[1.03] hover:shadow-xl h-full cursor-pointer
                                              border-l-4 ${c.borderColorClass}" 
                                      onclick="selectClass('${c.id}')"
-                                     title="${c.cumulativeTitle.replace(/"/g, '&quot;')}"> <!-- Added Tooltip Here -->
-                                    
-                                    <div class="flex justify-between items-start mb-1">
-                                        <!-- Class Name -->
+                                     title="${c.cumulativeTitle.replace(/"/g, '&quot;')}"> <div class="flex justify-between items-start">
                                         <span class="font-extrabold text-sm text-gray-900 leading-tight">${c.name}</span>
-                                        <!-- Performance Label (FIXED based on CUMULATIVE SCORE) -->
                                         <span class="text-2xs font-semibold px-1 py-0.5 rounded-full ${c.performance.bg} ${c.performance.text_color} whitespace-nowrap">
                                             ${c.performance.text}
                                         </span>
                                     </div>
                                     
-                                    <!-- Accumulated Average Score (FIXED TEXT) -->
-                                    <p class="text-2xs text-gray-500 leading-none">Avg (Cumul.):</p>
-                                    <p class="font-extrabold text-lg text-indigo-700 leading-snug">${c.averageScore}%</p>
+                                    <p class="text-2xs text-gray-500 leading-none">Score (Daily):</p>
+                                    <p class="font-extrabold text-lg text-indigo-700 leading-snug mb-2">${c.dailyScoreText}%</p>
                                     
-                                    <!-- Daily Score (Progress Bar - DYNAMIC) -->
-                                    <p class="text-2xs text-gray-500 leading-none mt-2">Daily Score (${c.dailyScoreText}%):</p>
-                                    <!-- h-1 is used for the thin progress bar -->
+                                    <div class="flex justify-between items-center text-center w-full pb-1 border-b border-gray-100 divide-x divide-gray-200">
+                                        
+                                        <div class="flex-1 flex flex-col px-1">
+                                            <span class="text-2xs text-gray-500 font-medium leading-none">Tot</span>
+                                            <span class="text-xs font-bold text-gray-800 leading-snug">${c.totalStudents}</span>
+                                        </div>
+
+                                        <div class="flex-1 flex flex-col px-1">
+                                            <span class="text-2xs text-gray-500 font-medium leading-none">Prt</span>
+                                            <span class="text-xs font-bold ${c.presentToday >= (c.totalStudents * 0.9) ? 'text-green-600' : 'text-red-500'} leading-snug">${c.presentToday}</span>
+                                        </div>
+
+                                        <div class="flex-1 flex flex-col px-1">
+                                            <span class="text-2xs text-gray-500 font-medium leading-none">Rpt</span>
+                                            <span class="text-xs font-bold text-gray-800 leading-snug">${c.reportBrought}</span>
+                                        </div>
+
+                                        <div class="flex-1 flex flex-col px-1">
+                                            <span class="text-2xs text-gray-500 font-medium leading-none">Sig</span>
+                                            <span class="text-xs font-bold text-gray-800 leading-snug">${c.reportSigned}</span>
+                                        </div>
+                                    </div>
+                                    <p class="text-2xs text-gray-500 leading-none mt-2">Avg (Cumul. ${c.averageScore}%):</p>
                                     <div class="h-1 bg-gray-200 rounded-full">
-                                        <div class="h-1 ${dailyProgressBarColor} rounded-full transition-all duration-300" style="width: ${dailyScoreWidth}%;"></div>
+                                        <div class="h-1 bg-blue-500 rounded-full transition-all duration-300" style="width: ${Math.min(parseFloat(c.averageScore), 100).toFixed(0)}%;"></div>
                                     </div>
                                 </div>
                             `;
