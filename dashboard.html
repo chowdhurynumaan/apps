@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Class Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        
+        html, body { 
+            height: 100%;
+            min-height: 100vh;
+            font-family: 'Inter', sans-serif; 
+            background-color: #f4f7f9; 
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Styling for each day cell in the calendar */
+        .calendar-day {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 60px; 
+            border-radius: 8px;
+            cursor: default;
+            transition: all 0.2s;
+            line-height: 1; /* Keep things compact */
+        }
+
+        /* The "Signal Light" element */
+        .signal-light {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-top: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        /* Green Light ON state */
+        .light-on {
+            background-color: #10B981; /* Green-500 */
+            box-shadow: 0 0 8px #34D399; /* Glow effect */
+        }
+        
+        /* Light OFF state */
+        .light-off {
+            background-color: #D1D5DB; /* Gray-400 */
+            border: 1px solid #9CA3AF;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+
+    <header class="mb-6 flex justify-between items-center border-b pb-4">
+        <h1 class="text-3xl font-extrabold text-gray-800">📊 Daily Report Dashboard</h1>
+        <a href="index.html" class="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition duration-150">
+            < Home
+        </a>
+    </header>
+
+    <main class="flex-grow max-w-4xl mx-auto w-full">
+        <div id="calendar-container" class="bg-white p-6 rounded-xl shadow-lg">
+            <h2 id="month-display" class="text-xl font-bold text-gray-700 mb-4 text-center">Loading...</h2>
+            
+            <div class="grid grid-cols-7 text-center text-sm font-semibold text-gray-500 border-b pb-2 mb-2">
+                <span>Sun</span>
+                <span>Mon</span>
+                <span>Tue</span>
+                <span>Wed</span>
+                <span>Thu</span>
+                <span>Fri</span>
+                <span>Sat</span>
+            </div>
+            
+            <div id="calendar-grid" class="grid grid-cols-7 gap-1">
+                </div>
+            
+            <p id="loading-status" class="text-center text-gray-500 mt-6">Fetching daily reports...</p>
+        </div>
+    </main>
+
+    <script type="module">
+        // --- FIREBASE CONFIGURATION (REPLACE THIS WITH YOUR ACTUAL CONFIG FROM index.html) ---
+        const firebaseConfig = {
+  apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJpMJihQ",
+  authDomain: "apps-e1163.firebaseapp.com",
+  projectId: "apps-e1163",
+  storageBucket: "apps-e1163.firebasestorage.app",
+  messagingSenderId: "855206153422",
+  appId: "1:855206153422:web:2a1366b2e7825304c3d49f",
+  measurementId: "G-7YCKESJB8T"
+};
+        };
+        // ---------------------------------------------------------------------------------
+
+        let USER_ID = localStorage.getItem('class_tracker_user_id'); 
+        let database;
+        
+        const initializeFirebase = () => {
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+            database = firebase.database();
+            
+            if (!USER_ID) {
+                document.getElementById('loading-status').textContent = 'Error: User ID not found. Please log in on the main page.';
+                return;
+            }
+            
+            renderCalendar();
+        };
+
+        const formatDate = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`; // Format: YYYY-MM-DD
+        };
+
+        const getMonthName = (date) => {
+            return date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+        };
+        
+        // Fetches all daily reports for the current user
+        const fetchDailyReports = async () => {
+            return new Promise((resolve, reject) => {
+                const reportsRef = database.ref(`users/${USER_ID}/dailyReports`);
+                
+                reportsRef.once('value', snapshot => {
+                    const reports = snapshot.val() || {};
+                    resolve(reports);
+                }, error => {
+                    console.error("Firebase fetch error:", error);
+                    reject(error);
+                });
+            });
+        };
+        
+        // Renders the calendar for the current month
+        const renderCalendar = async () => {
+            const calendarGrid = document.getElementById('calendar-grid');
+            const monthDisplay = document.getElementById('month-display');
+            const loadingStatus = document.getElementById('loading-status');
+            
+            calendarGrid.innerHTML = '';
+            loadingStatus.textContent = 'Loading daily report history...';
+            
+            let reports = {};
+            try {
+                reports = await fetchDailyReports();
+                loadingStatus.textContent = 'Data loaded successfully.';
+                loadingStatus.classList.add('hidden');
+            } catch (error) {
+                loadingStatus.textContent = 'Error loading data. Check console for details.';
+                return;
+            }
+
+            // Get date details for the current month
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = today.getMonth(); 
+            
+            const firstDayOfMonth = new Date(year, month, 1);
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const startingDayOfWeek = firstDayOfMonth.getDay(); // 0=Sunday
+            
+            monthDisplay.textContent = getMonthName(today);
+
+            // 1. Fill in preceding empty days (padding)
+            for (let i = 0; i < startingDayOfWeek; i++) {
+                calendarGrid.insertAdjacentHTML('beforeend', '<div class="calendar-day bg-gray-50 border border-gray-100"></div>');
+            }
+            
+            // 2. Render each day of the month
+            for (let day = 1; day <= daysInMonth; day++) {
+                const currentDate = new Date(year, month, day);
+                const dateKey = formatDate(currentDate); 
+                
+                // Check if a daily report entry exists for this day
+                // The existence of reports[dateKey] indicates a submission "did that day"
+                const hasReport = !!reports[dateKey] && Object.keys(reports[dateKey]).length > 0;
+                
+                // Determine styling
+                const lightClass = hasReport ? 'light-on' : 'light-off';
+                const dayBg = hasReport ? 'bg-green-50' : 'bg-white';
+                // Highlight today's date
+                const dayText = day === today.getDate() && month === today.getMonth() ? 'font-extrabold text-indigo-700' : 'text-gray-900';
+                
+                const tooltipText = hasReport 
+                    ? `Report submitted on ${dateKey}`
+                    : `No report found on ${dateKey}`;
+
+                // HTML for the day
+                const dayHtml = `
+                    <div class="calendar-day ${dayBg} border border-gray-200" title="${tooltipText}">
+                        <span class="text-sm ${dayText}">${day}</span>
+                        <div class="signal-light ${lightClass}"></div>
+                    </div>
+                `;
+                calendarGrid.insertAdjacentHTML('beforeend', dayHtml);
+            }
+        };
+
+        // --- INITIALIZATION ---
+        window.onload = () => {
+            initializeFirebase();
+        };
+
+    </script>
+</body>
+</html>
