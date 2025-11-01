@@ -768,103 +768,113 @@
         /**
          * Renders the overall class list with Daily and Accumulated Scores using the high-density grid.
          */
-        const renderClassList = () => {
-            const container = document.getElementById('scores-view');
-            
-            // We clear the scores container to redraw the class list.
-            container.innerHTML = '';
-            
-            // Step 1: Map all class data, including a numeric score value for ranking
-            const allClassesInitial = CLASS_DEFINITIONS.map(classDef => {
-                const report = currentReports[classDef.id] || {}; 
-                const rawAccumulated = currentAccumulatedScores[classDef.id] || {};
-                
-                // FIX: Defensively ensure all numeric fields are present, defaulting to 0.
-                const accumulated = {
-                    totalScore: rawAccumulated.totalScore || 0,
-                    daysCount: rawAccumulated.daysCount || 0,
-                    lastScoreContribution: rawAccumulated.lastScoreContribution || 0,
-                    lastReportDate: rawAccumulated.lastReportDate || ''
-                };
-                
-                // 1. DAILY SCORE (Dynamic, changes with selectedDateId)
-                const dailyReportHasData = report.totalStudents !== undefined && report.totalStudents !== 0 && Object.keys(report).length > 1;
+        // Locate and replace the ENTIRE 'renderClassList' function with the code below.
+const renderClassList = () => {
+    const container = document.getElementById('scores-view');
+    
+    // We clear the scores container to redraw the class list.
+    container.innerHTML = '';
+    
+    // ... [Omitted: Step 1 (mapping all class data)] ...
 
-                const dailyScoreValue = dailyReportHasData 
-                    ? calculateDailyScore(report) 
-                    : -1; // Use -1 as a numeric value for 'N/A' to allow for sorting (and exclusion)
+    // Step 1: Map all class data, including a numeric score value for ranking
+    const allClassesInitial = CLASS_DEFINITIONS.map(classDef => {
+        // ... [Rest of Step 1 remains UNCHANGED] ...
+        
+        // Accumulator data mapping and Daily Score calculation...
+        const report = currentReports[classDef.id] || {}; 
+        const rawAccumulated = currentAccumulatedScores[classDef.id] || {};
+        
+        const accumulated = {
+            totalScore: rawAccumulated.totalScore || 0,
+            daysCount: rawAccumulated.daysCount || 0,
+            lastScoreContribution: rawAccumulated.lastScoreContribution || 0,
+            lastReportDate: rawAccumulated.lastReportDate || ''
+        };
+        
+        const dailyReportHasData = report.totalStudents !== undefined && report.totalStudents !== 0 && Object.keys(report).length > 1;
 
-                const dailyScoreText = dailyReportHasData ? `${dailyScoreValue.toFixed(2)}` : 'N/A';
-                
-                // 2. CUMULATIVE AVERAGE
-                const isCumulativeData = accumulated.daysCount > 0;
-                const averageScore = isCumulativeData 
-                    ? (accumulated.totalScore / accumulated.daysCount)
-                    : 0;
+        const dailyScoreValue = dailyReportHasData 
+            ? calculateDailyScore(report) 
+            : -1; 
 
-                const cumulativeAvgText = averageScore.toFixed(2); 
+        const dailyScoreText = dailyReportHasData ? `${dailyScoreValue.toFixed(2)}` : 'N/A';
+        
+        const isCumulativeData = accumulated.daysCount > 0;
+        const averageScore = isCumulativeData 
+            ? (accumulated.totalScore / accumulated.daysCount)
+            : 0;
 
-                // Add a detailed title for inspection (Includes new field)
-                const cumulativeTitle = isCumulativeData 
-                    ? `Cumulative Breakdown:\nTotal Points: ${accumulated.totalScore.toFixed(2)}\nTotal Days: ${accumulated.daysCount}\nLast Score Added: ${accumulated.lastScoreContribution.toFixed(2)}\nLast Report Date: ${accumulated.lastReportDate || 'Unknown'}`
-                    : `No previous reports recorded.`;
+        const cumulativeAvgText = averageScore.toFixed(2); 
 
-                // --- CRITICAL CHECK: Use CUMULATIVE AVERAGE for Card Look ---
-                const borderColorClass = getPerformanceBorder(averageScore, isCumulativeData);
-                const performance = getPerformanceStatus(averageScore, isCumulativeData);
-                // -----------------------------------------------------------
-                
-                // --- EXTRACT THE FOUR METRICS FROM THE DAILY REPORT ---
-                const totalStudents = report.totalStudents || 0;
-                const presentToday = report.presentToday || 0;
-                const reportBrought = report.progressReportBrought || 0;
-                const reportSigned = report.progressReportSigned || 0;
-                // ----------------------------------------------------------
-                
-                return {
-                    ...classDef,
-                    dailyScoreValue, // Added for rank calculation
-                    dailyScoreText,
-                    averageScore: cumulativeAvgText, 
-                    borderColorClass, 
-                    performance, 
-                    cumulativeTitle, 
-                    totalStudents,
-                    presentToday,
-                    reportBrought,
-                    reportSigned
-                };
-            });
+        const cumulativeTitle = isCumulativeData 
+            ? `Cumulative Breakdown:\nTotal Points: ${accumulated.totalScore.toFixed(2)}\nTotal Days: ${accumulated.daysCount}\nLast Score Added: ${accumulated.lastScoreContribution.toFixed(2)}\nLast Report Date: ${accumulated.lastReportDate || 'Unknown'}`
+            : `No previous reports recorded.`;
 
-            // Step 2: Determine Ranks for the Top 3
-            const rankMap = calculateRanks(allClassesInitial);
-            
-            // Step 3: Re-map to add the 'rank' property to each class object
-            let allClasses = allClassesInitial.map(c => ({
-                ...c,
-                rank: rankMap.get(c.id) || 0 // 0 means no rank
-            }));
+        const borderColorClass = getPerformanceBorder(averageScore, isCumulativeData);
+        const performance = getPerformanceStatus(averageScore, isCumulativeData);
+        
+        const totalStudents = report.totalStudents || 0;
+        const presentToday = report.presentToday || 0;
+        const reportBrought = report.progressReportBrought || 0;
+        const reportSigned = report.progressReportSigned || 0;
+        
+        return {
+            ...classDef,
+            dailyScoreValue, 
+            dailyScoreText,
+            averageScore: cumulativeAvgText, 
+            borderColorClass, 
+            performance, 
+            cumulativeTitle, 
+            totalStudents,
+            presentToday,
+            reportBrought,
+            reportSigned
+        };
+    });
 
-            // --- START: SINGLE GRID RENDER (No Header) ---
-            
-            // The container is now set directly to the grid div content
-            container.innerHTML = `
+    // Step 2: Determine Ranks for the Top 3
+    const rankMap = calculateRanks(allClassesInitial);
+    
+    // Step 3: Re-map to add the 'rank' property to each class object and separate into groups
+    let girlsClasses = [];
+    let boysClasses = [];
+    
+    allClassesInitial.forEach(c => {
+        const classWithRank = {
+            ...c,
+            rank: rankMap.get(c.id) || 0 // 0 means no rank
+        };
+        
+        if (c.id.startsWith('Girls')) {
+            girlsClasses.push(classWithRank);
+        } else {
+            boysClasses.push(classWithRank);
+        }
+    });
+
+    // --- NEW: Helper function to render a section (Girls or Boys) ---
+    const renderSection = (classes, title, headerColor, headerBg) => {
+        if (classes.length === 0) return '';
+
+        return `
+            <div class="mb-4">
+                <h2 class="text-xl font-extrabold ${headerColor} border-b-2 border-gray-300 pb-1 mb-2">
+                    ${title}
+                </h2>
                 <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                    ${allClasses.map(c => {
-                        // Determine card color
+                    ${classes.map(c => {
+                        // Determine card color (remains in the original card logic)
                         const cardBgColor = c.id.startsWith('Girls') ? 'bg-pink-50' : 'bg-blue-50';
 
-                        // Calculate width for the progress bar based on daily score
-                        const dailyScoreValue = c.dailyScoreValue !== -1 ? c.dailyScoreValue : 0;
-                        const dailyScoreWidth = dailyScoreValue > 0 ? Math.min(dailyScoreValue, 100).toFixed(0) : '0';
+                        // Calculate width for the progress bar based on cumulative average score
+                        const avgScoreWidth = Math.min(parseFloat(c.averageScore), 100).toFixed(0);
                         
-                        // The daily score needs its own temporary color for the progress bar
-                        const dailyProgressBarColor = dailyScoreValue >= 80 ? 'bg-indigo-500' : dailyScoreValue >= 50 ? 'bg-orange-500' : 'bg-red-500';
-
-                        // --- Determine Color for Present Count (Green if high, Red if low) ---
+                        // Determine Color for Present Count (Green if high, Red if low)
                         const presentColor = c.presentToday >= (c.totalStudents * 0.9) ? 'text-green-600' : 'text-red-500';
 
-                        // --- Calculate Trophy HTML ---
+                        // Calculate Trophy HTML
                         const trophyHtml = getTrophyHtml(c.rank);
                         
                         return `
@@ -879,7 +889,6 @@
                                         ${trophyHtml}
                                     </div>
                                     <span class="w-2.5 h-2.5 rounded-full ${c.performance.bg} block" title="Cumulative Status: ${c.performance.text}"></span>
-                                    </span>
                                 </div>
                                 
                                 <div class="flex items-end mb-2">
@@ -911,22 +920,31 @@
                                 
                                 <p class="text-2xs text-gray-500 leading-none mt-2">Avg (${c.averageScore}%):</p>
                                 <div class="h-1 bg-gray-200 rounded-full">
-                                    <div class="h-1 bg-blue-500 rounded-full transition-all duration-300" style="width: ${Math.min(parseFloat(c.averageScore), 100).toFixed(0)}%;"></div>
+                                    <div class="h-1 bg-blue-500 rounded-full transition-all duration-300" style="width: ${avgScoreWidth}%;"></div>
                                 </div>
                             </div>
                         `;
                     }).join('')}
                 </div>
-            `;
-            // --- END: SINGLE GRID RENDER ---
+            </div>
+        `;
+    }
+    // --- END: Helper function to render a section ---
 
-            // --- EMPTY/INFO MESSAGE LOGIC ---
-            if (allClasses.length === 0) {
-                 container.innerHTML = `<p class="text-center text-gray-500 italic py-10">No class data found. Check definitions or initialization.</p>`;
-            } else if (allClasses.every(c => c.performance.text === 'No Data')) {
-                 container.insertAdjacentHTML('afterbegin', `<p class="text-center text-sm font-semibold text-gray-600 bg-yellow-50 p-2 rounded-lg mb-4">Database is empty. Click any class card to enter today's first report!</p>`);
-            }
-        };
+    // Step 4: Render both sections
+    let htmlContent = '';
+    htmlContent += renderSection(girlsClasses, 'Girls Section', 'text-pink-600', 'bg-pink-100');
+    htmlContent += renderSection(boysClasses, 'Boys Section', 'text-blue-600', 'bg-blue-100');
+    
+    container.innerHTML = htmlContent;
+
+    // --- EMPTY/INFO MESSAGE LOGIC ---
+    if (allClassesInitial.length === 0) {
+         container.innerHTML = `<p class="text-center text-gray-500 italic py-10">No class data found. Check definitions or initialization.</p>`;
+    } else if (allClassesInitial.every(c => c.performance.text === 'No Data')) {
+         container.insertAdjacentHTML('afterbegin', `<p class="text-center text-sm font-semibold text-gray-600 bg-yellow-50 p-2 rounded-lg mb-4">Database is empty. Click any class card to enter today's first report!</p>`);
+    }
+};
         
         /**
          * Updates only the Daily Class Score (DCS) text and color in the open modal.
