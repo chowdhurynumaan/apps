@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Progress Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, setLogLevel, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- GLOBAL CONFIG & STATE ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+
+        let db, auth, userId;
+        let authReady = false;
+        let currentView = 'groups'; // 'groups', 'students'
+        let selectedGroup = '';
+        let studentsData = []; // Cache for current group students
+        let selectedStudent = null; // Student object for modal interaction
+        let pendingLog = {}; // Tracks M/R changes in the logging modal
+        let groupToDelete = null; // Holds group name during deletion process
+        const TOTAL_LESSONS = 29;
+        const DAYS_IN_MONTH = 30.437; // Average days for calculation
+
+        // --- CORE FIREBASE & UTILITY FUNCTIONS ---
+
+        function getCollectionPath(collectionName) {
+            // All data is public as requested
+            return `artifacts/${appId}/public/data/${collectionName}`;
+        }
+
+        async function initApp() {
+            try {
+                // 1. Initialize Firebase
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                setLogLevel('Debug');
+
+                // 2. Authenticate
+                if (typeof __initial_auth_token !== 'undefined') {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                userId = auth.currentUser?.uid || crypto.randomUUID();
+                authReady = true;
+
+                console.log("App Initialized. User ID:", userId);
+
+                // 3. Load Data & UI
+                await addSampleData();
+                loadActiveGroups();
+
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                document.getElementById('app-container').innerHTML = `<p class="text-red-600">Error initializing the app. Check console for details.</p>`;
+            }
+        }
+
+        // --- DATA INITIALIZATION (SAMPLE DATA) ---
+        async function addSampleData() {
+            const groupsRef = collection(db, getCollectionPath('groups'));
+            const groupsSnapshot = await getDocs(groupsRef);
+            if (!groupsSnapshot.empty) return;
+
+            console.log("Adding sample data for first run...");
+
+            const groupNames = ["1A Male", "1B Female", "2A Mixed"];
+            const today = new Date();
+            const targetDate = new Date(today);
+            targetDate.setDate(today.getDate() + 90);
+            const targetDateStr = targetDate.toISOString().substring(0, 10);
+            const todayStr = today.toISOString().substring(0, 10);
+            const yesterdayStr = new Date(today.setDate(today.getDate() - 1)).toISOString().substring(0, 10);
+
+
+            for (const name of groupNames) {
+                await setDoc(doc(db, getCollectionPath('groups'), name), {
+                    name: name,
+                    isActive: true,
+                });
+            }
+
+            // Student Data with specific initial mastery/goals for diverse pacing
+            await setDoc(doc(collection(db, getCollectionPath('students'))), {
+                name: "Alice Johnson (Ahead)",
+                currentGroup: "1A Male",
+                goal: { targetDate: targetDateStr, studyDays: 5 },
+                progress: { 
+                    mastered: 15, 
+                    reviews: { 
+                        [yesterdayStr]: { '1': 'M', '2': 'M', '3': 'R' },
+                        [todayStr]: { '16': 'M', '17': 'R' } 
+                    } 
+                },
+                id: crypto.randomUUID()
+            });
+            await setDoc(doc(collection(db, getCollectionPath('students'))), {
+                name: "Bob Smith (On Track)",
+                currentGroup: "1A Male",
+                goal: { targetDate: targetDateStr, studyDays: 3 },
+                progress: { mastered: 8, reviews: {} },
+                id: crypto.randomUUID()
+            });
+            await setDoc(doc(collection(db, getCollectionPath('students'))), {
+                name: "Charlie Brown (Lapse)",
+                currentGroup: "1B Female",
+                goal: { targetDate: targetDateStr.replace(/90/, '30'), studyDays: 7 }, // Shorter timeline = critical lapse
+                progress: { mastered: 2, reviews: {} },
+                id: crypto.randomUUID()
+            });
+            await setDoc(doc(collection(db, getCollectionPath('students'))), {
+                name: "No Goal User",
+                currentGroup: "1B Female",
+                progress: { mastered: 5, reviews: {} },
+                id: crypto.randomUUID()
+            });
+        }
+
+        // --- PACING LOGIC ---
+
+        function calculatePacingStatus(student) {
+            const defaultPace = { value: 0, unit: 'N/A' };
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const startDate = new Date(); // Proxy start date
+            startDate.setHours(0,0,0,0);
+            
+            if (!student.goal || !student.goal.targetDate || !student.goal.studyDays) {
+                return { status: 'NO_GOAL', color: 'bg-gray-400', badge: 'No Goal Set', requiredPace: defaultPace };
+            }
+
+            const targetDate = new Date(student.goal.targetDate);
+            targetDate.setHours(0, 0, 0, 0);
+
+            // 1. Lessons Remaining
+            const actualMastery = student.progress?.mastered || 0;
+            const lessonsRemaining = TOTAL_LESSONS - actualMastery;
+
+            if (lessonsRemaining <= 0) {
+                 return { status: 'COMPLETE', color: 'bg-emerald-600', badge: 'COMPLETED!', requiredPace: defaultPace };
+            }
+
+            // 2. Days Remaining & Passed (using study days logic)
+            const studyDaysPerWeek = student.goal.studyDays;
+            
+            const totalDaysRemaining = Math.max(1, Math.ceil((targetDate - today) / (1000 * 60 * 60 * 60 * 24))); // Use 1 as minimum
+            const remainingWeeks = totalDaysRemaining / 7;
+            const daysPassed = Math.max(1, Math.ceil((today - startDate) / (1000 * 60 * 60 * 24)));
+            
+            if (totalDaysRemaining <= 0) {
+                 return { status: 'PAST_DUE', color: 'bg-yellow-600', badge: 'PAST DUE', requiredPace: defaultPace };
+            }
+
+            // --- REQUIRED PACE (WHOLE NUMBER, ROUNDED UP) ---
+
+            const requiredDailyRaw = lessonsRemaining / totalDaysRemaining;
+            const requiredWeeklyRaw = lessonsRemaining / remainingWeeks; // Lessons per calendar week
+            const requiredMonthlyRaw = requiredWeeklyRaw * (DAYS_IN_MONTH / 7);
+
+            // Required Paces (always rounded up to meet the deadline)
+            const requiredDailyCeil = Math.ceil(requiredDailyRaw);
+            const requiredWeeklyCeil = Math.ceil(requiredWeeklyRaw);
+            const requiredMonthlyCeil = Math.ceil(requiredMonthlyRaw);
+
+            let paceValue, paceUnit;
+
+            // Compactness Priority: Monthly (if lowest whole number) -> Weekly -> Daily
+            // Example: 5/month < 2/week < 1/day
+            if (requiredMonthlyCeil > 0 && requiredMonthlyCeil <= requiredWeeklyCeil) { 
+                paceValue = requiredMonthlyCeil;
+                paceUnit = 'month';
+            } else if (requiredWeeklyCeil > 0 && requiredWeeklyCeil <= requiredDailyCeil) { 
+                paceValue = requiredWeeklyCeil;
+                paceUnit = 'week';
+            } else {
+                paceValue = requiredDailyCeil;
+                paceUnit = 'day';
+            }
+            
+            const requiredPace = { 
+                value: paceValue, 
+                unit: paceUnit,
+                display: `${paceValue} lesson${paceValue === 1 ? '' : 's'} / ${paceUnit}`
+            };
+
+            // --- PACING STATUS (AHEAD/LAPSE) ---
+            
+            // Recalculate based on total project time for status check
+            const totalDays = totalDaysRemaining + daysPassed;
+            const totalEffectiveStudyDays = (totalDays / 7) * studyDaysPerWeek;
+            const expectedMasteryRatePerEffectiveDay = TOTAL_LESSONS / totalEffectiveStudyDays;
+
+            const effectiveStudyDaysPassed = (daysPassed / 7) * studyDaysPerWeek;
+            const expectedMasteryNow = expectedMasteryRatePerEffectiveDay * effectiveStudyDaysPassed;
+
+            // 4. Pacing Status Comparison
+            const difference = actualMastery - expectedMasteryNow;
+            const variancePercentage = (expectedMasteryNow > 0) ? (difference / expectedMasteryNow) * 100 : (actualMastery > 0 ? 100 : 0);
+
+            let status = 'ON_TRACK';
+            let color = 'bg-yellow-500';
+            let badge = `On Track (${Math.round(variancePercentage)}% Var.)`;
+
+            if (variancePercentage > 10) {
+                status = 'AHEAD';
+                color = 'bg-green-600';
+                badge = `Ahead (+${Math.round(variancePercentage)}% Var.)`;
+            } else if (variancePercentage < -10) {
+                status = 'CRITICAL_LAPSE';
+                color = 'bg-red-600';
+                badge = `CRITICAL LAPSE (${Math.round(variancePercentage)}% Var.)`;
+            }
+
+            return {
+                status: status,
+                color: color,
+                badge: badge,
+                lessonsRemaining: lessonsRemaining,
+                daysRemaining: totalDaysRemaining,
+                requiredDailyCeil: requiredDailyCeil,
+                requiredWeeklyCeil: requiredWeeklyCeil,
+                requiredMonthlyCeil: requiredMonthlyCeil,
+                requiredPace: requiredPace
+            };
+        }
+
+        // --- FIREBASE LISTENERS & UI NAVIGATION ---
+
+        function loadActiveGroups() {
+            const container = document.getElementById('app-container');
+            container.innerHTML = `
+                <header class="flex justify-between items-center pt-8 mb-6">
+                    <h1 class="text-3xl font-extrabold text-gray-900">Select Class Group</h1>
+                    <button onclick="openManageGroupsModal()" class="text-sm font-medium bg-gray-100 px-3 py-1 rounded-full text-gray-600 hover:bg-gray-200 transition duration-150">Manage Groups</button>
+                </header>
+                <div id="group-buttons" class="grid grid-cols-2 gap-4 mt-8">
+                    <p class="col-span-2 text-center text-gray-500">Loading Groups...</p>
+                </div>
+                <div class="mt-8 p-3 text-sm text-gray-500 border-t border-gray-200">
+                    <p>App ID: ${appId}</p>
+                    <p>User ID: ${userId}</p>
+                </div>
+            `;
+            
+            onSnapshot(collection(db, getCollectionPath('groups')), (snapshot) => {
+                const groups = [];
+                snapshot.forEach(doc => groups.push(doc.data()));
+                renderGroupSelection(groups);
+                // Update management list if the modal is open
+                if (document.getElementById('manage-groups-modal').classList.contains('opacity-100')) {
+                    renderGroupsManagementList(groups);
+                }
+            }, (error) => {
+                console.error("Error loading groups:", error);
+                document.getElementById('group-buttons').innerHTML = `<p class="col-span-2 text-red-500 text-center">Failed to load groups.</p>`;
+            });
+        }
+
+        function renderGroupSelection(groups) {
+            const groupButtons = document.getElementById('group-buttons');
+            groupButtons.innerHTML = groups.map(group => `
+                <button onclick="selectGroup('${group.name}')" class="group-btn bg-indigo-600 hover:bg-indigo-700 text-white p-6 rounded-xl shadow-lg transition duration-150 transform hover:scale-[1.02] text-lg font-semibold">
+                    ${group.name}
+                </button>
+            `).join('');
+
+            if (groups.length === 0) {
+                groupButtons.innerHTML = `<p class="col-span-2 text-gray-500 text-center">No groups found. Add one via "Manage Groups".</p>`;
+            }
+        }
+
+        // Attach functions called via inline onclick to the window object
+        window.selectGroup = function(groupName) {
+            selectedGroup = groupName;
+            currentView = 'students';
+            loadStudentsByGroup(groupName);
+        }
+        
+        // Attach functions called via inline onclick to the window object
+        window.goBackToGroups = function() {
+            selectedGroup = '';
+            currentView = 'groups';
+            loadActiveGroups();
+        }
+
+        function loadStudentsByGroup(groupName) {
+            const container = document.getElementById('app-container');
+            container.innerHTML = `
+                <header class="flex justify-between items-center pt-8 mb-6">
+                    <button onclick="goBackToGroups()" class="text-indigo-600 hover:text-indigo-800 p-2 rounded-full transition duration-150">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                    </button>
+                    <h2 class="text-2xl font-bold text-gray-900">${groupName}</h2>
+                    <button onclick="openRosterModal()" class="text-sm font-medium bg-gray-100 px-3 py-1 rounded-full text-gray-600 hover:bg-gray-200 transition duration-150">Manage Roster</button>
+                </header>
+                <div id="student-list" class="space-y-4">
+                    <p class="text-center text-gray-500">Loading Students...</p>
+                </div>
+            `;
+
+            const q = query(collection(db, getCollectionPath('students')), where("currentGroup", "==", groupName));
+
+            onSnapshot(q, (snapshot) => {
+                studentsData = [];
+                snapshot.forEach(doc => studentsData.push({ ...doc.data(), id: doc.id }));
+                renderStudentList(studentsData);
+                // Important: Update roster list if the modal is open
+                if (document.getElementById('roster-modal').classList.contains('opacity-100')) {
+                    renderRosterList(studentsData);
+                }
+            }, (error) => {
+                console.error("Error loading students:", error);
+                document.getElementById('student-list').innerHTML = `<p class="text-red-500 text-center">Failed to load students.</p>`;
+            });
+        }
+
+        function renderStudentList(students) {
+            const studentList = document.getElementById('student-list');
+            studentList.innerHTML = students.map(student => {
+                const pacing = calculatePacingStatus(student);
+                const borderClass = pacing.status === 'AHEAD' ? 'border-green-500' :
+                                   pacing.status === 'ON_TRACK' ? 'border-yellow-500' :
+                                   pacing.status === 'CRITICAL_LAPSE' ? 'border-red-500' : 'border-gray-500';
+
+                return `
+                    <div class="student-card bg-white shadow-lg p-5 rounded-xl border-l-4 ${borderClass} transition duration-150">
+                        <div class="flex justify-between items-start">
+                            <h3 class="text-lg font-semibold text-gray-800">${student.name}</h3>
+                            <span class="px-3 py-1 text-xs font-bold rounded-full ${pacing.color} text-white">${pacing.badge}</span>
+                        </div>
+                        <!-- Compact view applied: Removed detailed pace -->
+                        <div class="text-sm text-gray-500 mt-2">
+                            <p>Mastered: <span class="font-medium text-gray-800">${student.progress?.mastered || 0} / ${TOTAL_LESSONS}</span></p>
+                            ${pacing.status !== 'NO_GOAL' && pacing.status !== 'COMPLETE' && pacing.status !== 'PAST_DUE' ?
+                                `<p>Required Pace: ${pacing.requiredPace.display}</p>` : ''}
+                        </div>
+                        <div class="flex justify-end gap-2 mt-3">
+                            <button onclick="openLoggingModal('${student.id}')" class="text-sm bg-indigo-500 text-white p-2 rounded-lg hover:bg-indigo-600 transition">
+                                Log Progress
+                            </button>
+                            <button onclick="openGoalModal('${student.id}')" class="text-sm bg-gray-200 p-2 rounded-lg text-gray-700 hover:bg-gray-300 transition">
+                                Set Goal
+                            </button>
+                            <button onclick="openTransferModal('${student.id}', '${student.name}', '${student.currentGroup}')" class="text-sm bg-red-100 p-2 rounded-lg text-red-600 hover:bg-red-200 transition">
+                                Transfer
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            if (students.length === 0) {
+                 studentList.innerHTML = `<p class="text-center text-gray-500 p-8">No students in this group yet. Add one via "Manage Roster".</p>`;
+            }
+        }
+
+        // --- MODAL CONTROLS ---
+
+        // FIX: Attach to window object
+        window.openModal = function(id) {
+            document.getElementById(id).classList.remove('hidden', 'opacity-0');
+            document.getElementById(id).classList.add('opacity-100');
+        }
+
+        // FIX: Attach to window object
+        window.closeModal = function(id) {
+            document.getElementById(id).classList.remove('opacity-100');
+            document.getElementById(id).classList.add('opacity-0');
+            // Give transition time before hiding
+            setTimeout(() => document.getElementById(id).classList.add('hidden'), 300);
+        }
+
+        // --- GROUP MANAGEMENT LOGIC (NEW) ---
+
+        window.openManageGroupsModal = function() {
+            // Data is automatically refreshed by the onSnapshot listener in loadActiveGroups()
+            // which updates renderGroupsManagementList if this modal is open.
+            openModal('manage-groups-modal');
+        }
+
+        window.renderGroupsManagementList = function(groups) {
+            const listDiv = document.getElementById('group-management-list');
+            listDiv.innerHTML = groups.map(group => `
+                <div class="flex justify-between items-center p-3 border-b border-gray-200 last:border-b-0">
+                    <span class="font-medium text-gray-800 truncate">${group.name}</span>
+                    <button onclick="openConfirmDeleteGroupModal('${group.name}')" class="text-red-500 hover:text-red-700 p-1 rounded-full bg-red-50 transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                </div>
+            `).join('');
+
+            if (groups.length === 0) {
+                listDiv.innerHTML = `<p class="text-center text-gray-500 p-4">No groups found. Click "Add New Group" below.</p>`;
+            }
+        }
+
+        window.openAddGroupModal = function() {
+            document.getElementById('add-group-name').value = '';
+            closeModal('manage-groups-modal');
+            openModal('add-group-modal');
+        }
+        
+        window.backToManageGroupsModal = function() {
+            closeModal('add-group-modal');
+            openModal('manage-groups-modal');
+        }
+
+        window.addGroup = async function() {
+            const name = document.getElementById('add-group-name').value.trim();
+
+            if (!name) {
+                console.error("Group name cannot be empty.");
+                return;
+            }
+
+            const groupsRef = collection(db, getCollectionPath('groups'));
+            
+            try {
+                // Use the group name as the document ID for easy lookup
+                await setDoc(doc(groupsRef, name), {
+                    name: name,
+                    isActive: true,
+                });
+                
+                closeModal('add-group-modal');
+                // onSnapshot will refresh the list
+                openManageGroupsModal(); 
+            } catch (error) {
+                console.error("Error adding group:", error);
+            }
+        }
+        
+        // Deletion Process
+        window.openConfirmDeleteGroupModal = function(groupName) {
+            groupToDelete = groupName;
+            document.getElementById('delete-group-name').textContent = groupName;
+            closeModal('manage-groups-modal');
+            openModal('confirm-delete-group-modal');
+        }
+
+        window.confirmGroupDeletion = async function() {
+            if (!groupToDelete) return;
+            const groupName = groupToDelete;
+            const groupsRef = collection(db, getCollectionPath('groups'));
+            const studentsRef = collection(db, getCollectionPath('students'));
+            
+            try {
+                // 1. Find and delete all associated students
+                const q = query(studentsRef, where("currentGroup", "==", groupName));
+                const studentSnapshot = await getDocs(q);
+                
+                const batch = writeBatch(db);
+                studentSnapshot.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+                
+                // 2. Delete the group document
+                const groupDocRef = doc(groupsRef, groupName);
+                batch.delete(groupDocRef);
+                
+                // 3. Commit the batch operation
+                await batch.commit();
+
+                console.log(`Group "${groupName}" and ${studentSnapshot.size} associated students deleted successfully.`);
+                
+                groupToDelete = null;
+                closeModal('confirm-delete-group-modal');
+                // onSnapshot will automatically refresh the group selection screen
+                loadActiveGroups(); // Reload the main screen just to be sure
+            } catch (error) {
+                console.error("Error deleting group and students:", error);
+                closeModal('confirm-delete-group-modal');
+                // You might want a better error display here
+            }
+        }
+
+        // --- GOAL MODAL LOGIC (STEP 1.5 & 3.0) ---
+
+        window.updateGoalCalculations = function() {
+            const targetDateStr = document.getElementById('goal-target-date').value;
+            const studyDays = parseInt(document.getElementById('goal-study-days').value, 10);
+            const calculationsDiv = document.getElementById('goal-calculations');
+
+            if (!targetDateStr || isNaN(studyDays) || studyDays < 1 || studyDays > 7) {
+                calculationsDiv.innerHTML = `<p class="text-sm text-red-500 mt-3">Please set a valid date and study days (1-7).</p>`;
+                return;
+            }
+
+            const tempStudent = {
+                name: selectedStudent.name,
+                progress: selectedStudent.progress,
+                goal: { targetDate: targetDateStr, studyDays: studyDays }
+            };
+
+            const pacing = calculatePacingStatus(tempStudent);
+            
+            if (pacing.lessonsRemaining <= 0) {
+                 calculationsDiv.innerHTML = `<p class="text-sm text-green-600 font-semibold mt-3">Student has already mastered all ${TOTAL_LESSONS} lessons!</p>`;
+                 return;
+            }
+            if (pacing.daysRemaining <= 0) {
+                calculationsDiv.innerHTML = `<p class="text-sm text-yellow-600 font-semibold mt-3">Goal date is in the past. Update the target date to calculate pace.</p>`;
+                return;
+            }
+
+            // --- DISPLAYING ALL 3 CEIL PACE METRICS + COMPACT RECOMMENDATION ---
+            const recommendedUnit = pacing.requiredPace.unit.toUpperCase();
+            const recommendedValue = pacing.requiredPace.value;
+
+            calculationsDiv.innerHTML = `
+                <h4 class="font-semibold text-gray-700 mt-3 mb-2">Required Pace to Achieve Goal (${pacing.lessonsRemaining} lessons remaining)</h4>
+                <div class="grid grid-cols-3 gap-2 text-center text-sm">
+                    <div class="p-2 bg-indigo-50 rounded-lg">
+                        <p class="font-bold text-lg text-indigo-700">${pacing.requiredDailyCeil}</p>
+                        <p class="text-xs text-indigo-500">Daily Lessons</p>
+                    </div>
+                    <div class="p-2 bg-indigo-50 rounded-lg">
+                        <p class="font-bold text-lg text-indigo-700">${pacing.requiredWeeklyCeil}</p>
+                        <p class="text-xs text-indigo-500">Weekly Lessons</p>
+                    </div>
+                    <div class="p-2 bg-indigo-50 rounded-lg">
+                        <p class="font-bold text-lg text-indigo-700">${pacing.requiredMonthlyCeil}</p>
+                        <p class="text-xs text-indigo-500">Monthly Lessons</p>
+                    </div>
+                </div>
+                <p class="mt-4 text-center text-sm font-medium text-gray-700 bg-yellow-50 p-3 rounded-lg border-yellow-300 border">
+                    Recommendation: Adopt a pace of 
+                    <span class="font-extrabold text-indigo-600">${recommendedValue} lesson${recommendedValue === 1 ? '' : 's'} / ${recommendedUnit}</span> (Most Compact)
+                </p>
+            `;
+        }
+
+
+        window.openGoalModal = function(studentId, options = {}) {
+            selectedStudent = studentsData.find(s => s.id === studentId);
+            if (!selectedStudent) return;
+            
+            const isMandatory = options.mandatoryReview || false;
+            
+            document.getElementById('goal-student-name').textContent = selectedStudent.name;
+            document.getElementById('goal-mandatory-warning').classList.toggle('hidden', !isMandatory);
+            document.getElementById('goal-target-date').value = selectedStudent.goal?.targetDate || '';
+            document.getElementById('goal-study-days').value = selectedStudent.goal?.studyDays || 5;
+
+            // Attach listeners and run initial calculation
+            document.getElementById('goal-target-date').onchange = window.updateGoalCalculations;
+            document.getElementById('goal-study-days').onchange = window.updateGoalCalculations;
+            window.updateGoalCalculations();
+            
+            openModal('goal-modal');
+        }
+
+        window.saveGoal = async function() {
+            const targetDate = document.getElementById('goal-target-date').value;
+            const studyDays = parseInt(document.getElementById('goal-study-days').value, 10);
+
+            if (!targetDate || studyDays < 1 || studyDays > 7) {
+                console.error("Invalid goal inputs.");
+                return;
+            }
+            
+            const studentRef = doc(db, getCollectionPath('students'), selectedStudent.id);
+            try {
+                await updateDoc(studentRef, {
+                    goal: {
+                        targetDate: targetDate,
+                        studyDays: studyDays
+                    }
+                });
+                closeModal('goal-modal');
+                // Data update triggers onSnapshot, which re-renders the list and pacing status
+            } catch (error) {
+                console.error("Error saving goal:", error);
+            }
+        }
+
+        // --- LOGGING MODAL LOGIC (STEP 1.4, 3.3, & HISTORY) ---
+
+        window.getLessonStatus = function(lessonId) {
+             const today = new Date().toISOString().substring(0, 10);
+             // Check pending log first (unsaved changes)
+             if (pendingLog[lessonId]) return pendingLog[lessonId];
+             // Check existing log (saved log for today)
+             return selectedStudent?.progress?.reviews?.[today]?.[lessonId];
+        }
+
+        window.renderLogHistory = function() {
+            const historyDiv = document.getElementById('log-history-list');
+            const reviews = selectedStudent.progress?.reviews || {};
+            // Get all review dates and sort them from newest to oldest
+            const reviewDates = Object.keys(reviews).sort((a, b) => new Date(b) - new Date(a));
+
+            if (reviewDates.length === 0) {
+                historyDiv.innerHTML = `<p class="text-center text-gray-500 p-2">No historical logs found for this student.</p>`;
+                return;
+            }
+
+            historyDiv.innerHTML = reviewDates.map(date => {
+                const lessons = reviews[date];
+                // Count M and R logs
+                const mastered = Object.keys(lessons).filter(id => lessons[id] === 'M').length;
+                const reviewed = Object.keys(lessons).filter(id => lessons[id] === 'R').length;
+                
+                // Format date for display
+                const dateDisplay = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+
+                return `
+                    <div class="flex justify-between items-center p-3 border-b border-gray-100 last:border-b-0">
+                        <span class="font-medium text-gray-800">${dateDisplay}</span>
+                        <div class="text-sm space-x-4">
+                            <span class="text-green-600 font-semibold">${mastered} M</span>
+                            <span class="text-blue-600 font-semibold">${reviewed} R</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        window.openLoggingModal = function(studentId) {
+            selectedStudent = studentsData.find(s => s.id === studentId);
+            if (!selectedStudent) return;
+            
+            document.getElementById('logging-student-name').textContent = selectedStudent.name;
+            pendingLog = {}; // Clear pending log for new session
+
+            // Pre-load today's existing log into pendingLog for editing
+            const today = new Date().toISOString().substring(0, 10);
+            const existingLog = selectedStudent.progress?.reviews?.[today] || {};
+            Object.assign(pendingLog, existingLog);
+
+            renderLessonGrid();
+            renderLogHistory(); // Render log history
+            openModal('logging-modal');
+        }
+
+        window.renderLessonGrid = function() {
+            const grid = document.getElementById('lesson-grid');
+            grid.innerHTML = Array.from({ length: TOTAL_LESSONS }, (_, i) => {
+                const lessonId = String(i + 1);
+                let status = getLessonStatus(lessonId);
+                let btnClass = 'bg-gray-100 text-gray-700 hover:bg-gray-200';
+                let btnText = lessonId;
+
+                if (status === 'R') {
+                    btnClass = 'bg-blue-400 text-white border-2 border-blue-600 hover:bg-blue-500';
+                    btnText = `${lessonId} (R)`;
+                } else if (status === 'M') {
+                    btnClass = 'bg-green-500 text-white shadow-md hover:bg-green-600';
+                    btnText = `${lessonId} (M)`;
+                }
+                
+                return `
+                    <button id="lesson-${lessonId}" onclick="toggleLessonStatus('${lessonId}')" 
+                            class="aspect-square flex items-center justify-center p-2 rounded-lg font-bold transition duration-100 ${btnClass}">
+                        ${btnText}
+                    </button>
+                `;
+            }).join('');
+        }
+        
+        window.toggleLessonStatus = function(lessonId) {
+            const current = pendingLog[lessonId];
+            
+            // Cycle: Not Logged -> M -> R -> Not Logged
+            if (current === 'M') {
+                 // M (Mastered) -> R (Reviewed)
+                pendingLog[lessonId] = 'R';
+            } else if (current === 'R') {
+                // R (Reviewed) -> Not Logged (Delete)
+                delete pendingLog[lessonId];
+            } else {
+                // Not Logged -> M (Mastered)
+                pendingLog[lessonId] = 'M';
+            }
+            renderLessonGrid(); // Re-render grid to show updated status
+        }
+        
+        window.saveDailyLog = async function() {
+            const studentId = selectedStudent.id;
+            const studentRef = doc(db, getCollectionPath('students'), studentId);
+            const today = new Date().toISOString().substring(0, 10);
+            
+            // Recalculate unique 'M' lessons across all history after applying today's changes
+            let finalMastered = new Set();
+            // Get all past reviews excluding today
+            const allPastReviews = { ...selectedStudent.progress?.reviews || {} };
+            delete allPastReviews[today];
+
+            // Combine past reviews with today's pending log
+            const allReviews = { ...allPastReviews, [today]: pendingLog };
+            
+            // Count unique lessons mastered across all days
+            for (const date in allReviews) {
+                const dailyLog = allReviews[date];
+                for (const lessonId in dailyLog) {
+                    if (dailyLog[lessonId] === 'M') {
+                        finalMastered.add(lessonId);
+                    }
+                }
+            }
+            
+            try {
+                // Atomic Update
+                await updateDoc(studentRef, {
+                    'progress.mastered': finalMastered.size, // Recalculate unique M lessons
+                    [`progress.reviews.${today}`]: pendingLog // Overwrite/set today's log
+                });
+                closeModal('logging-modal');
+                pendingLog = {}; // Reset
+                // Triggers onSnapshot automatically
+            } catch (error) {
+                console.error("Error saving daily log:", error);
+            }
+        }
+
+        // --- TRANSFER LOGIC (STEP 3.4) ---
+
+        window.openTransferModal = function(studentId, studentName, currentGroup) {
+            document.getElementById('transfer-student-name').textContent = studentName;
+            document.getElementById('transfer-current-group').textContent = currentGroup;
+            document.getElementById('transfer-student-id').value = studentId;
+
+            // Load all available groups for selection (from firestore)
+            onSnapshot(collection(db, getCollectionPath('groups')), (snapshot) => {
+                const groups = [];
+                snapshot.forEach(doc => groups.push(doc.data()));
+                const select = document.getElementById('transfer-target-group');
+                select.innerHTML = groups
+                    .filter(g => g.name !== currentGroup)
+                    .map(group => `<option value="${group.name}">${group.name}</option>`)
+                    .join('');
+
+                if (select.children.length === 0) {
+                     select.innerHTML = `<option value="">No other groups available</option>`;
+                }
+            });
+
+            openModal('transfer-modal');
+        }
+
+        window.transferStudent = async function() {
+            const studentId = document.getElementById('transfer-student-id').value;
+            const newGroup = document.getElementById('transfer-target-group').value;
+
+            if (!studentId || !newGroup) return;
+
+            const studentRef = doc(db, getCollectionPath('students'), studentId);
+            
+            try {
+                await updateDoc(studentRef, {
+                    currentGroup: newGroup
+                });
+                
+                closeModal('transfer-modal');
+                
+                // MANDATORY PROMPT: Immediately open the goal modal for review
+                openGoalModal(studentId, { mandatoryReview: true });
+
+            } catch (error) {
+                console.error("Error transferring student:", error);
+            }
+        }
+        
+        // --- ROSTER MANAGEMENT LOGIC ---
+
+        window.openRosterModal = function() {
+            renderRosterList(studentsData);
+            openModal('roster-modal');
+        }
+
+        window.renderRosterList = function(students) {
+            const rosterList = document.getElementById('roster-list');
+            const currentGroup = selectedGroup;
+
+            document.getElementById('roster-group-name').textContent = currentGroup;
+            
+            const studentsInGroup = students.filter(s => s.currentGroup === currentGroup);
+
+            rosterList.innerHTML = studentsInGroup.map(student => `
+                <div class="flex justify-between items-center p-3 border-b border-gray-200 last:border-b-0">
+                    <span class="font-medium text-gray-800 truncate">${student.name}</span>
+                    <div class="flex space-x-2">
+                        <button onclick="deleteStudent('${student.id}', '${student.name}')" class="text-red-500 hover:text-red-700 p-1 rounded-full bg-red-50 transition">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        window.openAddStudentModal = function() {
+            document.getElementById('add-student-name').value = '';
+            document.getElementById('add-student-group').textContent = selectedGroup;
+            closeModal('roster-modal'); // Close roster to focus on adding
+            openModal('add-student-modal');
+        }
+        
+        window.backToRosterModal = function() {
+            closeModal('add-student-modal');
+            openModal('roster-modal');
+        }
+
+        window.addStudent = async function() {
+            const name = document.getElementById('add-student-name').value.trim();
+            const group = selectedGroup; // Always add to the currently selected group
+
+            if (!name) {
+                console.error("Student name cannot be empty.");
+                return;
+            }
+
+            const studentsRef = collection(db, getCollectionPath('students'));
+            
+            try {
+                await addDoc(studentsRef, {
+                    name: name,
+                    currentGroup: group,
+                    goal: {}, // No goal set initially
+                    progress: { mastered: 0, reviews: {} },
+                });
+                
+                // Firestore automatically assigns the ID. The onSnapshot listener will pick up the new doc.
+                closeModal('add-student-modal');
+                // Don't need to manually re-render; onSnapshot handles it, but open roster for continuity
+                openRosterModal(); 
+            } catch (error) {
+                console.error("Error adding student:", error);
+            }
+        }
+
+        window.deleteStudent = async function(studentId, studentName) {
+            // NOTE: Per instructions, we must avoid using window.confirm(). 
+            // In a production app, a custom confirmation modal should be used here.
+            console.warn(`Attempting to delete student ${studentName} (${studentId}). No confirmation UI is used.`);
+
+            const studentRef = doc(db, getCollectionPath('students'), studentId);
+            try {
+                // Delete the document
+                await deleteDoc(studentRef);
+                // The onSnapshot listener will refresh the roster automatically
+            } catch (error) {
+                console.error("Error deleting student:", error);
+            }
+        }
+
+        // --- INITIALIZATION ON LOAD ---
+        window.onload = initApp;
+
+    </script>
+    <style>
+        .modal-overlay { 
+            transition: opacity 0.3s ease; 
+            backdrop-filter: blur(2px);
+        }
+        .modal-content {
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        .opacity-0 .modal-content {
+            transform: scale(0.95);
+        }
+        .opacity-100 .modal-content {
+            transform: scale(1);
+        }
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen p-4">
+    <div id="app-container" class="max-w-md mx-auto">
+        <!-- Content dynamically generated here by JS (Group Selection or Student List) -->
+        <p class="text-center text-gray-400 p-10">Initializing Application...</p>
+    </div>
+
+    <!-- 1.4 MODAL: Daily Progress Logging -->
+    <div id="logging-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 opacity-0 modal-overlay" onclick="if(event.target.id === 'logging-modal') closeModal('logging-modal');">
+        <div class="modal-content bg-white rounded-2xl shadow-2xl w-11/12 max-w-lg p-6 m-4">
+            <h3 class="text-xl font-bold mb-2 text-gray-800">Log Progress for <span id="logging-student-name" class="text-indigo-600"></span></h3>
+            <p class="text-sm text-gray-500 mb-4">Tap a lesson: Not Logged &rarr; <span class="text-green-600 font-semibold">Mastered (M)</span> &rarr; <span class="text-blue-600 font-semibold">Reviewed (R)</span> &rarr; Not Logged</p>
+            
+            <div id="lesson-grid" class="grid grid-cols-5 gap-3 p-4 bg-gray-50 rounded-lg h-56 overflow-y-auto">
+                <!-- Lesson buttons will be rendered here -->
+            </div>
+
+            <h4 class="font-bold text-gray-800 mt-6 mb-2 border-t pt-4">Log History</h4>
+            <div id="log-history-list" class="max-h-48 overflow-y-auto bg-white border border-gray-200 rounded-lg">
+                <!-- Log history will be rendered here -->
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button onclick="closeModal('logging-modal')" class="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition">
+                    Cancel
+                </button>
+                <button onclick="saveDailyLog()" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition">
+                    Save Daily Log
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 1.5 MODAL: Goal Setting -->
+    <div id="goal-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 opacity-0 modal-overlay" onclick="if(event.target.id === 'goal-modal') closeModal('goal-modal');">
+        <div class="modal-content bg-white rounded-2xl shadow-2xl w-11/12 max-w-md p-6 m-4">
+            <h3 class="text-xl font-bold mb-2 text-gray-800">Set Goal for <span id="goal-student-name" class="text-indigo-600"></span></h3>
+            
+            <div id="goal-mandatory-warning" class="hidden bg-red-100 border-l-4 border-red-500 text-red-700 p-3 mb-4 rounded-md" role="alert">
+                <p class="font-bold">Mandatory Goal Review</p>
+                <p class="text-sm">Please set or confirm the student's pacing goal after transfer.</p>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label for="goal-target-date" class="block text-sm font-medium text-gray-700 mb-1">Target Completion Date</label>
+                    <input type="date" id="goal-target-date" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label for="goal-study-days" class="block text-sm font-medium text-gray-700 mb-1">Weekly Study Days (1-7)</label>
+                    <input type="number" id="goal-study-days" min="1" max="7" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+            </div>
+
+            <div id="goal-calculations">
+                <!-- Goal calculations will be rendered here -->
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button onclick="closeModal('goal-modal')" class="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition">
+                    Cancel
+                </button>
+                <button onclick="saveGoal()" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition">
+                    Save Goal
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Student Transfer -->
+    <div id="transfer-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 opacity-0 modal-overlay" onclick="if(event.target.id === 'transfer-modal') closeModal('transfer-modal');">
+        <div class="modal-content bg-white rounded-2xl shadow-2xl w-11/12 max-w-md p-6 m-4">
+            <h3 class="text-xl font-bold mb-2 text-gray-800">Transfer Student: <span id="transfer-student-name" class="text-indigo-600"></span></h3>
+            <p class="text-sm text-gray-500 mb-4">Current Group: <span id="transfer-current-group" class="font-semibold"></span></p>
+
+            <input type="hidden" id="transfer-student-id">
+            
+            <div class="space-y-4">
+                <div>
+                    <label for="transfer-target-group" class="block text-sm font-medium text-gray-700 mb-1">Move to Group</label>
+                    <select id="transfer-target-group" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button onclick="closeModal('transfer-modal')" class="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition">
+                    Cancel
+                </button>
+                <button onclick="transferStudent()" class="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-red-700 transition">
+                    Confirm Transfer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Roster Management -->
+    <div id="roster-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 opacity-0 modal-overlay" onclick="if(event.target.id === 'roster-modal') closeModal('roster-modal');">
+        <div class="modal-content bg-white rounded-2xl shadow-2xl w-11/12 max-w-md p-6 m-4">
+            <h3 class="text-xl font-bold mb-2 text-gray-800">Manage Roster: <span id="roster-group-name" class="text-indigo-600"></span></h3>
+            
+            <div class="h-64 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100" id="roster-list">
+                <p class="text-center text-gray-500 p-4">Loading roster...</p>
+            </div>
+
+            <div class="flex justify-between gap-3 mt-6">
+                <button onclick="closeModal('roster-modal')" class="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition">
+                    Done
+                </button>
+                <button onclick="openAddStudentModal()" class="bg-green-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition">
+                    Add New Student
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Add Student -->
+    <div id="add-student-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 opacity-0 modal-overlay" onclick="if(event.target.id === 'add-student-modal') closeModal('add-student-modal');">
+        <div class="modal-content bg-white rounded-2xl shadow-2xl w-11/12 max-w-sm p-6 m-4">
+            <h3 class="text-xl font-bold mb-4 text-gray-800">Add New Student</h3>
+            
+            <div class="space-y-4">
+                <div>
+                    <label for="add-student-group" class="block text-sm font-medium text-gray-700 mb-1">Group (Read Only)</label>
+                    <p id="add-student-group" class="w-full p-3 bg-gray-100 border border-gray-300 rounded-lg font-semibold text-gray-700"></p>
+                </div>
+                <div>
+                    <label for="add-student-name" class="block text-sm font-medium text-gray-700 mb-1">Student Name</label>
+                    <input type="text" id="add-student-name" placeholder="E.g., Jane Doe" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button onclick="backToRosterModal()" class="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition">
+                    Back to Roster
+                </button>
+                <button onclick="addStudent()" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition">
+                    Save Student
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- NEW MODAL: Group Management -->
+    <div id="manage-groups-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 opacity-0 modal-overlay" onclick="if(event.target.id === 'manage-groups-modal') closeModal('manage-groups-modal');">
+        <div class="modal-content bg-white rounded-2xl shadow-2xl w-11/12 max-w-md p-6 m-4">
+            <h3 class="text-xl font-bold mb-4 text-gray-800">Manage Class Groups</h3>
+            
+            <div class="h-64 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100" id="group-management-list">
+                <p class="text-center text-gray-500 p-4">Loading groups...</p>
+            </div>
+
+            <div class="flex justify-between gap-3 mt-6">
+                <button onclick="closeModal('manage-groups-modal')" class="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition">
+                    Done
+                </button>
+                <button onclick="openAddGroupModal()" class="bg-green-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition">
+                    Add New Group
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW MODAL: Add Group -->
+    <div id="add-group-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 opacity-0 modal-overlay" onclick="if(event.target.id === 'add-group-modal') closeModal('add-group-modal');">
+        <div class="modal-content bg-white rounded-2xl shadow-2xl w-11/12 max-w-sm p-6 m-4">
+            <h3 class="text-xl font-bold mb-4 text-gray-800">Add New Class Group</h3>
+            
+            <div class="space-y-4">
+                <div>
+                    <label for="add-group-name" class="block text-sm font-medium text-gray-700 mb-1">Group Name</label>
+                    <input type="text" id="add-group-name" placeholder="E.g., 3B Honors" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button onclick="backToManageGroupsModal()" class="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition">
+                    Cancel
+                </button>
+                <button onclick="addGroup()" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition">
+                    Save Group
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW MODAL: Confirm Group Deletion -->
+    <div id="confirm-delete-group-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 opacity-0 modal-overlay" onclick="if(event.target.id === 'confirm-delete-group-modal') closeModal('confirm-delete-group-modal');">
+        <div class="modal-content bg-white rounded-2xl shadow-2xl w-11/12 max-w-sm p-6 m-4">
+            <h3 class="text-xl font-bold mb-2 text-red-600">Confirm Deletion</h3>
+            
+            <p class="text-gray-700 mb-4">Are you sure you want to delete the group: <span id="delete-group-name" class="font-bold text-indigo-600"></span>?</p>
+            
+            <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-3 rounded-md mb-6">
+                <p class="font-bold">Warning!</p>
+                <p class="text-sm">Deleting a group will permanently remove it AND **all associated student records** from the database.</p>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-4">
+                <button onclick="closeModal('confirm-delete-group-modal'); openManageGroupsModal();" class="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition">
+                    Cancel
+                </button>
+                <button onclick="confirmGroupDeletion()" class="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-red-700 transition">
+                    Yes, Delete Group & Students
+                </button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
