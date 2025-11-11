@@ -195,6 +195,7 @@
         let isAuthReady = false;
         let currentReports = {}; // Daily report entries for the SELECTED DAY
         let currentAccumulatedScores = {}; // Accumulated scores (all classes)
+        let qaidaPacingData = {}; // NEW: To hold student pacing data from Qaida tracker
         let selectedClassId = null; 
         let isSaving = false;
         
@@ -321,6 +322,65 @@
             }
             return { text: 'Poor', bg: 'bg-red-100', text_color: 'text-red-700', bar_color: 'bg-red-500', score_color: 'text-red-700' };
         };
+
+        // --- PACING LOGIC (from qaida-tracker.html) ---
+        const TOTAL_LESSONS = 29;
+        const DAYS_IN_MONTH = 30.437;
+
+        function calculatePacingStatus(student) {
+            const defaultPace = { value: 0, unit: 'N/A' };
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            let startDate = new Date(); // Default to today
+            const reviewDates = student.progress?.reviews ? Object.keys(student.progress.reviews) : [];
+            if (reviewDates.length > 0) {
+                reviewDates.sort();
+                startDate = new Date(reviewDates[0]);
+            }
+            startDate.setHours(0,0,0,0);
+
+            if (!student.goal || !student.goal.targetDate || !student.goal.studyDays) {
+                return { status: 'NO_GOAL', color: 'bg-gray-400', badge: 'No Goal Set', requiredPace: defaultPace };
+            }
+
+            const targetDate = new Date(student.goal.targetDate);
+            targetDate.setHours(0, 0, 0, 0);
+
+            const actualMastery = student.progress?.mastered || 0;
+            const lessonsRemaining = TOTAL_LESSONS - actualMastery;
+
+            if (lessonsRemaining <= 0) {
+                 return { status: 'COMPLETE', color: 'bg-emerald-600', badge: 'COMPLETED!', requiredPace: defaultPace };
+            }
+
+            const studyDaysPerWeek = student.goal.studyDays;
+            const totalDaysRemaining = Math.max(1, Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24)));
+            const remainingWeeks = totalDaysRemaining / 7;
+            const daysPassed = Math.max(1, Math.ceil((today - startDate) / (1000 * 60 * 60 * 24)));
+
+            if (totalDaysRemaining <= 0) {
+                 return { status: 'PAST_DUE', color: 'bg-yellow-600', badge: 'PAST DUE', requiredPace: defaultPace };
+            }
+
+            const totalDays = totalDaysRemaining + daysPassed;
+            const totalEffectiveStudyDays = (totalDays / 7) * studyDaysPerWeek;
+            const expectedMasteryRatePerEffectiveDay = TOTAL_LESSONS / totalEffectiveStudyDays;
+
+            const effectiveStudyDaysPassed = (daysPassed / 7) * studyDaysPerWeek;
+            const expectedMasteryNow = expectedMasteryRatePerEffectiveDay * effectiveStudyDaysPassed;
+
+            const difference = actualMastery - expectedMasteryNow;
+            const variancePercentage = (expectedMasteryNow > 0) ? (difference / expectedMasteryNow) * 100 : (actualMastery > 0 ? 100 : 0);
+
+            let status = 'ON_TRACK';
+            if (variancePercentage > 10) {
+                status = 'AHEAD';
+            } else if (variancePercentage < -10) {
+                status = 'CRITICAL_LAPSE';
+            }
+            return { status };
+        }
 
         /**
          * Helper function to hide the modal. It must be a global function for the HTML onclick to work.
@@ -690,6 +750,52 @@
                     // Note: We don't hide the whole UI on data fetch errors, just log and continue.
                 });
             }
+
+            // 3. NEW: Listener for Qaida Student Pacing Data
+            if (!window.qaidaStudentsUnsubscribe) {
+                const studentsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'students');
+
+                window.qaidaStudentsUnsubscribe = onSnapshot(studentsCollectionRef, (querySnapshot) => {
+                    const studentsByGroup = {};
+
+                    querySnapshot.forEach(doc => {
+                        const student = doc.data();
+                        const group = student.currentGroup;
+                        if (!group) return;
+
+                        if (!studentsByGroup[group]) {
+                            studentsByGroup[group] = [];
+                        }
+                        studentsByGroup[group].push(student);
+                    });
+
+                    // Calculate pacing for each group
+                    const pacingSummary = {};
+                    for (const group in studentsByGroup) {
+                        pacingSummary[group] = {
+                            ahead: 0,
+                            onTrack: 0,
+                            lapse: 0,
+                            noGoal: 0,
+                            completed: 0
+                        };
+                        studentsByGroup[group].forEach(student => {
+                            const pacing = calculatePacingStatus(student);
+                            if (pacing.status === 'AHEAD') pacingSummary[group].ahead++;
+                            else if (pacing.status === 'ON_TRACK') pacingSummary[group].onTrack++;
+                            else if (pacing.status === 'CRITICAL_LAPSE') pacingSummary[group].lapse++;
+                            else if (pacing.status === 'NO_GOAL') pacingSummary[group].noGoal++;
+                            else if (pacing.status === 'COMPLETE') pacingSummary[group].completed++;
+                        });
+                    }
+
+                    qaidaPacingData = pacingSummary;
+                    console.log("Qaida Pacing Data updated:", qaidaPacingData);
+                    renderClassList(); // Re-render when pacing data updates
+                }, (error) => {
+                    console.error("Error fetching Qaida student data:", error);
+                });
+            }
         };
 
         // --- RENDERING FUNCTIONS (UI/UX) ---
@@ -922,6 +1028,25 @@ const renderClassList = () => {
                                 <p class="text-2xs text-gray-500 leading-none mt-2">Avg (${c.averageScore}%):</p>
                                 <div class="h-1 bg-gray-200 rounded-full">
                                     <div class="h-1 bg-blue-500 rounded-full transition-all duration-300" style="width: ${avgScoreWidth}%;"></div>
+                                </div>
+
+                                <!-- NEW: Qaida Pacing Info -->
+                                <div class="mt-2 pt-2 border-t border-gray-200">
+                                    <p class="text-2xs text-gray-500 font-semibold mb-1">Qaida Progress:</p>
+                                    <div class="flex justify-around text-center text-2xs">
+                                        <div>
+                                            <p class="font-bold text-green-600">${qaidaPacingData[c.id]?.ahead || 0}</p>
+                                            <p class="text-gray-500">Ahead</p>
+                                        </div>
+                                        <div>
+                                            <p class="font-bold text-yellow-600">${qaidaPacingData[c.id]?.onTrack || 0}</p>
+                                            <p class="text-gray-500">On Track</p>
+                                        </div>
+                                        <div>
+                                            <p class="font-bold text-red-600">${qaidaPacingData[c.id]?.lapse || 0}</p>
+                                            <p class="text-gray-500">Lapse</p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         `;
