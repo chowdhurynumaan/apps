@@ -47,7 +47,6 @@
     </script>
 </head>
 <body class="p-4 md:p-8 min-h-screen">
-    <body class="p-4 md:p-8 min-h-screen">
     <header class="fixed top-0 left-0 w-full bg-blue-600 text-white p-3 shadow-lg z-40 flex items-center justify-between h-16">
         <div class="flex items-center space-x-4">
             <button onclick="app.toggleMenu()" class="text-white hover:text-blue-200 transition duration-150 p-2 rounded-full">
@@ -58,8 +57,7 @@
         <span id="student-name-display" class="text-xl font-semibold hidden"></span>
     </header>
 
-    <div id="app-container" class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-4 md:p-6 mt-20">
-
+<div id="app-container" class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-4 md:p-6 overflow-y-auto" style="margin-top: 64px; max-height: calc(100vh - 96px);">
         <!-- Sidebar Menu -->
         <div>
             <div>
