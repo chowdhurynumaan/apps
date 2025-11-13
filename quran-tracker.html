@@ -965,14 +965,27 @@
                 const targetCompletionDate = document.getElementById('target-date-input').value || null;
 
                 if (!name || name.length > 100) {
-                    document.getElementById('student-modal-error').textContent = 'Name is required and must be under 100 characters.';
-                    btn.disabled = false;
-                    btn.textContent = originalText;
-                    return;
-                }
+        document.getElementById('student-modal-error').textContent = 'Name is required and must be under 100 characters.';
+        btn.disabled = false;
+        btn.textContent = originalText;
+        return;
+    }
 
-                try {
-                    const data = {
+    // Check for duplicate name (case-insensitive)
+    const isDuplicate = this.state.students.some(student => {
+        const isSameStudent = this.state.isEditMode && student.id === this.state.studentToEditId;
+        return !isSameStudent && student.name.toLowerCase() === name.toLowerCase();
+    });
+
+    if (isDuplicate) {
+        document.getElementById('student-modal-error').textContent = 'A student with this name already exists.';
+        btn.disabled = false;
+        btn.textContent = originalText;
+        return;
+    }
+
+    try {
+        const data = {
                         name: this.sanitize(name),
                         gender: gender, // NEW FIELD
                         stage: stage,
