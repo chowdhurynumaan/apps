@@ -171,6 +171,10 @@
                                 <option value="Hifz">4. Hifz (Memorization)</option>
                             </select>
                         </div>
+                        <div class="mb-6">
+                            <label for="target-date-input" class="block text-sm font-medium text-gray-700">Target Completion Date (Optional)</label>
+                            <input type="date" id="target-date-input" name="target-date-input" class="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        </div>
                         <div class="flex justify-end space-x-3">
                             <button type="button" onclick="app.closeModal('student-modal')" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300">Cancel</button>
                             <button type="submit" id="student-modal-btn" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">Save Student</button>
@@ -249,6 +253,7 @@
         const SIFARAH_START = 78;
         const SIFARAH_END = 114;
         const TOTAL_SIFARAH_AYAHS = 471; // Pre-calculated sum of AYAH_MAP[78] through AYAH_MAP[114]
+        const TOTAL_QURAN_AYAHS = AYAH_MAP.slice(1).reduce((sum, count) => sum + count, 0); // Total Ayahs: 6236
         const QAIDA_LESSON_COUNT = 29;
         const N_REVIEW_TIMES = 3; // N for Qaida 'Finished' flag
 
@@ -412,21 +417,67 @@
                 const infoDiv = document.getElementById('progression-info');
                 infoDiv.innerHTML = '';
 
-                if (student.stage === 'Sifarah') {
-                    const progress = student.sifarah_completed_ayahs || 0;
-                    const percent = ((progress / TOTAL_SIFARAH_AYAHS) * 100).toFixed(1);
-                    infoDiv.innerHTML = `
-                        <p class="text-sm text-gray-700">Sifarah Ayah Coverage:
-                            <span class="font-bold text-green-600">${progress} / ${TOTAL_SIFARAH_AYAHS}</span> (${percent}%)
+                let totalScopeName, scopeCompleted, totalScope;
+
+                if (student.stage === 'Qaida') {
+                    const completedLessons = Object.values(student.qaida_finished || {}).filter(f => f).length;
+                    scopeCompleted = completedLessons;
+                    totalScope = QAIDA_LESSON_COUNT;
+                    totalScopeName = 'Lessons';
+                } else if (student.stage === 'Sifarah') {
+                    scopeCompleted = student.sifarah_completed_ayahs || 0;
+                    totalScope = TOTAL_SIFARAH_AYAHS;
+                    totalScopeName = 'Ayahs';
+                } else if (student.stage === 'Quran Reading' || student.stage === 'Hifz') {
+                    const inventoryCount = student.hifz_inventory ? this.calculateAyahCount(student.hifz_inventory) : 0;
+                    const coveredAyahs = Object.keys(student.stage === 'Hifz' ? (student.hifz_coverage || {}) : (student.reading_coverage || {})).length;
+                    scopeCompleted = Math.min(TOTAL_QURAN_AYAHS, coveredAyahs + inventoryCount);
+                    totalScope = TOTAL_QURAN_AYAHS;
+                    totalScopeName = 'Ayahs';
+
+                    if (student.stage === 'Hifz') {
+                        const pace = this.calculateHifzPace(student);
+                        infoDiv.innerHTML += `<p class="text-sm text-gray-700">Hifz Inventory (Pre-Memorized): <span class="font-bold">${inventoryCount} Ayahs</span></p>`;
+                        infoDiv.innerHTML += `<p class="text-sm text-gray-700">30-Day Pace (New Ayahs): <span class="font-bold text-indigo-600">${pace} Ayahs/day</span></p>`;
+                    }
+                } else {
+                    return; // Exit if stage is not tracked
+                }
+
+                // 1. Display Current Progress
+                if (totalScope > 0) {
+                    const percent = ((scopeCompleted / totalScope) * 100).toFixed(1);
+                    infoDiv.innerHTML += `
+                        <p class="text-sm text-gray-700">Progress:
+                            <span class="font-bold text-green-600">${scopeCompleted} / ${totalScope} ${totalScopeName}</span> (${percent}%)
                         </p>
                     `;
-                } else if (student.stage === 'Hifz') {
-                    const pace = this.calculateHifzPace(student);
-                    const inventoryCount = student.hifz_inventory ? this.calculateAyahCount(student.hifz_inventory) : 0;
-                    infoDiv.innerHTML = `
-                        <p class="text-sm text-gray-700">Hifz Inventory (Pre-Memorized): <span class="font-bold">${inventoryCount} Ayahs</span></p>
-                        <p class="text-sm text-gray-700">30-Day Pace (New Ayahs): <span class="font-bold text-indigo-600">${pace} Ayahs/day</span></p>
-                    `;
+                }
+
+
+                // 2. Display Goal Pace
+                const goalPace = this.calculateGoalPace(student);
+                if (goalPace) {
+                    const daysRemaining = goalPace.days;
+                    const unit = goalPace.unit + (goalPace.daily > 1 ? 's' : '');
+
+                    if (goalPace.isComplete) {
+                        infoDiv.innerHTML += `
+                            <p class="text-sm text-gray-700 font-bold text-green-700">Goal: Already complete! 🎉</p>
+                        `;
+                    } else {
+                        infoDiv.innerHTML += `
+                            <p class="text-sm text-gray-700 font-bold mt-2 border-t border-gray-100 pt-2">
+                                Goal Pace to Finish in ${daysRemaining} days (by ${student.targetCompletionDate}):
+                            </p>
+                            <ul class="list-disc list-inside text-xs text-blue-600 ml-4 space-y-0.5">
+                                <li>Daily: <span class="font-bold">${goalPace.daily} ${unit}</span></li>
+                                <li>Weekly: <span class="font-bold">${goalPace.weekly} ${unit}</span></li>
+                                <li>Monthly: <span class="font-bold">${goalPace.monthly} ${unit}</span></li>
+                            </ul>
+                            <p class="text-xs text-gray-500 mt-1">Remaining: ${goalPace.scopeRemaining} ${totalScopeName}</p>
+                        `;
+                    }
                 }
             },
 
@@ -778,6 +829,7 @@
                 document.getElementById('student-name-input').value = '';
                 document.getElementById('student-stage-input').value = 'Qaida';
                 document.getElementById('student-modal-error').textContent = '';
+                document.getElementById('target-date-input').value = '';
                 document.getElementById('student-modal').classList.remove('hidden');
             },
 
@@ -789,6 +841,7 @@
                 document.getElementById('student-name-input').value = student.name;
                 document.getElementById('student-stage-input').value = student.stage;
                 document.getElementById('student-modal-error').textContent = '';
+                document.getElementById('target-date-input').value = student.targetCompletionDate || '';
                 document.getElementById('student-modal').classList.remove('hidden');
             },
 
@@ -809,6 +862,7 @@
                 
                 const name = document.getElementById('student-name-input').value.trim();
                 const stage = document.getElementById('student-stage-input').value;
+                const targetCompletionDate = document.getElementById('target-date-input').value.trim();
 
                 if (!name || name.length > 100) {
                     document.getElementById('student-modal-error').textContent = 'Name is required and must be under 100 characters.';
@@ -825,19 +879,24 @@
     qaida_review_count: {},
     qaida_first_review_date: {},
     qaida_finished: {},
-    hifz_coverage: {}, // New: Hifz-specific map
-    reading_coverage: {}, // New: Reading/Sifarah-specific map
-    hifz_inventory: [],
-};
+        hifz_coverage: {}, // New: Hifz-specific map
+        reading_coverage: {}, // New: Reading/Sifarah-specific map
+        hifz_inventory: [],
+        targetCompletionDate: targetCompletionDate, // NEW
+    };
 
                     if (this.state.isEditMode) {
-                        // Update existing student (only name and stage are user-editable here)
-                        const studentDocRef = doc(db, `artifacts/${APP_ID}/public/data/students`, this.state.studentToEditId);
-                        await updateDoc(studentDocRef, { name: data.name, stage: data.stage });
-                    } else {
-                        // Add new student
-                        await addDoc(collection(db, `artifacts/${APP_ID}/public/data/students`), data);
-                    }
+                    // Update existing student (only name, stage, and target date are user-editable here)
+                    const studentDocRef = doc(db, `artifacts/${APP_ID}/public/data/students`, this.state.studentToEditId);
+                    await updateDoc(studentDocRef, {
+                        name: this.sanitize(name),
+                        stage: stage,
+                        targetCompletionDate: targetCompletionDate, // NEW
+                    });
+                } else {
+                    // Create new student
+                    await addDoc(collection(db, `artifacts/${APP_ID}/public/data/students`), data);
+                }
 
                     this.closeModal('student-modal');
                 } catch (error) {
@@ -1375,6 +1434,63 @@ showHifzBulkImportModal: function() {
                     statusDiv.textContent = 'No valid, non-overlapping ranges were entered.';
                     statusDiv.className = 'mt-3 text-sm font-medium text-red-600';
                 }
+            },
+            
+            calculateGoalPace: function(student) {
+                const targetDateString = student.targetCompletionDate;
+                if (!targetDateString) return null;
+
+                const targetDate = new Date(targetDateString + 'T00:00:00'); // Ensure date is treated as midnight UTC for consistent day counting
+                const today = new Date();
+                today.setHours(0, 0, 0, 0); // Normalize today's date
+
+                // Check if the target date is in the past
+                if (targetDate <= today) return null;
+
+                const timeDiff = targetDate.getTime() - today.getTime();
+                const totalDays = Math.ceil(timeDiff / (1000 * 60 * 60 * 24)); // Total days including today
+
+                let scopeCompleted, totalScope, unit;
+
+                if (student.stage === 'Qaida') {
+                    const completedLessons = Object.values(student.qaida_finished || {}).filter(f => f).length;
+                    scopeCompleted = completedLessons;
+                    totalScope = QAIDA_LESSON_COUNT;
+                    unit = 'Lesson';
+                } else if (student.stage === 'Sifarah') {
+                    scopeCompleted = student.sifarah_completed_ayahs || 0;
+                    totalScope = TOTAL_SIFARAH_AYAHS;
+                    unit = 'Ayah';
+                } else if (student.stage === 'Quran Reading' || student.stage === 'Hifz') {
+                    // Calculate completed Ayahs based on coverage map
+                    let coverageMap = student.stage === 'Hifz' ? student.hifz_coverage : student.reading_coverage;
+                    const coveredAyahs = Object.keys(coverageMap || {}).length;
+                    const inventoryAyahs = student.hifz_inventory ? this.calculateAyahCount(student.hifz_inventory) : 0;
+                    
+                    // For Hifz, we use the greater of covered/inventoried as the starting point, but only if it's less than the total scope
+                    scopeCompleted = Math.min(TOTAL_QURAN_AYAHS, coveredAyahs + inventoryAyahs);
+                    totalScope = TOTAL_QURAN_AYAHS;
+                    unit = 'Ayah';
+                } else {
+                    return null;
+                }
+
+                const scopeRemaining = totalScope - scopeCompleted;
+                if (scopeRemaining <= 0) return { daily: 0, weekly: 0, monthly: 0, yearly: 0, days: totalDays, unit: unit, isComplete: true };
+
+                const dailyRate = scopeRemaining / totalDays;
+
+                return {
+                    daily: Math.max(1, Math.ceil(dailyRate)), // At least 1 unit/day if remaining
+                    weekly: Math.ceil(dailyRate * 7),
+                    monthly: Math.ceil(dailyRate * 30.4375), // Average days per month
+                    yearly: Math.ceil(dailyRate * 365.25),
+                    days: totalDays,
+                    unit: unit,
+                    isComplete: false,
+                    scopeRemaining: scopeRemaining,
+                    totalScope: totalScope
+                };
             },
 
             checkOverlap: function(rangeA, rangeB) {
