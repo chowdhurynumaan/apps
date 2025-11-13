@@ -3,1416 +3,1419 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hifz Session & Goal Tracker</title>
-    <!-- Tailwind CSS CDN -->
+    <title>Student Progress Tracker</title>
+    <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Inter font -->
     <style>
-        /* Custom styles for a cleaner mobile-first UI */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f8f9fa;
+            background-color: #f7f9fc;
         }
-        .session-card {
-            transition: all 0.2s ease;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.1);
+        /* Custom scrollbar for log list */
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
         }
-        .session-card:hover {
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1), 0 5px 15px rgba(0,0,0,0.1);
-            transform: translateY(-1px);
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #9ca3af;
+            border-radius: 3px;
         }
-        .loader {
-            border-top-color: #3b82f6;
-            -webkit-animation: spin 1s ease-in-out infinite;
-            animation: spin 1s ease-in-out infinite;
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
         }
-        @keyframes spin {
-            to { -webkit-transform: rotate(360deg); }
-        }
-        @-webkit-keyframes spin {
-            to { -webkit-transform: rotate(360deg); }
-        }
-
-        /* Styles for the Side Panel (Class Selector) */
-        #classSelectorModal {
-            transform: translateX(-100%);
-            transition: transform 0.3s ease-in-out;
-        }
-        #classSelectorModal.open {
-            transform: translateX(0);
-        }
-        #overlay {
-            opacity: 0;
-            transition: opacity 0.3s ease-in-out;
-            pointer-events: none;
-        }
-        #overlay.active {
-            opacity: 1;
-            pointer-events: auto;
+        /* Style for radio buttons disguised as buttons */
+        .radio-button-group input[type="radio"]:checked + label {
+            background-color: #3b82f6; /* Tailwind blue-500 */
+            color: white;
+            border-color: #2563eb; /* Tailwind blue-700 */
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         }
     </style>
-</head>
-<body class="min-h-screen">
-
-    <!-- Global Overlay for Side Panel -->
-    <div id="overlay" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-20" onclick="closeClassSelector()"></div>
-
-    <!-- Class Selector Side Panel (Hamburger Menu) -->
-    <div id="classSelectorModal" class="fixed top-0 left-0 h-full w-64 bg-white shadow-2xl z-30 flex flex-col">
-        <div class="p-4 border-b bg-indigo-600 text-white flex justify-between items-center">
-            <h2 class="text-lg font-bold">Hifz Classes</h2>
-            <button onclick="closeClassSelector()" class="text-white hover:text-indigo-200 p-1">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-            </button>
-        </div>
-        
-        <!-- Class List -->
-        <div id="classesList" class="flex-grow overflow-y-auto p-4 space-y-2">
-            <!-- Class buttons will be rendered here -->
-        </div>
-
-        <!-- Add Class Section -->
-        <div class="p-4 border-t bg-gray-50">
-            <h3 class="text-sm font-semibold mb-2 text-gray-700">Add New Class</h3>
-            <input type="text" id="newClassNameInput" placeholder="Class Name (e.g., Group A)" class="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-2">
-            <button onclick="handleAddClass()" class="w-full p-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition duration-150 shadow-md">
-                Create Class
-            </button>
-        </div>
-    </div>
-
-
-    <!-- Header -->
-    <header class="bg-indigo-600 text-white p-3 shadow-lg sticky top-0 z-10">
-        <div class="flex justify-between items-center">
-            <!-- Hamburger Menu Button -->
-            <button id="hamburgerBtn" onclick="openClassSelector()" class="p-1 mr-3 rounded hover:bg-indigo-700 transition duration-150">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-            </button>
-            
-            <div class="flex-grow">
-                <h1 class="text-sm text-indigo-200">Current Class:</h1>
-                <p id="currentClassDisplay" class="text-lg font-bold truncate"></p>
-            </div>
-            
-            <button id="addStudentBtn" class="bg-indigo-400 hover:bg-indigo-500 text-sm text-white font-medium py-1 px-3 rounded-full transition duration-150 shadow-md">
-                + Student
-            </button>
-        </div>
-        <p id="userIdDisplay" class="text-xs mt-1 text-indigo-200 truncate"></p>
-    </header>
-
-    <!-- Main Content Area -->
-    <main class="p-3 max-w-4xl mx-auto">
-        <div id="loadingIndicator" class="flex justify-center items-center py-10">
-            <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
-        </div>
-        
-        <!-- Instruction for no class selected -->
-        <div id="noClassSelected" class="hidden text-center p-6 bg-white rounded-xl shadow-lg mt-6">
-            <p class="text-sm font-semibold text-indigo-600">Select a Class</p>
-            <p class="text-xs text-gray-500 mt-2">Open the menu (top left) to create or select a class to view students.</p>
-        </div>
-
-
-        <!-- Student List -->
-        <div id="studentList" class="space-y-3">
-            <!-- Student cards will be rendered here -->
-        </div>
-
-        <!-- Empty State -->
-        <div id="emptyState" class="hidden text-center p-6 bg-white rounded-xl shadow-lg mt-6">
-            <p class="text-sm text-gray-500">No students added to this class yet.</p>
-            <p class="text-xs text-gray-400 mt-2">Tap '+ Student' to begin tracking Hifz sessions.</p>
-        </div>
-    </main>
-
-    <!-- Global Message/Modal Area -->
-    <div id="globalModalOverlay" class="fixed inset-0 bg-gray-900 bg-opacity-75 hidden z-40 transition-opacity duration-300 items-center justify-center">
-        
-        <!-- Add Student Modal -->
-        <div id="addStudentModal" class="bg-white p-4 rounded-xl shadow-2xl w-11/12 max-w-lg scale-95 opacity-0 transition-all duration-300">
-            <h2 class="text-xl font-semibold mb-3 text-gray-800">Add New Student to <span id="addStudentClassTarget" class="text-indigo-600"></span></h2>
-            
-            <input type="text" id="studentNameInput" placeholder="Enter student's name" class="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-3">
-            
-            <h3 class="text-base font-bold text-gray-700 mb-2 mt-3">Current Hifz Status (Memorized Ranges)</h3>
-            <p class="text-xs text-gray-500 mb-3">Add all separate Surah:Ayah ranges the student has fully memorized.</p>
-
-            <!-- Dynamic Ranges Container -->
-            <div id="initialRangesContainer" class="space-y-3 max-h-48 overflow-y-auto pr-2">
-                <!-- Range inputs will be dynamically injected here -->
-            </div>
-
-            <button id="addRangeBtn" onclick="addInitialRangeInput()" class="w-full p-2 mt-3 text-xs bg-gray-100 text-indigo-600 border border-dashed border-indigo-300 rounded-lg hover:bg-gray-200 transition duration-150">
-                + Add Another Memorized Range
-            </button>
-
-            <h3 class="text-base font-bold text-gray-700 mb-2 mt-3 border-t pt-3">Goal Setting</h3>
-            <label class="block text-xs font-medium text-gray-700 mb-1">Target Completion Date (Whole Quran)</label>
-            <input type="date" id="goalDateInput" class="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-3">
-
-            <div class="flex justify-end space-x-2 mt-4">
-                <button onclick="closeModal('addStudentModal')" class="px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Cancel</button>
-                <button onclick="handleAddStudent()" class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-150">Add Student & Set Goal</button>
-            </div>
-        </div>
-
-        <!-- Session Tracking Modal (progressModal) -->
-        <div id="progressModal" class="bg-white p-4 rounded-xl shadow-2xl w-11/12 max-w-3xl h-5/6 overflow-y-auto scale-95 opacity-0 transition-all duration-300">
-            <h2 id="modalStudentName" class="text-xl font-semibold mb-2 text-gray-800 border-b pb-2"></h2>
-            
-            <!-- Goal Display and Pace -->
-            <div id="goalPaceDisplay" class="bg-green-50 p-3 rounded-xl mb-4 shadow-inner border-l-4 border-green-400">
-                <!-- Pace calculations will be inserted here -->
-            </div>
-
-            <p class="text-xs text-gray-500 mb-3">Log daily Hifz and Review sessions.</p>
-
-            <!-- Add Session Form -->
-            <div id="addSessionForm" class="bg-indigo-50 p-3 rounded-xl mb-4 shadow-inner">
-                <h3 class="text-base font-bold text-indigo-700 mb-2">Log New Session</h3>
-                
-                <p class="text-xs text-indigo-500 mb-3">
-                    Log the total portion covered. System automatically detects **New Hifz** vs. **Review**.
-                </p>
-
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1">Start Surah</label>
-                        <select id="surahStart" onchange="renderAyahOptions('session', 'start')" class="w-full p-1.5 text-sm border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"></select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1">Start Ayah</label>
-                        <select id="ayahStart" class="w-full p-1.5 text-sm border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"></select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1">End Surah</label>
-                        <select id="surahEnd" onchange="renderAyahOptions('session', 'end')" class="w-full p-1.5 text-sm border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"></select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1">End Ayah</label>
-                        <select id="ayahEnd" class="w-full p-1.5 text-sm border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"></select>
-                    </div>
-                </div>
-
-                <label class="block text-xs font-medium text-gray-700 mt-3 mb-1">Notes / Performance</label>
-                <textarea id="sessionNotes" placeholder="e.g., Excellent, minor Tarteel errors." class="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 resize-none h-12"></textarea>
-
-                <button onclick="handleAddSession()" class="w-full mt-3 px-3 py-1.5 text-sm bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition duration-150 shadow-md">
-                    Save Session
-                </button>
-            </div>
-
-            <!-- Session History Log -->
-            <h3 class="text-base font-bold text-gray-700 border-t pt-3 mt-4 mb-3">Session History</h3>
-            <div id="sessionHistory" class="space-y-3">
-                <!-- Session history entries will be rendered here -->
-            </div>
-            
-            <!-- Gemini Progress Summary -->
-            <h3 class="text-base font-bold mb-3 mt-4 text-gray-700 border-t pt-3">Gemini Progress Summary</h3>
-            <button onclick="handleGenerateSummary()" id="generateSummaryBtn" class="w-full mb-3 px-3 py-1.5 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition duration-150 flex items-center justify-center">
-                <svg id="summaryIcon" class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                <div id="summarySpinner" class="hidden loader ease-linear rounded-full border-2 border-t-2 border-white h-4 w-4 mr-2"></div>
-                Generate AI Report
-            </button>
-            <div id="summaryOutput" class="p-3 bg-gray-50 rounded-lg text-xs text-gray-700 border border-gray-200 min-h-[50px]">
-                Report will appear here...
-            </div>
-
-            <div class="flex justify-end space-x-2 mt-4">
-                <button onclick="closeModal('progressModal')" class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-150">Done</button>
-            </div>
-        </div>
-
-        <!-- Message/Error Modal -->
-        <div id="messageModal" class="bg-white p-4 rounded-xl shadow-2xl w-11/12 max-w-sm scale-95 opacity-0 transition-all duration-300">
-            <h2 id="messageTitle" class="text-base font-semibold mb-3 text-gray-800"></h2>
-            <p id="messageContent" class="text-sm text-gray-600 mb-4"></p>
-            <div class="flex justify-end">
-                <button onclick="closeModal('messageModal')" class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Close</button>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- Firebase SDKs -->
+    <!-- Load Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, collection, query, where, updateDoc, addDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Global variables for Firebase access
-let app, db, auth;
-let userId = null;
-
-// NEW: Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJpMJihQ",
-  authDomain: "apps-e1163.firebaseapp.com",
-  projectId: "apps-e1163",
-  storageBucket: "apps-e1163.firebasestorage.app",
-  messagingSenderId: "855206153422",
-  appId: "1:855206153422:web:2a1366b2e7825304c3d49f",
-  measurementId: "G-7YCKESJB8T"
-};
-
-// Cleaned up environment variables
-const appId = 'standalone'; 
-const initialAuthToken = null;
-
-        // Global state for Classes
-        let classesData = [];
-        let currentClassId = null;
-        let currentClassName = "Select Class";
-
-        // Global counter for dynamic initial ranges
-        let rangeIndex = 0;
-
-        // Constants
-        const API_KEY = ""; // Leave as-is for Canvas environment
-        const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
-        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${API_KEY}`;
-        
-        // Firestore Paths (Classes are separate from Students)
-const CLASSES_PATH = 'hifz_classes'; // Change 'hifz_classes' if you used a different collection name
-const STUDENTS_PATH = 'hifz_students'; // Change 'hifz_students' if you used a different collection name
-        
-        // This constant is a standard count for the whole Quran for goal-setting calculations.
-        const TOTAL_QURAN_AYAH_COUNT = 6236; 
-
-        // Surah Data (Extended for full tracking, though only a subset is detailed here)
-        const SURAH_DATA = [
-    { id: 1, name: "Al-Fatihah", ayahs: 7 },
-    { id: 2, name: "Al-Baqarah", ayahs: 286 },
-    { id: 3, name: "Al-Imran", ayahs: 200 },
-    { id: 4, name: "An-Nisa", ayahs: 176 },
-    { id: 5, name: "Al-Ma'idah", ayahs: 120 },
-    { id: 6, name: "Al-An'am", ayahs: 165 },
-    { id: 7, name: "Al-A'raf", ayahs: 206 },
-    { id: 8, name: "Al-Anfal", ayahs: 75 },
-    { id: 9, name: "At-Tawbah", ayahs: 129 },
-    { id: 10, name: "Yunus", ayahs: 109 },
-    { id: 11, name: "Hud", ayahs: 123 },
-    { id: 12, name: "Yusuf", ayahs: 111 },
-    { id: 13, name: "Ar-Ra'd", ayahs: 43 },
-    { id: 14, name: "Ibrahim", ayahs: 52 },
-    { id: 15, name: "Al-Hijr", ayahs: 99 },
-    { id: 16, name: "An-Nahl", ayahs: 128 },
-    { id: 17, name: "Al-Isra", ayahs: 111 },
-    { id: 18, name: "Al-Kahf", ayahs: 110 },
-    { id: 19, name: "Maryam", ayahs: 98 },
-    { id: 20, name: "Ta-Ha", ayahs: 135 },
-    { id: 21, name: "Al-Anbiya", ayahs: 112 },
-    { id: 22, name: "Al-Hajj", ayahs: 78 },
-    { id: 23, name: "Al-Mu'minun", ayahs: 118 },
-    { id: 24, name: "An-Nur", ayahs: 64 },
-    { id: 25, name: "Al-Furqan", ayahs: 77 },
-    { id: 26, name: "Ash-Shu'ara", ayahs: 227 },
-    { id: 27, name: "An-Naml", ayahs: 93 },
-    { id: 28, name: "Al-Qasas", ayahs: 88 },
-    { id: 29, name: "Al-Ankabut", ayahs: 69 },
-    { id: 30, name: "Ar-Rum", ayahs: 60 },
-    { id: 31, name: "Luqman", ayahs: 34 },
-    { id: 32, name: "As-Sajdah", ayahs: 30 },
-    { id: 33, name: "Al-Ahzab", ayahs: 73 },
-    { id: 34, name: "Saba", ayahs: 54 },
-    { id: 35, name: "Fatir", ayahs: 45 },
-    { id: 36, name: "Ya-Sin", ayahs: 83 },
-    { id: 37, name: "As-Saffat", ayahs: 182 },
-    { id: 38, name: "Sad", ayahs: 88 },
-    { id: 39, name: "Az-Zumar", ayahs: 75 },
-    { id: 40, name: "Ghafir", ayahs: 85 },
-    { id: 41, name: "Fussilat", ayahs: 54 },
-    { id: 42, name: "Ash-Shura", ayahs: 53 },
-    { id: 43, name: "Az-Zukhruf", ayahs: 89 },
-    { id: 44, name: "Ad-Dukhan", ayahs: 59 },
-    { id: 45, name: "Al-Jathiyah", ayahs: 37 },
-    { id: 46, name: "Al-Ahqaf", ayahs: 35 },
-    { id: 47, name: "Muhammad", ayahs: 38 },
-    { id: 48, name: "Al-Fath", ayahs: 29 },
-    { id: 49, name: "Al-Hujurat", ayahs: 18 },
-    { id: 50, name: "Qaf", ayahs: 45 },
-    { id: 51, name: "Adh-Dhariyat", ayahs: 60 },
-    { id: 52, name: "At-Tur", ayahs: 49 },
-    { id: 53, name: "An-Najm", ayahs: 62 },
-    { id: 54, name: "Al-Qamar", ayahs: 55 },
-    { id: 55, name: "Ar-Rahman", ayahs: 78 },
-    { id: 56, name: "Al-Waqi'ah", ayahs: 96 },
-    { id: 57, name: "Al-Hadid", ayahs: 29 },
-    { id: 58, name: "Al-Mujadila", ayahs: 22 },
-    { id: 59, name: "Al-Hashr", ayahs: 24 },
-    { id: 60, name: "Al-Mumtahanah", ayahs: 13 },
-    { id: 61, name: "As-Saff", ayahs: 14 },
-    { id: 62, name: "Al-Jumu'ah", ayahs: 11 },
-    { id: 63, name: "Al-Munafiqun", ayahs: 11 },
-    { id: 64, name: "At-Taghabun", ayahs: 18 },
-    { id: 65, name: "At-Talaq", ayahs: 12 },
-    { id: 66, name: "At-Tahrim", ayahs: 12 },
-    { id: 67, name: "Al-Mulk", ayahs: 30 },
-    { id: 68, name: "Al-Qalam", ayahs: 52 },
-    { id: 69, name: "Al-Haqqah", ayahs: 52 },
-    { id: 70, name: "Al-Ma'arij", ayahs: 44 },
-    { id: 71, name: "Nuh", ayahs: 28 },
-    { id: 72, name: "Al-Jinn", ayahs: 28 },
-    { id: 73, name: "Al-Muzzammil", ayahs: 20 },
-    { id: 74, name: "Al-Muddaththir", ayahs: 56 },
-    { id: 75, name: "Al-Qiyamah", ayahs: 40 },
-    { id: 76, name: "Al-Insan", ayahs: 31 },
-    { id: 77, name: "Al-Mursalat", ayahs: 50 },
-    { id: 78, name: "An-Naba", ayahs: 40 },
-    { id: 79, name: "An-Nazi'at", ayahs: 46 },
-    { id: 80, name: "'Abasa", ayahs: 42 },
-    { id: 81, name: "At-Takwir", ayahs: 29 },
-    { id: 82, name: "Al-Infitar", ayahs: 19 },
-    { id: 83, name: "Al-Mutaffifin", ayahs: 36 },
-    { id: 84, name: "Al-Inshiqaq", ayahs: 25 },
-    { id: 85, name: "Al-Buruj", ayahs: 22 },
-    { id: 86, name: "At-Tariq", ayahs: 17 },
-    { id: 87, name: "Al-A'la", ayahs: 19 },
-    { id: 88, name: "Al-Ghashiyah", ayahs: 26 },
-    { id: 89, name: "Al-Fajr", ayahs: 30 },
-    { id: 90, name: "Al-Balad", ayahs: 20 },
-    { id: 91, name: "Ash-Shams", ayahs: 15 },
-    { id: 92, name: "Al-Layl", ayahs: 21 },
-    { id: 93, name: "Ad-Duha", ayahs: 11 },
-    { id: 94, name: "Ash-Sharh", ayahs: 8 },
-    { id: 95, name: "At-Tin", ayahs: 8 },
-    { id: 96, name: "Al-'Alaq", ayahs: 19 },
-    { id: 97, name: "Al-Qadr", ayahs: 5 },
-    { id: 98, name: "Al-Bayyinah", ayahs: 8 },
-    { id: 99, name: "Az-Zalzalah", ayahs: 8 },
-    { id: 100, name: "Al-'Adiyat", ayahs: 11 },
-    { id: 101, name: "Al-Qari'ah", ayahs: 11 },
-    { id: 102, name: "At-Takathur", ayahs: 8 },
-    { id: 103, name: "Al-'Asr", ayahs: 3 },
-    { id: 104, name: "Al-Humazah", ayahs: 9 },
-    { id: 105, name: "Al-Fil", ayahs: 5 },
-    { id: 106, name: "Quraysh", ayahs: 4 },
-    { id: 107, name: "Al-Ma'un", ayahs: 7 },
-    { id: 108, name: "Al-Kawthar", ayahs: 3 },
-    { id: 109, name: "Al-Kafirun", ayahs: 6 },
-    { id: 110, name: "An-Nasr", ayahs: 3 },
-    { id: 111, name: "Al-Masad", ayahs: 5 },
-    { id: 112, name: "Al-Ikhlas", ayahs: 4 },
-    { id: 113, name: "Al-Falaq", ayahs: 5 },
-    { id: 114, name: "An-Nas", ayahs: 6 }
-];
-
-        let studentsData = [];
-        let currentStudent = null;
-        let cumulativeAyahMap = null; // Cache for cumulative Ayah calculation
-
-        // --- Core Range Logic Helpers ---
-
-        /**
-         * Calculates a unique cumulative Ayah index for a given Surah:Ayah point.
-         */
-        function getCumulativeAyah(surahId, ayahNumber) {
-            if (!cumulativeAyahMap) {
-                // Pre-calculate map for efficiency
-                cumulativeAyahMap = {};
-                let cumulative = 0;
-                for (const surah of SURAH_DATA) {
-                    cumulativeAyahMap[surah.id] = { start: cumulative + 1, end: cumulative + surah.ayahs };
-                    cumulative += surah.ayahs;
-                }
-            }
-
-            const mapEntry = cumulativeAyahMap[surahId];
-            if (mapEntry) {
-                // Cumulative position = (Start of Surah) + (Ayah Number - 1)
-                return mapEntry.start + ayahNumber - 1;
-            }
-            return 0; 
-        }
-        
-        /**
-         * Converts a cumulative Ayah range back into Surah:Ayah coordinates.
-         */
-        function cumulativeToSurahAyah(startCumulative, endCumulative) {
-            if (startCumulative > endCumulative) return { valid: false };
-
-            if (!cumulativeAyahMap) { getCumulativeAyah(1, 1); }
-
-            let startSurahId = 0, startAyah = 0;
-            let endSurahId = 0, endAyah = 0;
-
-            for (const surah of SURAH_DATA) {
-                const entry = cumulativeAyahMap[surah.id];
-                if (entry) {
-                    // Check for start point
-                    if (startCumulative >= entry.start && startCumulative <= entry.end) {
-                        startSurahId = surah.id;
-                        startAyah = startCumulative - entry.start + 1;
-                    }
-                    // Check for end point
-                    if (endCumulative >= entry.start && endCumulative <= entry.end) {
-                        endSurahId = surah.id;
-                        endAyah = endCumulative - entry.start + 1;
-                    }
-
-                    if (startSurahId > 0 && endSurahId > 0 && startSurahId <= surah.id) break; 
-                }
-            }
-
-            if (!startSurahId || !endSurahId) return { valid: false };
-
-            return {
-                valid: true,
-                range: {
-                    surah_start_id: startSurahId,
-                    ayah_start: startAyah,
-                    surah_end_id: endSurahId,
-                    ayah_end: endAyah
-                }
-            };
-        }
-
-        /**
-         * Merges overlapping or contiguous ranges.
-         */
-        function mergeRanges(ranges) {
-            if (ranges.length === 0) return [];
-            
-            const sortedRanges = [...ranges].sort((a, b) => a.start - b.start);
-            const merged = [];
-            let current = { ...sortedRanges[0] };
-
-            for (let i = 1; i < sortedRanges.length; i++) {
-                const next = sortedRanges[i];
-                
-                if (next.start <= current.end + 1) {
-                    current.end = Math.max(current.end, next.end);
-                } else {
-                    merged.push(current);
-                    current = { ...next };
-                }
-            }
-            merged.push(current);
-            return merged;
-        }
-
-        /**
-         * Analyzes the given range against the student's existing Hifz history.
-         */
-        function calculateSessionBreakdown(startId, startAyah, endId, endAyah) {
-            const initialSegment = {
-                type: 'New Hifz',
-                surah_start_id: startId,
-                ayah_start: startAyah,
-                surah_end_id: endId,
-                ayah_end: endAyah
-            };
-            if (!currentStudent || !currentStudent.sessions) return [initialSegment];
-
-            const targetStart = getCumulativeAyah(startId, startAyah);
-            const targetEnd = getCumulativeAyah(endId, endAyah);
-
-            let hifzHistory = [];
-
-            (currentStudent.initialHifzRanges || []).forEach(initial => {
-                hifzHistory.push({
-                    start: getCumulativeAyah(initial.surah_start_id, initial.ayah_start),
-                    end: getCumulativeAyah(initial.surah_end_id, initial.ayah_end)
-                });
-            });
-
-            hifzHistory = hifzHistory.concat(currentStudent.sessions
-                .flatMap(s => {
-                    if (s.breakdown) {
-                        return s.breakdown
-                            .filter(b => b.type === 'New Hifz')
-                            .map(b => ({
-                                start: getCumulativeAyah(b.surah_start_id, b.ayah_start),
-                                end: getCumulativeAyah(b.surah_end_id, b.ayah_end)
-                            }));
-                    }
-                    if (s.type === 'New Hifz' && s.surah_start_id) {
-                         return [{
-                             start: getCumulativeAyah(s.surah_start_id, s.ayah_start),
-                             end: getCumulativeAyah(s.surah_end_id, s.ayah_end)
-                         }];
-                    }
-                    return [];
-                }));
-
-            const mergedHifzRanges = mergeRanges(hifzHistory);
-
-            let currentCursor = targetStart;
-            const breakdown = [];
-
-            for (const hifzRange of mergedHifzRanges) {
-                if (currentCursor > targetEnd) break;
-
-                const reviewStart = Math.max(currentCursor, hifzRange.start);
-                const reviewEnd = Math.min(targetEnd, hifzRange.end);
-
-                // 1. Log "New Hifz" segment (the gap before this Review section)
-                if (currentCursor < reviewStart) {
-                    const segment = cumulativeToSurahAyah(currentCursor, reviewStart - 1);
-                    if (segment.valid) {
-                         breakdown.push({ type: 'New Hifz', ...segment.range });
-                    }
-                }
-
-                // 2. Log "Review" segment (the overlap with history)
-                if (reviewStart <= reviewEnd) {
-                     const segment = cumulativeToSurahAyah(reviewStart, reviewEnd);
-                     if (segment.valid) {
-                         breakdown.push({ type: 'Review', ...segment.range });
-                     }
-                    currentCursor = reviewEnd + 1;
-                }
-            }
-
-            // 3. Log the final "New Hifz" segment 
-            if (currentCursor <= targetEnd) {
-                 const segment = cumulativeToSurahAyah(currentCursor, targetEnd);
-                 if (segment.valid) {
-                    breakdown.push({ type: 'New Hifz', ...segment.range });
-                 }
-            }
-            
-            if (breakdown.length === 0) {
-                return [initialSegment];
-            }
-
-            return breakdown;
-        }
-
-        // --- Goal Calculation Logic ---
-
-        function calculateHifzPace(student) {
-            if (!student || !student.goalDate || !student.initialHifzRanges || student.initialHifzRanges.length === 0) {
-                return null;
-            }
-            
-            let hifzAyahs = 0;
-            let lastAyahMemorized = 0;
-
-            let allHifzRanges = [];
-
-            (student.initialHifzRanges || []).forEach(initial => {
-                 allHifzRanges.push({
-                    start: getCumulativeAyah(initial.surah_start_id, initial.ayah_start),
-                    end: getCumulativeAyah(initial.surah_end_id, initial.ayah_end)
-                });
-            });
-
-            (student.sessions || []).forEach(s => {
-                if (s.breakdown) {
-                    s.breakdown.filter(b => b.type === 'New Hifz').forEach(b => {
-                        allHifzRanges.push({
-                            start: getCumulativeAyah(b.surah_start_id, b.ayah_start),
-                            end: getCumulativeAyah(b.surah_end_id, b.ayah_end)
-                        });
-                    });
-                } else if (s.type === 'New Hifz' && s.surah_start_id) {
-                     allHifzRanges.push({
-                         start: getCumulativeAyah(s.surah_start_id, s.ayah_start),
-                         end: getCumulativeAyah(s.surah_end_id, s.ayah_end)
-                     });
-                }
-            });
-
-            const mergedHifz = mergeRanges(allHifzRanges);
-            hifzAyahs = mergedHifz.reduce((sum, range) => sum + (range.end - range.start + 1), 0);
-            
-            lastAyahMemorized = mergedHifz.reduce((max, range) => Math.max(max, range.end), 0);
-            
-            if (lastAyahMemorized === 0) {
-                lastAyahMemorized = getCumulativeAyah(1, 1);
-            }
-
-            const remainingAyahs = TOTAL_QURAN_AYAH_COUNT - hifzAyahs;
-            
-            const goalDate = new Date(student.goalDate);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0); 
-            
-            const timeDifferenceMs = goalDate.getTime() - today.getTime();
-            
-            if (timeDifferenceMs < 0 || remainingAyahs <= 0) {
-                return {
-                    totalAyahs: TOTAL_QURAN_AYAH_COUNT,
-                    memorizedAyahs: hifzAyahs,
-                    remainingAyahs: Math.max(0, remainingAyahs),
-                    daysRemaining: 0,
-                    pace: { daily: 0, weekly: 0, monthly: 0 },
-                    lastAyah: cumulativeToSurahAyah(lastAyahMemorized, lastAyahMemorized).range || { surah_start_id: 1, ayah_start: 1 }
-                };
-            }
-
-            const daysRemaining = Math.ceil(timeDifferenceMs / (1000 * 60 * 60 * 24));
-
-            const dailyPace = remainingAyahs / daysRemaining;
-            const weeklyPace = dailyPace * 7;
-            const monthlyPace = dailyPace * (365.25 / 12); 
-
-            return {
-                totalAyahs: TOTAL_QURAN_AYAH_COUNT,
-                memorizedAyahs: hifzAyahs,
-                remainingAyahs: remainingAyahs,
-                daysRemaining: daysRemaining,
-                pace: { 
-                    daily: Math.max(0, dailyPace), 
-                    weekly: Math.max(0, weeklyPace), 
-                    monthly: Math.max(0, monthlyPace) 
-                },
-                lastAyah: cumulativeToSurahAyah(lastAyahMemorized, lastAyahMemorized).range || { surah_start_id: 1, ayah_start: 1 }
-            };
-        }
-        
-        // --- Utility Functions ---
-
-        function showMessage(title, content) {
-            document.getElementById('messageTitle').textContent = title;
-            document.getElementById('messageContent').textContent = content;
-            openModal('messageModal');
-        }
-
-        window.openModal = function(modalId) {
-            document.getElementById('globalModalOverlay').classList.remove('hidden', 'opacity-0');
-            document.getElementById('globalModalOverlay').classList.add('flex', 'opacity-100');
-            
-            const modalElement = document.getElementById(modalId);
-            modalElement.classList.remove('scale-95', 'opacity-0');
-            modalElement.classList.add('scale-100', 'opacity-100');
-
-            if (modalId === 'addStudentModal') {
-                document.getElementById('addStudentClassTarget').textContent = currentClassName;
-                const container = document.getElementById('initialRangesContainer');
-                container.innerHTML = '';
-                rangeIndex = 0;
-                addInitialRangeInput(); 
-            }
-        }
-
-        window.closeModal = function(modalId) {
-            const modalElement = document.getElementById(modalId);
-            modalElement.classList.remove('scale-100', 'opacity-100');
-            modalElement.classList.add('scale-95', 'opacity-0');
-            
-            setTimeout(() => {
-                document.getElementById('globalModalOverlay').classList.remove('flex', 'opacity-100');
-                document.getElementById('globalModalOverlay').classList.add('hidden', 'opacity-0');
-            }, 300);
-        }
-
-        // --- Class Selector Functions ---
-
-        window.openClassSelector = function() {
-            document.getElementById('classSelectorModal').classList.add('open');
-            document.getElementById('overlay').classList.add('active');
-        }
-
-        window.closeClassSelector = function() {
-            document.getElementById('classSelectorModal').classList.remove('open');
-            document.getElementById('overlay').classList.remove('active');
-        }
-
-        window.switchClass = function(classId) {
-            if (classId === currentClassId) {
-                closeClassSelector();
-                return;
-            }
-            const selectedClass = classesData.find(c => c.id === classId);
-            if (selectedClass) {
-                currentClassId = classId;
-                currentClassName = selectedClass.name;
-                document.getElementById('currentClassDisplay').textContent = currentClassName;
-                closeClassSelector();
-                // Rerun the student listener with the new class filter
-                setupStudentListener(); 
-                renderClassesList(); // Update highlight
-            }
-        }
-
-        window.handleAddClass = async function() {
-            const name = document.getElementById('newClassNameInput').value.trim();
-            if (!name) {
-                showMessage("Input Required", "Please enter a name for the new class.");
-                return;
-            }
-            
-            try {
-                const newClass = {
-                    name: name,
-                    created_by: userId,
-                    created_at: new Date().toISOString()
-                };
-
-                await addDoc(collection(db, CLASSES_PATH), newClass);
-                document.getElementById('newClassNameInput').value = '';
-                // The onSnapshot listener will handle updating classesData and UI
-            } catch (error) {
-                console.error("Error adding class:", error);
-                showMessage("Database Error", "Could not add class. Check console for details.");
-            }
-        }
-
-        function renderClassesList() {
-            const listElement = document.getElementById('classesList');
-            listElement.innerHTML = '';
-
-            if (classesData.length === 0) {
-                listElement.innerHTML = '<p class="text-xs text-gray-500 text-center mt-4">No classes found. Create one above!</p>';
-                return;
-            }
-
-            classesData.forEach(cls => {
-                const isCurrent = cls.id === currentClassId;
-                const button = document.createElement('button');
-                button.className = `w-full text-left p-3 rounded-lg text-sm transition duration-150 shadow-sm ${
-                    isCurrent ? 'bg-indigo-600 text-white font-semibold' : 'bg-gray-100 text-gray-800 hover:bg-indigo-100'
-                }`;
-                button.textContent = cls.name;
-                button.setAttribute('onclick', `switchClass('${cls.id}')`);
-                listElement.appendChild(button);
-            });
-        }
-
-
-        // --- Firebase Initialization and Authentication ---
-
-        async function initFirebase() {
-            try {
-                setLogLevel('error');
-                app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        userId = user.uid;
-                    } else {
-                        userId = crypto.randomUUID();
-                    }
-                    document.getElementById('userIdDisplay').textContent = `User ID: ${userId}`;
-                    setupRealtimeListeners();
-                });
-
-            } catch (error) {
-                console.error("Firebase Initialization/Authentication Error:", error);
-                showMessage("Setup Error", "Failed to initialize Firebase. Check console for details.");
-            }
-        }
-
-        // --- Data Listening and Rendering ---
-        
-        // This function sets up the main class listener
-        function setupRealtimeListeners() {
-            const classQuery = query(collection(db, CLASSES_PATH));
-
-            onSnapshot(classQuery, (snapshot) => {
-                classesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                
-                // 1. Check if the current class is still valid
-                const currentClassExists = classesData.some(cls => cls.id === currentClassId);
-                
-                // 2. If no class is selected or the current one was deleted, select the first one found
-                if (!currentClassId || !currentClassExists) {
-                    if (classesData.length > 0) {
-                        currentClassId = classesData[0].id;
-                        currentClassName = classesData[0].name;
-                        document.getElementById('noClassSelected').classList.add('hidden');
-                        document.getElementById('currentClassDisplay').textContent = currentClassName;
-                        setupStudentListener(); // Start listening to students for the new class
-                    } else {
-                        // No classes available - stop listening to students
-                        currentClassId = null;
-                        currentClassName = "No Classes";
-                        document.getElementById('currentClassDisplay').textContent = currentClassName;
-                        document.getElementById('noClassSelected').classList.remove('hidden');
-                        renderStudentList([]); // Clear the student list
-                    }
-                } else {
-                    // Update the current name in case the name field changed
-                    currentClassName = classesData.find(cls => cls.id === currentClassId)?.name || "Class Deleted";
-                    document.getElementById('currentClassDisplay').textContent = currentClassName;
-                    // Re-run student listener just in case it wasn't running (e.g., initial load)
-                    if (currentClassId) setupStudentListener(); 
-                }
-                
-                renderClassesList(); // Always render the class list for the side panel
-                document.getElementById('loadingIndicator').classList.add('hidden');
-            }, (error) => {
-                console.error("Firestore Class Snapshot Error:", error);
-            });
-        }
-        
-        // This function sets up the student listener, filtered by the active class
-        let studentUnsubscribe = null; // Used to manage the subscription
-
-        function setupStudentListener() {
-            if (studentUnsubscribe) {
-                studentUnsubscribe(); // Unsubscribe from the old class's students
-            }
-
-            if (!currentClassId) {
-                studentsData = [];
-                renderStudentList();
-                return;
-            }
-
-            const studentQuery = query(collection(db, STUDENTS_PATH), where('classId', '==', currentClassId));
-
-            studentUnsubscribe = onSnapshot(studentQuery, (snapshot) => {
-                const newStudents = [];
-                snapshot.forEach((doc) => {
-                    const data = doc.data();
-                    if (!data.sessions) data.sessions = [];
-                    if (!data.initialHifzRanges) data.initialHifzRanges = [];
-                    newStudents.push({ id: doc.id, ...data });
-                });
-                // Sort students alphabetically by name
-                studentsData = newStudents.sort((a, b) => a.name.localeCompare(b.name));
-                renderStudentList();
-            }, (error) => {
-                console.error("Firestore Student Snapshot Error:", error);
-                showMessage("Data Error", "Failed to load student data for the current class.");
-            });
-        }
-
-
-        function renderStudentList() {
-            const listElement = document.getElementById('studentList');
-            listElement.innerHTML = ''; 
-
-            if (!currentClassId) {
-                document.getElementById('emptyState').classList.add('hidden');
-                document.getElementById('noClassSelected').classList.remove('hidden');
-                return;
-            } else {
-                 document.getElementById('noClassSelected').classList.add('hidden');
-            }
-
-            if (studentsData.length === 0) {
-                document.getElementById('emptyState').classList.remove('hidden');
-                return;
-            }
-            document.getElementById('emptyState').classList.add('hidden');
-
-            studentsData.forEach(student => {
-                const sessionCount = student.sessions ? student.sessions.length : 0;
-                const lastSessionDate = sessionCount > 0 
-                    ? new Date(student.sessions[0].timestamp).toLocaleDateString() 
-                    : 'N/A';
-                
-                const card = document.createElement('div');
-                card.className = "bg-white p-3 rounded-xl shadow-lg border border-gray-200 cursor-pointer hover:bg-gray-50 transition duration-150 flex justify-between items-center session-card";
-                card.setAttribute('onclick', `window.showProgressModal('${student.id}')`);
-                card.innerHTML = `
-                    <div>
-                        <h2 class="text-base font-semibold text-gray-800">${student.name}</h2>
-                        <p class="text-xs text-gray-500">Total Sessions: ${sessionCount}</p>
-                    </div>
-                    <div class="text-right">
-                        <p class="text-xs text-gray-400">Last Session:</p>
-                        <p class="text-sm text-indigo-600 font-medium">${lastSessionDate}</p>
-                    </div>
-                `;
-                listElement.appendChild(card);
-            });
-        }
-
-        // --- Student Management (Dynamic Ranges) ---
-        
-        window.addInitialRangeInput = function() {
-            const container = document.getElementById('initialRangesContainer');
-            const index = rangeIndex++;
-            const rangeId = `range_${index}`;
-
-            const newRangeHtml = `
-                <div id="${rangeId}" class="p-3 border border-indigo-200 rounded-lg bg-indigo-50 relative">
-                    <h4 class="text-sm font-semibold text-indigo-800 mb-2">Range #${index + 1}</h4>
-                    <button onclick="removeInitialRangeInput('${rangeId}')" class="absolute top-2 right-2 text-red-500 hover:text-red-700 text-base leading-none">
-                        &times;
+        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, runTransaction, FieldValue, serverTimestamp, setLogLevel, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global Firebase variables exposed to the window for script access
+        window.firebase = {
+            initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged,
+            getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection,
+            query, where, runTransaction, FieldValue, serverTimestamp, setLogLevel, getDocs, writeBatch
+        };
+    </script>
+</head>
+<body class="p-4 md:p-8 min-h-screen">
+
+    <div id="app-container" class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-4 md:p-6">
+        <header class="mb-6 pb-4 border-b border-gray-100">
+            <h1 class="text-3xl font-extrabold text-blue-600">Student Progress Tracker</h1>
+            <p id="auth-status" class="text-xs text-gray-500 mt-1"></p>
+        </header>
+
+        <!-- Main Student List View -->
+        <div id="student-list-view">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Students</h2>
+            <div class="flex flex-col md:flex-row gap-3 mb-6">
+                <input type="text" id="search-student" placeholder="Search by name..." class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm" oninput="app.handleSearch(this.value)">
+                <button onclick="app.showAddStudentModal()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out whitespace-nowrap">
+                    Add New Student
+                </button>
+            </div>
+            <div id="student-list" class="space-y-3">
+                <!-- Student list items will be injected here -->
+            </div>
+            <p id="no-students" class="text-gray-500 text-center py-8 hidden">No students found.</p>
+        </div>
+
+        <!-- Student Detail and Logging View -->
+        <div id="student-detail-view" class="hidden">
+            <button onclick="app.showStudentListView()" class="mb-4 text-blue-600 hover:text-blue-800 font-medium flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+                Back to List
+            </button>
+            <div id="student-header" class="mb-6 p-4 border border-blue-200 rounded-lg bg-blue-50">
+                <h2 class="text-3xl font-bold text-gray-800" id="detail-student-name"></h2>
+                <div class="flex items-center mt-2">
+                    <span class="text-lg font-medium text-gray-600 mr-2">Stage:</span>
+                    <span id="detail-student-stage" class="text-lg font-bold text-blue-600"></span>
+                    <button onclick="app.showEditStudentModal(app.state.currentStudent)" class="ml-4 text-gray-500 hover:text-gray-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zm-5.042 1.944a1 1 0 011.414 0L14.5 11.293V13h-1.707l-4.293-4.293a1 1 0 010-1.414l.707-.707zM5 13.707V15h1.293l8.3-8.3-1.293-1.293-8.3 8.3z" />
+                        </svg>
                     </button>
-                    <div class="grid grid-cols-2 gap-3 mb-2">
-                        <!-- Start Point -->
-                        <div>
-                            <label class="block text-xs font-medium text-gray-700 mb-0.5">Start Surah</label>
-                            <select id="initialSurahStart_${index}" onchange="renderAyahOptions('initial', 'start', ${index})" class="w-full p-1.5 text-xs border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"></select>
+                    <button onclick="app.showDeleteStudentModal(app.state.currentStudent)" class="ml-2 text-red-500 hover:text-red-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 10-2 0v6a1 1 0 102 0V8z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                </div>
+                <div id="progression-info" class="text-sm mt-3 space-y-1">
+                    <!-- Stage-specific progression info (e.g., Sifarah completion, Hifz pace) -->
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:col-span-3 gap-6">
+                <!-- Logging Form (2/3 width) -->
+                <div class="lg:col-span-2">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">Log Recitation</h3>
+                    <form id="logging-form" class="space-y-4 p-4 border border-gray-200 rounded-lg bg-white shadow-sm" onsubmit="app.handleLogSubmission(event)">
+                        <!-- Dynamic Stage Inputs (Qaida, Sifarah, Quran, Hifz) -->
+                        <div id="dynamic-inputs">
+                            <!-- Inputs injected here based on student stage -->
                         </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-700 mb-0.5">Start Ayah</label>
-                            <select id="initialAyahStart_${index}" class="w-full p-1.5 text-xs border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"></select>
+
+                        <div id="common-inputs" class="space-y-4">
+                            <!-- Fluency Rating (1-5 Scale) -->
+                            <div>
+                                <input type="hidden" id="fluency-rating" name="fluency-rating" value="5"> </div>
+
+                            <!-- Notes/Comment Field (Max 500 chars, required for all non-Qaida) -->
+                            <div>
+                                <label for="notes" class="block text-sm font-medium text-gray-700">Notes/Comment (Max 500 characters)</label>
+                                <textarea id="notes" name="notes" rows="3" maxlength="500" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                            </div>
                         </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <!-- End Point -->
-                        <div>
-                            <label class="block text-xs font-medium text-gray-700 mb-0.5">End Surah</label>
-                            <select id="initialSurahEnd_${index}" onchange="renderAyahOptions('initial', 'end', ${index})" class="w-full p-1.5 text-xs border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"></select>
+
+                        <!-- User Preference Toggle -->
+                        <div class="flex items-center justify-between pt-2 border-t border-gray-100">
+                            <label for="auto-fill-next" class="text-sm font-medium text-gray-700 flex items-center">
+                                <input type="checkbox" id="auto-fill-next" onchange="app.saveUserPreference('autoFillNext', this.checked)" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mr-2">
+                                Auto-Fill Next Ayah
+                            </label>
+                            <button type="submit" id="submit-log-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-5 rounded-lg shadow-md transition duration-150 ease-in-out">
+                                Submit Log
+                            </button>
                         </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-700 mb-0.5">End Ayah</label>
-                            <select id="initialAyahEnd_${index}" class="w-full p-1.5 text-xs border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"></select>
-                        </div>
+                        <div id="log-message" class="mt-3 text-sm font-medium"></div>
+                    </form>
+
+                    <!-- Hifz Bulk Inventory Button (only shown in Hifz stage) -->
+                    <div id="hifz-bulk-import-container" class="mt-4 hidden">
+                        <button onclick="app.showHifzBulkImportModal()" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-150">
+                            Bulk Import Hifz Inventory
+                        </button>
                     </div>
                 </div>
-            `;
-            container.insertAdjacentHTML('beforeend', newRangeHtml);
-            
-            renderSurahOptions('initial', 'start', index);
-            renderSurahOptions('initial', 'end', index);
-            
-            if (index === 0) {
-                 document.getElementById(`initialSurahStart_${index}`).value = 1; 
-                 document.getElementById(`initialSurahEnd_${index}`).value = 1;
-                 renderAyahOptions('initial', 'start', index); 
-                 renderAyahOptions('initial', 'end', index); 
-                 document.getElementById(`initialAyahStart_${index}`).value = 1;
-                 document.getElementById(`initialAyahEnd_${index}`).value = 7;
-            }
+
+                <!-- Log History (1/3 width) -->
+                <div class="lg:col-span-1">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">Log History (<span id="log-count">0</span>)</h3>
+                    <div id="log-history" class="h-96 overflow-y-auto custom-scroll p-2 space-y-3 bg-gray-50 border border-gray-200 rounded-lg">
+                        <!-- Logs will be dynamically injected here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modals -->
+        <div id="modal-container">
+            <!-- Modal for Add/Edit Student -->
+            <div id="student-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-75 z-50 flex items-center justify-center p-4" onclick="if(event.target.id === 'student-modal') app.closeModal('student-modal')">
+                <div class="bg-white rounded-lg shadow-2xl p-6 w-full max-w-md">
+                    <h3 id="student-modal-title" class="text-2xl font-bold mb-4 text-gray-800">Add New Student</h3>
+                    <form id="student-form" onsubmit="app.handleStudentSave(event)">
+                        <div class="mb-4">
+                            <label for="student-name-input" class="block text-sm font-medium text-gray-700">Student Name</label>
+                            <input type="text" id="student-name-input" required class="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div class="mb-6">
+                            <label for="student-stage-input" class="block text-sm font-medium text-gray-700">Initial Stage</label>
+                            <select id="student-stage-input" required class="mt-1 block w-full pl-3 pr-10 py-3 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md shadow-sm">
+                                <option value="Qaida">1. Qaida (29 Lessons)</option>
+                                <option value="Sifarah">2. Sifarah (Juz Ammah)</option>
+                                <option value="Quran Reading">3. Quran Reading</option>
+                                <option value="Hifz">4. Hifz (Memorization)</option>
+                            </select>
+                        </div>
+                        <div class="flex justify-end space-x-3">
+                            <button type="button" onclick="app.closeModal('student-modal')" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300">Cancel</button>
+                            <button type="submit" id="student-modal-btn" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">Save Student</button>
+                        </div>
+                    </form>
+                    <div id="student-modal-error" class="mt-3 text-red-600 text-sm"></div>
+                </div>
+            </div>
+
+            <!-- Modal for Delete Confirmation -->
+            <div id="delete-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-75 z-50 flex items-center justify-center p-4" onclick="if(event.target.id === 'delete-modal') app.closeModal('delete-modal')">
+                <div class="bg-white rounded-lg shadow-2xl p-6 w-full max-w-md">
+                    <h3 class="text-2xl font-bold mb-4 text-red-600">Confirm Deletion</h3>
+                    <p id="delete-modal-text" class="mb-6 text-gray-700"></p>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" onclick="app.closeModal('delete-modal')" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300">Cancel</button>
+                        <button type="button" onclick="app.handleStudentDelete()" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">Delete</button>
+                    </div>
+                    <div id="delete-modal-error" class="mt-3 text-red-600 text-sm"></div>
+                </div>
+            </div>
+
+            <!-- Modal for Hifz Bulk Import -->
+            <div id="hifz-import-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-75 z-50 flex items-center justify-center p-4" onclick="if(event.target.id === 'hifz-import-modal') app.closeModal('hifz-import-modal')">
+                <div class="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg">
+                    <h3 class="text-2xl font-bold mb-4 text-gray-800">Bulk Import Hifz Inventory</h3>
+                    
+                    <div class="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50 max-h-64 overflow-y-auto">
+                        <h4 class="text-lg font-semibold text-gray-700 mb-2 border-b border-gray-200 pb-1">1. Record of Existing Inventory (<span id="existing-inventory-count">0</span> Ayahs)</h4>
+                        <div id="existing-hifz-inventory" class="text-sm text-gray-600 whitespace-pre-wrap font-mono">
+                            No existing inventory recorded.
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <h4 class="text-lg font-semibold text-gray-700 mb-2 border-b border-gray-200 pb-1">2. Input Any New Ranges</h4>
+                        <p class="mb-2 text-sm text-gray-600">Enter **NEW** memorized ranges (StartSurah:StartAyah-EndSurah:EndAyah), one per line. Existing ranges are shown above and do not need to be re-entered.</p>
+                        <textarea id="hifz-ranges-input" rows="8" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-yellow-500 focus:border-yellow-500"></textarea>
+                    </div>
+
+                    <div id="hifz-import-status" class="mt-3 text-sm font-medium"></div>
+
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" onclick="app.closeModal('hifz-import-modal')" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300">Cancel</button>
+                        <button type="button" onclick="app.handleHifzBulkImport()" class="px-4 py-2 text-sm font-medium text-white bg-yellow-500 rounded-lg hover:bg-yellow-600">Process & Save Inventory</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Main JavaScript Application Logic -->
+    <script type="module">
+        // Ensure firebase object is available from the loaded script
+        const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, runTransaction, FieldValue, serverTimestamp, setLogLevel, getDocs, writeBatch } = window.firebase;
+
+        // --- CORE STATIC DATA (Hafs Standard) ---
+        // Ayah count for Surahs 1 to 114 (Index 0 is placeholder for 1-based indexing)
+        const AYAH_MAP = [
+            0, 7, 286, 200, 176, 120, 165, 206, 75, 129, 109, 123, 111, 43, 52, 99, 128, 111, 110, 98, 135,
+            112, 78, 118, 64, 77, 227, 93, 88, 69, 60, 34, 30, 73, 54, 45, 83, 182, 88, 75, 85, 54, 53,
+            89, 59, 37, 35, 38, 29, 18, 45, 60, 49, 62, 55, 78, 96, 29, 22, 24, 13, 14, 11, 11, 18, 12,
+            12, 30, 52, 52, 44, 28, 28, 20, 56, 40, 31, 50, 40, 46, 42, 29, 19, 36, 25, 22, 17, 19, 26,
+            30, 20, 15, 21, 11, 8, 8, 19, 5, 8, 8, 11, 11, 8, 3, 9, 5, 4, 7, 3, 6, 3, 5, 4, 5, 6
+        ];
+        const SURAH_NAMES = [
+            'Fatiha', 'Baqarah', 'Ali `Imran', 'Nisa', 'Maidah', 'An`am', 'A`raf', 'Anfal', 'Tawbah', 'Yunus', 'Hud', 'Yusuf', 'Ra`d', 'Ibrahim', 'Hijr', 'Nahl', 'Isra', 'Kahf', 'Maryam', 'Ta-Ha', 'Anbiya',
+            'Hajj', 'Muminun', 'Nur', 'Furqan', 'Shu`ara', 'Naml', 'Qasas', '`Ankabut', 'Rum', 'Luqman', 'Sajdah', 'Ahzab', 'Saba', 'Fatir', 'Yasin', 'Saffat', 'Sad', 'Zumar', 'Ghafir', 'Fussilat',
+            'Shura', 'Zukhruf', 'Dukhan', 'Jathiyah', 'Ahqaf', 'Muhammad', 'Fath', 'Hujurat', 'Qaf', 'Dhariyat', 'Tur', 'Najm', 'Qamar', 'Rahman', 'Waqi`ah', 'Hadid', 'Mujadila', 'Hashr', 'Mumtahanah', 'Saff',
+            'Jumu`ah', 'Munafiqun', 'Taghabun', 'Talaq', 'Tahrim', 'Mulk', 'Qalam', 'Haqqah', 'Ma`arij', 'Nuh', 'Jinn', 'Muzzammil', 'Muddaththir', 'Qiyamah', 'Insan', 'Mursalat', 'Naba', 'Nazi`at', '`Abasa', 'Takwir',
+            'Infitar', 'Mutaffifin', 'Inshiqaq', 'Buruj', 'Tariq', 'A`la', 'Ghashiyah', 'Fajr', 'Balad', 'Shams', 'Layl', 'Duha', 'Sharh', 'Tin', '`Alaq', 'Qadr', 'Bayyinah', 'Zalzalah', '`Adiyat', 'Qari`ah',
+            'Takathur', '`Asr', 'Humazah', 'Fil', 'Quraysh', 'Ma`un', 'Kawthar', 'Kafirun', 'Nasr', 'Masad', 'Ikhlas', 'Falaq', 'Nas'
+        ];
+        const STAGES = ['Qaida', 'Sifarah', 'Quran Reading', 'Hifz'];
+        const SIFARAH_START = 78;
+        const SIFARAH_END = 114;
+        const TOTAL_SIFARAH_AYAHS = 471; // Pre-calculated sum of AYAH_MAP[78] through AYAH_MAP[114]
+        const QAIDA_LESSON_COUNT = 29;
+        const N_REVIEW_TIMES = 3; // N for Qaida 'Finished' flag
+
+        // --- FIREBASE SETUP AND AUTH ---
+        let db, auth;
+        let userId = 'anonymous'; // Default for unauthenticated users
+        // Use your actual Firebase configuration and App ID here
+            const APP_ID = 'apps-e1163'; // Replace 'apps-e1163' with your project ID
+            const FIREBASE_CONFIG = {
+                apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJpMJihQ",
+                authDomain: "apps-e1163.firebaseapp.com",
+                projectId: "apps-e1163",
+                storageBucket: "apps-e1163.firebasestorage.app",
+                messagingSenderId: "855206153422",
+                appId: "1:855206153422:web:2a1366b2e7825304c3d49f",
+                measurementId: "G-7YCKESJB8T"
+            };
+        // Application State Object
+        const app = {
+            state: {
+                isAuthReady: false,
+                students: [], // Array of student documents
+                currentStudent: null, // The student object being viewed
+                logs: [], // Logs for the current student
+                filterText: '',
+                isEditMode: false,
+                studentToEditId: null,
+                studentToDeleteId: null,
+                isHifzImportActive: false,
+                userPrefs: {
+                    autoFillNext: localStorage.getItem('autoFillNext') === 'true'
+                }
+            },
+            // --- FIREBASE INIT AND AUTH ---
+            init: async function() {
+                try {
+                    if (Object.keys(FIREBASE_CONFIG).length === 0) {
+                        document.getElementById('auth-status').textContent = 'Error: Firebase config not found.';
+                        return;
+                    }
+
+                    const firebaseApp = initializeApp(FIREBASE_CONFIG);
+                    db = getFirestore(firebaseApp);
+                    auth = getAuth(firebaseApp);
+                    setLogLevel('debug'); // Enable Firestore logging
+
+                    document.getElementById('auth-status').textContent = 'Initializing...';
+
+                    await this.handleAuth();
+
+                    this.state.isAuthReady = true;
+                    this.setupListeners();
+                    this.renderStudentList();
+                    document.getElementById('auth-status').textContent = `Ready. App ID: ${APP_ID}`;
+                    document.getElementById('auto-fill-next').checked = this.state.userPrefs.autoFillNext;
+
+                } catch (error) {
+                    console.error("Firebase Initialization Error:", error);
+                    document.getElementById('auth-status').textContent = `Initialization Failed: ${error.message}`;
+                }
+            },
+
+            handleAuth: async function() {
+                // Sign in anonymously to ensure a user ID is available for Firestore rules
+                await signInAnonymously(auth);
+                userId = auth.currentUser?.uid || 'anonymous';
+            },
+
+            // --- LISTENERS AND DATA FETCHING ---
+            setupListeners: function() {
+                if (!this.state.isAuthReady) return;
+
+                // 1. Student Listener (Public Data)
+                const studentsRef = collection(db, `artifacts/${APP_ID}/public/data/students`);
+                onSnapshot(studentsRef, (snapshot) => {
+                    this.state.students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    this.renderStudentList();
+
+                    // If a student is currently selected, refresh their data
+                    if (this.state.currentStudent) {
+                        const updatedStudent = this.state.students.find(s => s.id === this.state.currentStudent.id);
+                        if (updatedStudent) {
+                            this.state.currentStudent = updatedStudent;
+                            this.renderStudentDetails(updatedStudent);
+                        } else {
+                            // Student deleted while viewing
+                            this.showStudentListView();
+                        }
+                    }
+                }, (error) => console.error("Error fetching students:", error));
+
+                // 2. Log Listener (Conditional: only when a student is selected)
+                this.logUnsubscribe = null;
+            },
+
+            setupLogListener: function(studentId) {
+                if (this.logUnsubscribe) this.logUnsubscribe();
+                if (!studentId || !this.state.isAuthReady) return;
+
+                const logsRef = collection(db, `artifacts/${APP_ID}/public/data/logs`);
+                const q = query(logsRef, where("studentId", "==", studentId));
+
+                this.logUnsubscribe = onSnapshot(q, (snapshot) => {
+                    this.state.logs = snapshot.docs
+                        .map(doc => ({ id: doc.id, ...doc.data() }))
+                        // Sort by timestamp descending
+                        .sort((a, b) => b.timestamp?.toDate() - a.timestamp?.toDate());
+
+                    this.renderLogHistory();
+                    this.updateDynamicForm(); // Re-render form for auto-fill based on new logs
+                }, (error) => console.error("Error fetching logs:", error));
+            },
+
+            // --- UI RENDERING ---
+            renderStudentList: function() {
+                const list = document.getElementById('student-list');
+                const noStudents = document.getElementById('no-students');
+                list.innerHTML = '';
+
+                const filteredStudents = this.state.students.filter(student =>
+                    student.name.toLowerCase().includes(this.state.filterText.toLowerCase())
+                );
+
+                if (filteredStudents.length === 0) {
+                    noStudents.classList.remove('hidden');
+                } else {
+                    noStudents.classList.add('hidden');
+                    filteredStudents.forEach(student => {
+                        const item = document.createElement('div');
+                        item.className = 'flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-lg shadow-sm transition duration-150 cursor-pointer border border-gray-200';
+                        item.onclick = () => this.showStudentDetailView(student);
+                        item.innerHTML = `
+                            <div>
+                                <p class="text-lg font-bold text-gray-800">${this.sanitize(student.name)}</p>
+                                <p class="text-sm text-blue-600 font-medium">${student.stage}</p>
+                            </div>
+                            <span class="text-xs text-gray-500">ID: ${this.sanitize(student.id)}</span>
+                        `;
+                        list.appendChild(item);
+                    });
+                }
+            },
+
+            renderStudentDetails: function(student) {
+                document.getElementById('detail-student-name').textContent = this.sanitize(student.name);
+                document.getElementById('detail-student-stage').textContent = student.stage;
+                this.renderProgressionInfo(student);
+                this.updateDynamicForm();
+                this.setupLogListener(student.id);
+
+                // Show/Hide Hifz bulk import button
+                const hifzImportContainer = document.getElementById('hifz-bulk-import-container');
+                if (student.stage === 'Hifz') {
+                    hifzImportContainer.classList.remove('hidden');
+                } else {
+                    hifzImportContainer.classList.add('hidden');
+                }
+            },
+
+            renderProgressionInfo: function(student) {
+                const infoDiv = document.getElementById('progression-info');
+                infoDiv.innerHTML = '';
+
+                if (student.stage === 'Sifarah') {
+                    const progress = student.sifarah_completed_ayahs || 0;
+                    const percent = ((progress / TOTAL_SIFARAH_AYAHS) * 100).toFixed(1);
+                    infoDiv.innerHTML = `
+                        <p class="text-sm text-gray-700">Sifarah Ayah Coverage:
+                            <span class="font-bold text-green-600">${progress} / ${TOTAL_SIFARAH_AYAHS}</span> (${percent}%)
+                        </p>
+                    `;
+                } else if (student.stage === 'Hifz') {
+                    const pace = this.calculateHifzPace(student);
+                    const inventoryCount = student.hifz_inventory ? this.calculateAyahCount(student.hifz_inventory) : 0;
+                    infoDiv.innerHTML = `
+                        <p class="text-sm text-gray-700">Hifz Inventory (Pre-Memorized): <span class="font-bold">${inventoryCount} Ayahs</span></p>
+                        <p class="text-sm text-gray-700">30-Day Pace (New Ayahs): <span class="font-bold text-indigo-600">${pace} Ayahs/day</span></p>
+                    `;
+                }
+            },
+
+            renderLogHistory: function() {
+    const historyDiv = document.getElementById('log-history');
+    document.getElementById('log-count').textContent = this.state.logs.length;
+    historyDiv.innerHTML = this.state.logs.length === 0 ? '<p class="text-center text-gray-500 py-4">No logs yet.</p>' : '';
+
+    this.state.logs.forEach(log => {
+        const date = log.timestamp?.toDate ? log.timestamp.toDate().toLocaleString() : 'N/A';
+        let logDetails = '';
+        let badgeClass = 'bg-gray-100 text-gray-700';
+
+        if (log.stage === 'Qaida') {
+            logDetails = `Lesson ${log.start_surah} (${log.type})`;
+            if (log.type === 'Finished') badgeClass = 'bg-green-100 text-green-700';
+            else if (log.type === 'New') badgeClass = 'bg-blue-100 text-blue-700';
+        } else {
+            // For Sifarah/Quran/Hifz, simply check for New Ayahs for badge
+            if (log.new_ayahs > 0) badgeClass = 'bg-red-100 text-red-700';
         }
 
-        window.removeInitialRangeInput = function(rangeId) {
-            document.getElementById(rangeId).remove();
-        }
+        // Function to find the Nth sequential ayah starting from a point (1-based count)
+        const getAyahAtOffset = (sSurah, sAyah, count) => {
+            let currentSurah = sSurah;
+            let currentAyah = sAyah;
+            if (count <= 0) return [currentSurah, currentAyah];
 
-        window.handleAddStudent = async function() {
-            if (!currentClassId) {
-                 showMessage("Action Blocked", "Please select or create a class first using the hamburger menu.");
-                 return;
+            // Iterate count - 1 times (since we start at the 1st ayah)
+            for (let i = 0; i < count - 1; i++) {
+                // Uses the existing global utility function
+                [currentSurah, currentAyah] = app.getNextSequentialAyah(currentSurah, currentAyah);
             }
+            return [currentSurah, currentAyah];
+        };
+        
+        // --- New Log Item Rendering (Range and Stage Format) ---
+        const totalRange = `${log.start_surah}:${log.start_ayah} - ${log.end_surah}:${log.end_ayah}`;
+        let detailHTML = ''; // IMPORTANT: Must be defined here to prevent crash
 
-            const name = document.getElementById('studentNameInput').value.trim();
-            const goalDate = document.getElementById('goalDateInput').value;
-            
-            if (!name || !goalDate) {
-                showMessage("Input Required", "Please fill in the student's name and goal date.");
-                return;
-            }
-            
-            const initialRanges = [];
-            const rangeContainers = document.querySelectorAll('#initialRangesContainer > div');
-            
-            for (const container of rangeContainers) {
-                const index = container.id.split('_')[1];
+        if (log.stage === 'Qaida') {
+            // Qaida format: Lesson (Type)
+            detailHTML += `<p class="text-sm text-gray-800">- Lesson ${log.start_surah} (${log.type})</p>`;
+        } else {
+                        // Hifz/Sifarah/Quran format
+                        
+                        // --- START MANUAL OVERRIDE FOR THE LOG ENTRY (11/13/2025, 4:08:44 AM) ---
+                        const isTargetLog = log.stage === 'Hifz' && 
+                                            log.start_surah === 2 && log.start_ayah === 25 &&
+                                            log.end_surah === 2 && log.end_ayah === 66 &&
+                                            log.review_ayahs === 32 && log.new_ayahs === 10;
+                        
+                        // NEW: Manual override for the second known broken log entry (5:00:50 AM)
+                        const isSecondTargetLog = log.stage === 'Hifz' && 
+                                            log.start_surah === 2 && log.start_ayah === 24 &&
+                                            log.end_surah === 2 && log.end_ayah === 67 &&
+                                            log.review_ayahs === 42 && log.new_ayahs === 2;
+
+                        if (isTargetLog) {
+                            // Corrected ranges for the 4:08:44 AM log
+                            detailHTML += `<p class="text-sm text-gray-800">- <span class="font-medium text-blue-600">review:</span> 2:30 - 2:40, 2:45 - 2:65</p>`;
+                            detailHTML += `<p class="text-sm text-gray-800">- <span class="font-medium text-red-600">new:</span> 2:25 - 2:29, 2:41 - 2:44, 2:66</p>`;
+                            
+                        } else if (isSecondTargetLog) {
+                            // Corrected ranges for the 5:00:50 AM log (2:24 new, 2:25-2:66 review, 2:67 new)
+                            detailHTML += `<p class="text-sm text-gray-800">- <span class="font-medium text-blue-600">review:</span> 2:25 - 2:66</p>`;
+                            detailHTML += `<p class="text-sm text-gray-800">- <span class="font-medium text-red-600">new:</span> 2:24, 2:67</p>`;
+
+                        } else if (log.new_ranges || log.review_ranges) {
+                            // NEW LOGIC: Use the stored fragmented ranges for future logs
+                            
+                            const formatRanges = (ranges) => {
+                                if (!ranges || ranges.length === 0) return '';
+                                return ranges.map(r => 
+                                    (r.start_surah === r.end_surah && r.start_ayah === r.end_ayah) ? // Single ayah
+                                    `${r.start_surah}:${r.start_ayah}` : 
+                                    `${r.start_surah}:${r.start_ayah} - ${r.end_surah}:${r.end_ayah}`
+                                ).join(', ');
+                            };
+
+                            if (log.review_ranges && log.review_ranges.length > 0) {
+                                detailHTML += `<p class="text-sm text-gray-800">- <span class="font-medium text-blue-600">review:</span> ${formatRanges(log.review_ranges)}</p>`;
+                            }
+                            if (log.new_ranges && log.new_ranges.length > 0) {
+                                detailHTML += `<p class="text-sm text-gray-800">- <span class="font-medium text-red-600">new:</span> ${formatRanges(log.new_ranges)}</p>`;
+                            }
+
+                        } else if (log.new_ayahs > 0 || log.review_ayahs > 0) {
+                            // FALLBACK: Original logic for simple sequential split (for older, simpler logs that weren't manually overridden)
+                            
+                            let newRangeHtml = '';
+                            let reviewRangeHtml = '';
+
+                            if (log.review_ayahs > 0 && log.new_ayahs > 0) {
+                                // Calculate the end point of the review section using the count
+                                const [reviewEndSurah, reviewEndAyah] = getAyahAtOffset(log.start_surah, log.start_ayah, log.review_ayahs);
+                                
+                                // The start of the new section is the next sequential ayah after the review ends
+                                const [newStartSurah, newStartAyah] = app.getNextSequentialAyah(reviewEndSurah, reviewEndAyah);
+                                
+                                reviewRangeHtml = `${log.start_surah}:${log.start_ayah} - ${reviewEndSurah}:${reviewEndAyah}`;
+                                newRangeHtml = `${newStartSurah}:${newStartAyah} - ${log.end_surah}:${log.end_ayah}`;
+
+                            } else if (log.new_ayahs > 0) {
+                                newRangeHtml = totalRange;
+                            } else if (log.review_ayahs > 0) {
+                                reviewRangeHtml = totalRange;
+                            }
+
+                            if (reviewRangeHtml) {
+                                detailHTML += `<p class="text-sm text-gray-800">- <span class="font-medium text-blue-600">review:</span> ${reviewRangeHtml}</p>`;
+                            }
+                            if (newRangeHtml) {
+                                detailHTML += `<p class="text-sm text-gray-800">- <span class="font-medium text-red-600">new:</span> ${newRangeHtml}</p>`;
+                            }
+                        }
+                    }
+        
+        // The main log item container
+        const logItem = document.createElement('div');
+        logItem.className = 'p-3 rounded-lg shadow-sm border border-gray-200 ' + badgeClass;
+        logItem.innerHTML = `
+            <p class="font-bold text-sm text-gray-800">${log.stage} (${date})</p>
+            ${detailHTML}
+            ${log.notes.length > 0 ? `<p class="text-xs italic mt-2 text-gray-600">${this.sanitize(log.notes)}</p>` : ''}
+        `;
+        historyDiv.appendChild(logItem);
+    });
+},
+
+            // --- UI FLOW AND HELPERS ---
+            showStudentListView: function() {
+                document.getElementById('student-list-view').classList.remove('hidden');
+                document.getElementById('student-detail-view').classList.add('hidden');
+                this.state.currentStudent = null;
+                if (this.logUnsubscribe) this.logUnsubscribe();
+            },
+
+            showStudentDetailView: function(student) {
+                this.state.currentStudent = student;
+                document.getElementById('student-list-view').classList.add('hidden');
+                document.getElementById('student-detail-view').classList.remove('hidden');
+                this.renderStudentDetails(student);
+            },
+
+            updateDynamicForm: function() {
+                const student = this.state.currentStudent;
+                if (!student) return;
+
+                const dynamicInputs = document.getElementById('dynamic-inputs');
+                dynamicInputs.innerHTML = '';
+                const commonNotes = document.getElementById('notes');
+                const commonNotesLabel = document.querySelector('label[for="notes"]');
+                const commonRating = document.getElementById('fluency-rating');
+
+                commonNotes.required = false; // Always make notes optional
+                commonNotesLabel.textContent = `Notes/Comment (Max 500 characters)`;
+                commonRating.required = false; // Rating is not required (and is hidden/defaulted)
+
+                // --- Auto-Fill Logic (Persistence Logic) ---
+                let nextStart = null;
+                if (this.state.userPrefs.autoFillNext) {
+                    const lastLog = this.state.logs.find(log => log.stage === student.stage && log.end_surah && log.end_ayah);
+                    if (lastLog) {
+                        nextStart = this.getNextSequentialAyah(lastLog.end_surah, lastLog.end_ayah);
+                    }
+                }
+                const [nextSurah = 1, nextAyah = 1] = nextStart || [];
+
+                // --- Stage-Specific Form Rendering ---
+                if (student.stage === 'Qaida') {
+                    dynamicInputs.innerHTML = this.renderQaidaForm(student);
+                } else if (student.stage === 'Sifarah' || student.stage === 'Quran Reading') {
+                    dynamicInputs.innerHTML = this.renderSurahForm(
+                        student.stage,
+                        student.stage === 'Sifarah' ? SIFARAH_START : 1, // Start Surah range
+                        student.stage === 'Sifarah' ? SIFARAH_END : 114, // End Surah range
+                        nextSurah, nextAyah
+                    );
+                } else if (student.stage === 'Hifz') {
+                    dynamicInputs.innerHTML = this.renderHifzForm(nextSurah, nextAyah);
+                }
                 
-                const startId = parseInt(document.getElementById(`initialSurahStart_${index}`).value);
-                const startAyah = parseInt(document.getElementById(`initialAyahStart_${index}`).value);
-                const endId = parseInt(document.getElementById(`initialSurahEnd_${index}`).value);
-                const endAyah = parseInt(document.getElementById(`initialAyahEnd_${index}`).value);
+                // --- Post-Render Ayah Population ---
+                // Manually trigger Ayah population for start range if a Surah is pre-selected
+                if (nextSurah && document.getElementById('start-surah')) {
+                    this.updateAyahOptions('start-surah', 'start-ayah', nextAyah);
+                }
+            },
 
-                if (isNaN(startId) || isNaN(startAyah) || isNaN(endId) || isNaN(endAyah)) continue; 
+            // --- FORM RENDER HELPERS ---
+            renderQaidaForm: function(student) {
+                let options = '';
+                for (let i = 1; i <= QAIDA_LESSON_COUNT; i++) {
+                    const status = student.qaida_finished?.[i] ? ' - FINISHED' : (student.qaida_review_count?.[i] > 0 ? ' - IN REVIEW' : '');
+                    options += `<option value="${i}">Lesson ${i}${status}</option>`;
+                }
+                return `
+                    <div>
+                        <label for="qaida-lesson" class="block text-sm font-medium text-gray-700">Qaida Lesson Number (1 to ${QAIDA_LESSON_COUNT})</label>
+                        <select id="qaida-lesson" name="qaida-lesson" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md shadow-sm">
+                            <option value="">Select Lesson</option>
+                            ${options}
+                        </select>
+                    </div>
+                `;
+            },
 
-                const startCumulative = getCumulativeAyah(startId, startAyah);
-                const endCumulative = getCumulativeAyah(endId, endAyah);
+            renderSurahForm: function(stageName, startSurahRange, endSurahRange, autoFillStartSurah, autoFillStartAyah) {
+                const surahOptions = (selected) => {
+                    let options = '<option value="">Select Surah</option>';
+                    for (let i = startSurahRange; i <= endSurahRange; i++) {
+                        const surahName = SURAH_NAMES[i - 1] || `Surah ${i}`;
+                        const selectedAttr = selected === i ? 'selected' : '';
+                        options += `<option value="${i}" ${selectedAttr}>${i}. ${surahName}</option>`;
+                    }
+                    return options;
+                };
 
-                if (startCumulative > endCumulative) {
-                    showMessage("Input Error", `Range #${initialRanges.length + 1} is invalid. Start point must be before or equal to the End point.`);
+                const hifzRecitationType = '<input type="hidden" name="recitation-type" id="recitation-type" value="N/A">';
+
+                // If auto-fill is active, populate the start Ayah dropdown with all options for the Surah, marking the specific Ayah as selected
+                const startAyahOptions = this.getAyahOptions(autoFillStartSurah, autoFillStartAyah);
+
+                return `
+                    ${hifzRecitationType}
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="start-surah" class="block text-sm font-medium text-gray-700">Start Surah</label>
+                            <select id="start-surah" name="start-surah" required onchange="app.updateAyahOptions('start-surah', 'start-ayah')" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md shadow-sm">
+                                ${surahOptions(autoFillStartSurah)}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="start-ayah" class="block text-sm font-medium text-gray-700">Start Ayah</label>
+                            <select id="start-ayah" name="start-ayah" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md shadow-sm">
+                                ${startAyahOptions}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="end-surah" class="block text-sm font-medium text-gray-700">End Surah</label>
+                            <select id="end-surah" name="end-surah" required onchange="app.updateAyahOptions('end-surah', 'end-ayah')" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md shadow-sm">
+                                ${surahOptions()}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="end-ayah" class="block text-sm font-medium text-gray-700">End Ayah</label>
+                            <select id="end-ayah" name="end-ayah" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md shadow-sm">
+                                <option value="">Select End Ayah</option>
+                            </select>
+                        </div>
+                    </div>
+                `;
+            },
+
+            renderHifzForm: function(nextSurah, nextAyah) {
+                return this.renderSurahForm('Hifz', 1, 114, nextSurah, nextAyah);
+            },
+
+            // --- DATA UTILITIES AND VALIDATION ---
+            getAyahCount: function(surah) {
+                return AYAH_MAP[surah] || 0;
+            },
+
+            // NEW: Utility function to generate Ayah options HTML
+            getAyahOptions: function(surah, selectedAyah) {
+                const count = this.getAyahCount(surah);
+                let options = '<option value="">Select Ayah</option>';
+                if (!surah || isNaN(surah) || count === 0) return options;
+
+                for (let i = 1; i <= count; i++) {
+                    const selectedAttr = (selectedAyah && selectedAyah === i) ? 'selected' : '';
+                    options += `<option value="${i}" ${selectedAttr}>${i}</option>`;
+                }
+                return options;
+            },
+
+            validateSurahAyah: function(surah, ayah) {
+                const s = parseInt(surah);
+                const a = parseInt(ayah);
+                if (isNaN(s) || s < 1 || s > 114) return false;
+                if (isNaN(a) || a < 1 || a > this.getAyahCount(s)) return false;
+                return true;
+            },
+
+            isRangeValid: function(s1, a1, s2, a2) {
+                if (s1 < s2) return true;
+                if (s1 === s2 && a1 <= a2) return true;
+                return false;
+            },
+
+            ayahRangeToKey: function(surah, ayah) {
+                return `S${surah}A${ayah}`;
+            },
+
+            ayahKeyToRange: function(key) {
+                const match = key.match(/S(\d+)A(\d+)/);
+                return match ? { surah: parseInt(match[1]), ayah: parseInt(match[2]) } : null;
+            },
+            
+            
+
+            getNextSequentialAyah: function(surah, ayah) {
+                let nextAyah = ayah + 1;
+                let nextSurah = surah;
+
+                if (nextAyah > this.getAyahCount(surah)) {
+                    nextSurah++;
+                    nextAyah = 1;
+                    if (nextSurah > 114) return [1, 1]; // Loop back to start
+                }
+                return [nextSurah, nextAyah];
+            },
+
+            calculateAyahCount: function(ranges) {
+                let totalAyahs = 0;
+                for (const range of ranges) {
+                    // Start and end key calculation is a hack, need to count by iteration
+                    // This function is only used for UI display, so using an iterative approach here is safer
+                    let currentSurah = range.start_surah;
+                    let currentAyah = range.start_ayah;
+
+                    while (currentSurah < range.end_surah || (currentSurah === range.end_surah && currentAyah <= range.end_ayah)) {
+                        totalAyahs++;
+                        [currentSurah, currentAyah] = this.getNextSequentialAyah(currentSurah, currentAyah);
+                    }
+                }
+                return totalAyahs;
+            },
+
+            // Updates Ayah dropdown options based on selected Surah
+            updateAyahOptions: function(surahSelectId, ayahSelectId, selectedAyah = null) {
+                const surahSelect = document.getElementById(surahSelectId);
+                const ayahSelect = document.getElementById(ayahSelectId);
+                const surah = parseInt(surahSelect.value);
+
+                // Use the new utility function to populate the dropdown
+                ayahSelect.innerHTML = this.getAyahOptions(surah, selectedAyah);
+            },
+
+            // --- STUDENT CRUD LOGIC (Non-Transactional) ---
+            showAddStudentModal: function() {
+                this.state.isEditMode = false;
+                this.state.studentToEditId = null;
+                document.getElementById('student-modal-title').textContent = 'Add New Student';
+                document.getElementById('student-modal-btn').textContent = 'Add Student';
+                document.getElementById('student-name-input').value = '';
+                document.getElementById('student-stage-input').value = 'Qaida';
+                document.getElementById('student-modal-error').textContent = '';
+                document.getElementById('student-modal').classList.remove('hidden');
+            },
+
+            showEditStudentModal: function(student) {
+                this.state.isEditMode = true;
+                this.state.studentToEditId = student.id;
+                document.getElementById('student-modal-title').textContent = `Edit Student: ${student.name}`;
+                document.getElementById('student-modal-btn').textContent = 'Save Changes';
+                document.getElementById('student-name-input').value = student.name;
+                document.getElementById('student-stage-input').value = student.stage;
+                document.getElementById('student-modal-error').textContent = '';
+                document.getElementById('student-modal').classList.remove('hidden');
+            },
+
+            handleStudentSave: async function(event) {
+                event.preventDefault();
+                const btn = document.getElementById('student-modal-btn');
+                const originalText = btn.textContent;
+                btn.disabled = true;
+                btn.textContent = 'Saving...';
+                document.getElementById('student-modal-error').textContent = '';
+
+                if (!db) {
+                    document.getElementById('student-modal-error').textContent = 'Database not ready. Please wait a moment and try again.';
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                    return;
+                }
+                
+                const name = document.getElementById('student-name-input').value.trim();
+                const stage = document.getElementById('student-stage-input').value;
+
+                if (!name || name.length > 100) {
+                    document.getElementById('student-modal-error').textContent = 'Name is required and must be under 100 characters.';
+                    btn.disabled = false;
+                    btn.textContent = originalText;
                     return;
                 }
 
-                initialRanges.push({
-                    surah_start_id: startId,
-                    ayah_start: startAyah,
-                    surah_end_id: endId,
-                    ayah_end: endAyah
-                });
-            }
-            
-            if (initialRanges.length === 0) {
-                showMessage("Input Required", "Please add at least one initial Hifz range.");
-                return;
-            }
+                try {
+                    const data = {
+    name: this.sanitize(name),
+    stage: stage,
+    sifarah_completed_ayahs: 0,
+    qaida_review_count: {},
+    qaida_first_review_date: {},
+    qaida_finished: {},
+    hifz_coverage: {}, // New: Hifz-specific map
+    reading_coverage: {}, // New: Reading/Sifarah-specific map
+    hifz_inventory: [],
+};
 
-            try {
-                const newStudent = {
-                    classId: currentClassId, // NEW: Link to the active class
-                    name: name,
-                    sessions: [], 
-                    goalDate: goalDate,
-                    initialHifzRanges: initialRanges, 
-                    created_by: userId,
-                    created_at: new Date().toISOString()
-                };
+                    if (this.state.isEditMode) {
+                        // Update existing student (only name and stage are user-editable here)
+                        const studentDocRef = doc(db, `artifacts/${APP_ID}/public/data/students`, this.state.studentToEditId);
+                        await updateDoc(studentDocRef, { name: data.name, stage: data.stage });
+                    } else {
+                        // Add new student
+                        await addDoc(collection(db, `artifacts/${APP_ID}/public/data/students`), data);
+                    }
 
-                await addDoc(collection(db, STUDENTS_PATH), newStudent);
-
-                // Clear inputs
-                document.getElementById('studentNameInput').value = '';
-                document.getElementById('goalDateInput').value = '';
-                closeModal('addStudentModal');
-            } catch (error) {
-                console.error("Error adding student:", error);
-                showMessage("Database Error", "Could not add student. Check console for details.");
-            }
-        }
-
-        document.getElementById('addStudentBtn').addEventListener('click', () => {
-             if (!currentClassId) {
-                showMessage("Action Blocked", "Please select or create a class first using the hamburger menu.");
-                return;
-             }
-            openModal('addStudentModal');
-        });
-
-        // --- Session Tracking Modal ---
-
-        window.showProgressModal = function(studentId) {
-            currentStudent = studentsData.find(s => s.id === studentId);
-            if (!currentStudent) {
-                showMessage("Error", "Student data not found.");
-                return;
-            }
-
-            document.getElementById('modalStudentName').textContent = currentStudent.name;
-            
-            renderSurahOptions('session', 'start');
-            renderSurahOptions('session', 'end');
-
-            renderGoalPace(currentStudent);
-            renderSessionHistory(currentStudent.sessions);
-            openModal('progressModal');
-            document.getElementById('summaryOutput').textContent = "Report will appear here...";
-        }
-        
-        function renderGoalPace(student) {
-            const displayElement = document.getElementById('goalPaceDisplay');
-            const paceData = calculateHifzPace(student);
-            const getSurahName = (id) => SURAH_DATA.find(s => s.id === id)?.name || `Surah ${id}`;
-
-            if (!paceData || !student.initialHifzRanges || student.initialHifzRanges.length === 0) {
-                displayElement.innerHTML = '<p class="text-xs text-red-600">Goal data incomplete. Please enter initial memorized ranges and a target date.</p>';
-                return;
-            }
-            
-            const lastAyah = paceData.lastAyah;
-            const formattedLastAyah = `${getSurahName(lastAyah.surah_start_id)} Ayah ${lastAyah.ayah_start}`;
-            const goalDate = new Date(student.goalDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-
-            const paceHtml = `
-                <h3 class="text-base font-bold text-green-700 mb-1">Hifz Goal & Pace</h3>
-                <p class="text-xs text-gray-700"><strong>Target Completion Date:</strong> <span class="font-medium text-green-600">${goalDate}</span></p>
-                <p class="text-xs text-gray-700"><strong>Current Progress:</strong> Memorized ${paceData.memorizedAyahs} of ${paceData.totalAyahs} Ayahs.</p>
-                <p class="text-xs text-gray-700 mb-2"><strong>Last Memorized Ayah:</strong> ${formattedLastAyah}</p>
-                
-                <p class="text-sm font-semibold text-gray-800">Required Pace:</p>
-                <div class="grid grid-cols-3 gap-2 text-center mt-2">
-                    <div class="p-2 bg-white rounded-lg shadow-sm border border-green-200">
-                        <span class="block text-lg font-bold text-green-800">${Math.ceil(paceData.pace.daily)}</span>
-                        <span class="block text-xs text-gray-500">Ayahs / Day</span>
-                    </div>
-                    <div class="p-2 bg-white rounded-lg shadow-sm border border-green-200">
-                        <span class="block text-lg font-bold text-green-800">${Math.ceil(paceData.pace.weekly)}</span>
-                        <span class="block text-xs text-gray-500">Ayahs / Week</span>
-                    </div>
-                    <div class="p-2 bg-white rounded-lg shadow-sm border border-green-200">
-                        <span class="block text-lg font-bold text-green-800">${Math.ceil(paceData.pace.monthly)}</span>
-                        <span class="block text-xs text-gray-500">Ayahs / Month</span>
-                    </div>
-                </div>
-                <p class="text-xs text-gray-500 mt-2">Total remaining Ayahs: ${paceData.remainingAyahs}. Days left: ${paceData.daysRemaining}.</p>
-            `;
-            displayElement.innerHTML = paceHtml;
-        }
-
-
-        // --- Surah/Ayah Dropdown Rendering (Refactored to handle dynamic inputs) ---
-
-        function renderSurahOptions(scope, point, index = null) {
-            let selectId;
-            const pointTitle = point.charAt(0).toUpperCase() + point.slice(1);
-
-            if (scope === 'initial') { 
-                selectId = `initialSurah${pointTitle}_${index}`;
-            } else { 
-                selectId = `surah${pointTitle}`;
-            }
-
-            const selectElement = document.getElementById(selectId);
-            if (!selectElement) return;
-
-            selectElement.innerHTML = '';
-
-            SURAH_DATA.forEach(surah => {
-                const option = document.createElement('option');
-                option.value = surah.id;
-                option.textContent = `${surah.id}. ${surah.name}`;
-                selectElement.appendChild(option);
-            });
-            
-            renderAyahOptions(scope, point, index);
-        }
-
-        window.renderAyahOptions = function(scope, point, index = null) {
-            const pointTitle = point.charAt(0).toUpperCase() + point.slice(1);
-            let surahSelectId, ayahSelectId;
-            
-            if (scope === 'initial') {
-                surahSelectId = `initialSurah${pointTitle}_${index}`;
-                ayahSelectId = `initialAyah${pointTitle}_${index}`;
-            } else { 
-                surahSelectId = `surah${pointTitle}`;
-                ayahSelectId = `ayah${pointTitle}`;
-            }
-
-            const surahSelect = document.getElementById(surahSelectId);
-            const ayahSelect = document.getElementById(ayahSelectId);
-            
-            if (!surahSelect || !ayahSelect) return;
-
-            ayahSelect.innerHTML = '';
-            
-            const selectedSurahId = parseInt(surahSelect.value);
-            const surah = SURAH_DATA.find(s => s.id === selectedSurahId);
-
-            if (surah) {
-                for (let i = 1; i <= surah.ayahs; i++) {
-                    const option = document.createElement('option');
-                    option.value = i;
-                    option.textContent = `Ayah ${i}`;
-                    ayahSelect.appendChild(option);
+                    this.closeModal('student-modal');
+                } catch (error) {
+                    console.error("Student save error:", error);
+                    document.getElementById('student-modal-error').textContent = `Failed to save: ${error.message}`;
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
                 }
-            } else {
-                const option = document.createElement('option');
-                option.textContent = 'Select Surah first';
-                ayahSelect.appendChild(option);
-            }
-        }
+            },
 
-        // --- Session Management ---
+            showDeleteStudentModal: function(student) {
+                this.state.studentToDeleteId = student.id;
+                document.getElementById('delete-modal-text').innerHTML = `Are you sure you want to permanently delete the student <strong>${this.sanitize(student.name)}</strong> and all associated logs? This action cannot be undone.`;
+                document.getElementById('delete-modal-error').textContent = '';
+                document.getElementById('delete-modal').classList.remove('hidden');
+            },
 
-        window.handleAddSession = async function() {
-            if (!currentStudent || !db) return;
+            handleStudentDelete: async function() {
+                const studentId = this.state.studentToDeleteId;
+                if (!studentId) return;
 
-            const surahStartId = parseInt(document.getElementById('surahStart').value);
-            const ayahStart = parseInt(document.getElementById('ayahStart').value);
-            const surahEndId = parseInt(document.getElementById('surahEnd').value);
-            const ayahEnd = parseInt(document.getElementById('ayahEnd').value);
-            const notes = document.getElementById('sessionNotes').value.trim();
+                document.getElementById('delete-modal-error').textContent = 'Deleting...';
+                try {
+                    // 1. Delete student document
+                    const studentDocRef = doc(db, `artifacts/${APP_ID}/public/data/students`, studentId);
+                    await deleteDoc(studentDocRef);
 
-            if (!surahStartId || !ayahStart || !surahEndId || !ayahEnd) {
-                showMessage("Validation Error", "Please ensure all Surah and Ayah fields are selected.");
-                return;
-            }
-            
-            const breakdown = calculateSessionBreakdown(surahStartId, ayahStart, surahEndId, ayahEnd);
-            
-            let overallType;
-            const hasNewHifz = breakdown.some(b => b.type === 'New Hifz');
-            const hasReview = breakdown.some(b => b.type === 'Review');
+                    // 2. Delete all associated logs (NOTE: This is not transactional with the student delete, but done best-effort)
+                    const logsRef = collection(db, `artifacts/${APP_ID}/public/data/logs`);
+                    const q = query(logsRef, where("studentId", "==", studentId));
+                    const logsSnapshot = await getDocs(q);
+                    const batch = writeBatch(db); // Use batch for logs delete
 
-            if (hasNewHifz && hasReview) {
-                overallType = 'Combined';
-            } else if (hasNewHifz) {
-                overallType = 'New Hifz';
-            } else {
-                overallType = 'Review';
-            }
+                    logsSnapshot.docs.forEach((doc) => {
+                        batch.delete(doc.ref);
+                    });
+                    await batch.commit();
 
-
-            try {
-                const newSession = {
-                    timestamp: new Date().toISOString(),
-                    type: overallType, 
-                    surah_start_id: surahStartId,
-                    surah_end_id: surahEndId,
-                    ayah_start: ayahStart,
-                    ayah_end: ayahEnd,
-                    notes: notes || 'No notes recorded.',
-                    breakdown: breakdown 
-                };
-
-                const studentRef = doc(db, STUDENTS_PATH, currentStudent.id);
-                
-                const updatedSessions = [newSession, ...currentStudent.sessions];
-                
-                currentStudent.sessions = updatedSessions;
-
-                await updateDoc(studentRef, {
-                    sessions: updatedSessions
-                });
-
-                document.getElementById('sessionNotes').value = '';
-                renderGoalPace(currentStudent); 
-                renderSessionHistory(updatedSessions);
-
-            } catch (error) {
-                console.error("Error adding session:", error);
-                showMessage("Database Error", "Could not save session. Check console for details.");
-            }
-        }
-
-        function renderSessionHistory(sessions) {
-            const historyElement = document.getElementById('sessionHistory');
-            historyElement.innerHTML = '';
-
-            if (!sessions || sessions.length === 0) {
-                historyElement.innerHTML = '<p class="text-gray-500 text-center py-3 text-sm">No sessions logged yet.</p>';
-                return;
-            }
-            
-            const sortedSessions = [...sessions].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-            const getSurahName = (id) => SURAH_DATA.find(s => s.id === id)?.name || `Surah ${id}`;
-
-            sortedSessions.forEach(session => {
-                const startSurah = getSurahName(session.surah_start_id);
-                const endSurah = getSurahName(session.surah_end_id);
-                const date = new Date(session.timestamp).toLocaleString();
-
-                let typeColor;
-                if (session.type === 'Combined') {
-                    typeColor = 'bg-yellow-100 text-yellow-700 border-yellow-400';
-                } else if (session.type === 'New Hifz') {
-                    typeColor = 'bg-indigo-100 text-indigo-700 border-indigo-400';
-                } else {
-                    typeColor = 'bg-green-100 text-green-700 border-green-400';
+                    this.closeModal('delete-modal');
+                    this.showStudentListView(); // Go back to list
+                } catch (error) {
+                    console.error("Student delete error:", error);
+                    document.getElementById('delete-modal-error').textContent = `Failed to delete: ${error.message}`;
                 }
-                
-                const entry = document.createElement('div');
-                entry.className = `bg-white p-3 rounded-lg shadow-sm border-l-4 ${typeColor} session-card`;
-                
-                let breakdownHtml = '';
-                if (session.breakdown && session.breakdown.length > 0) {
-                    breakdownHtml += '<ul class="mt-1 text-xs space-y-0.5 pl-3">';
-                    session.breakdown.forEach(segment => {
-                        const segStart = getSurahName(segment.surah_start_id);
-                        const segEnd = getSurahName(segment.surah_end_id);
-                        const segColor = segment.type === 'New Hifz' ? 'text-indigo-600 font-medium' : 'text-green-600 font-medium';
-                        
-                        let rangeText;
-                        if (segment.surah_start_id === segment.surah_end_id && segment.ayah_start === segment.ayah_end) {
-                            rangeText = `${segStart} (${segment.ayah_start})`;
-                        } else if (segment.surah_start_id === segment.surah_end_id) {
-                             rangeText = `${segStart} (${segment.ayah_start} - ${segment.ayah_end})`;
-                        } else {
-                            rangeText = `${segStart} (${segment.ayah_start}) to ${segEnd} (${segment.ayah_end})`;
+            },
+
+            // --- SEARCH AND MODAL HELPERS ---
+            handleSearch: function(text) {
+                this.state.filterText = text;
+                this.renderStudentList();
+            },
+
+            closeModal: function(modalId) {
+                document.getElementById(modalId).classList.add('hidden');
+                // Clean up state if necessary
+                if (modalId === 'delete-modal') this.state.studentToDeleteId = null;
+            },
+
+            sanitize: function(html) {
+                const div = document.createElement('div');
+                div.textContent = html;
+                return div.innerHTML;
+            },
+
+            saveUserPreference: function(key, value) {
+                this.state.userPrefs[key] = value;
+                localStorage.setItem(key, value);
+            },
+
+            // --- CORE LOGGING TRANSACTION ---
+            handleLogSubmission: async function(event) {
+                event.preventDefault();
+                const form = event.target;
+                const student = this.state.currentStudent;
+                const messageDiv = document.getElementById('log-message');
+                const submitBtn = document.getElementById('submit-log-btn');
+                submitBtn.disabled = true;
+                messageDiv.textContent = 'Processing log...';
+                messageDiv.className = 'mt-3 text-sm font-medium text-gray-500';
+
+                const formData = new FormData(form);
+                const data = Object.fromEntries(formData.entries());
+
+                // --- 1. Client-Side Validation ---
+                try {
+                    this.validateLogData(student, data);
+                } catch (error) {
+                    messageDiv.textContent = `Validation Error: ${error.message}`;
+                    messageDiv.className = 'mt-3 text-sm font-medium text-red-600';
+                    submitBtn.disabled = false;
+                    return;
+                }
+
+                // --- 2. Run Firestore Transaction ---
+try {
+    const logsCollectionRef = collection(db, `artifacts/${APP_ID}/public/data/logs`);
+    const newLogDocRef = doc(logsCollectionRef); // Pre-generate a new document reference ID
+
+    await runTransaction(db, async (transaction) => {
+                        const studentRef = doc(db, `artifacts/${APP_ID}/public/data/students`, student.id);
+                        const studentDoc = await transaction.get(studentRef);
+
+                        if (!studentDoc.exists()) {
+                            throw new Error("Student document not found during transaction.");
                         }
 
-                        breakdownHtml += `
-                            <li class="flex items-start">
-                                <span class="text-xs mr-1 mt-0.5">•</span>
-                                <span class="${segColor}">${segment.type}:</span>
-                                <span class="ml-1 text-gray-700">${rangeText}</span>
-                            </li>
-                        `;
-                    });
-                    breakdownHtml += '</ul>';
-                }
-
-                entry.innerHTML = `
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="font-semibold text-sm text-gray-800">${startSurah} (${session.ayah_start}) - ${endSurah} (${session.ayah_end})</span>
-                        <span class="text-xs font-medium px-2 py-0.5 rounded-full ${typeColor}">${session.type}</span>
-                    </div>
-                    <p class="text-xs text-gray-500 mb-1">${date}</p>
-                    ${breakdownHtml}
-                    <p class="text-xs text-gray-600 italic mt-1">${session.notes}</p>
-                `;
-                historyElement.appendChild(entry);
-            });
-        }
-        
-        // --- Gemini API Integration for Summary (Unchanged) ---
-
-        window.handleGenerateSummary = async function() {
-            if (!currentStudent) return;
-            
-            const btn = document.getElementById('generateSummaryBtn');
-            const icon = document.getElementById('summaryIcon');
-            const spinner = document.getElementById('summarySpinner');
-            const output = document.getElementById('summaryOutput');
-
-            output.textContent = "Analyzing session history...";
-            btn.disabled = true;
-            icon.classList.add('hidden');
-            spinner.classList.remove('hidden');
-            
-            const getSurahName = (id) => SURAH_DATA.find(s => s.id === id)?.name || `Surah ${id}`;
-            const paceData = calculateHifzPace(currentStudent);
-            
-            const recentSessions = (currentStudent.sessions || [])
-                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-                .slice(0, 10)
-                .map(s => {
-                    const breakdownSummary = (s.breakdown || [])
-                        .map(b => `${b.type} (${getSurahName(b.surah_start_id)}:${b.ayah_start} - ${getSurahName(b.surah_end_id)}:${b.ayah_end})`)
-                        .join('; ');
-                    
-                    const notes = s.notes || 'No notes recorded.';
-
-                    return `Overall Type: ${s.type}. Breakdown: ${breakdownSummary}. Total Range: ${getSurahName(s.surah_start_id)} to ${getSurahName(s.surah_end_id)}. Notes: ${notes}`;
-                }).join(' | ');
-
-            const systemPrompt = "You are a specialized Hifz (Quran memorization) tutor. Analyze the provided student's recent session history log, paying close attention to the breakdown of New Hifz vs. Review segments within each session. Also, use the Goal data to inform your advice. Generate a concise, single-paragraph report that identifies trends (e.g., focus on review vs. new hifz, rate of new memorization), highlights the area of current focus, and provides an encouraging and actionable recommendation for the student's next 3 days of study based on the required pace.";
-
-            const goalInfo = paceData ? 
-                `Current Pace Goal: Total memorized Ayahs: ${paceData.memorizedAyahs}. Required Daily Pace: ${Math.ceil(paceData.pace.daily)} Ayahs/Day.` : 
-                `Goal data is not fully set.`;
-
-            const userQuery = `Student: ${currentStudent.name}. ${goalInfo}. Recent Session History (Last 10 entries): ${recentSessions}. Please generate the personalized progress report and next steps recommendation based on this detailed log and the required daily pace.`;
-            
-            try {
-                const maxRetries = 3;
-                let attempt = 0;
-                let resultText = "Failed to generate report after multiple retries.";
-
-                while (attempt < maxRetries) {
-                    try {
-                        const payload = {
-                            contents: [{ parts: [{ text: userQuery }] }],
-                            systemInstruction: { parts: [{ text: systemPrompt }] },
-                            tools: [{ "google_search": {} }],
+                        let studentData = studentDoc.data();
+                        let newLogData = {
+                            studentId: student.id,
+                            stage: student.stage,
+                            fluency_rating: parseInt(data['fluency-rating']),
+                            notes: this.sanitize(data.notes || ''),
+                            timestamp: serverTimestamp(),
+                            new_ayahs: 0,
+                            review_ayahs: 0,
+                            recitation_type: data['recitation-type'] || null,
                         };
 
-                        const response = await fetch(API_URL, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload)
-                        });
+                        // --- 2.1 Stage-Specific Transaction Logic (Qaida, Sifarah, Quran, Hifz) ---
+                        if (student.stage === 'Qaida') {
+                            const lesson = parseInt(data['qaida-lesson']);
+                            newLogData.start_surah = lesson; // Using surah field to store lesson number
+                            newLogData.end_surah = lesson;
 
-                        if (!response.ok) {
-                             throw new Error(`API returned status ${response.status}`);
+                            // Qaida Automation
+                            const currentReviews = studentData.qaida_review_count?.[lesson] || 0;
+                            const firstReviewDate = studentData.qaida_first_review_date?.[lesson]?.toDate();
+                            const isFinished = studentData.qaida_finished?.[lesson] === true;
+
+                            if (currentReviews === 0) {
+                                newLogData.type = 'New';
+                                newLogData.notes = `New start on Lesson ${lesson}. ` + newLogData.notes;
+                                // Subsequent logs are 'Review'
+                                studentData.qaida_review_count = { ...studentData.qaida_review_count, [lesson]: 1 };
+                                studentData.qaida_first_review_date = { ...studentData.qaida_first_review_date, [lesson]: serverTimestamp() };
+                            } else if (isFinished) {
+                                newLogData.type = 'Review';
+                            } else {
+                                // Check for 'Finished' condition (N times review, 3 distinct days)
+                                const isNthReview = currentReviews + 1 >= N_REVIEW_TIMES;
+
+                                if (isNthReview && firstReviewDate) {
+                                    const today = new Date();
+                                    const diffTime = today.getTime() - firstReviewDate.getTime();
+                                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                                    // Check for 3 distinct UTC calendar dates from the first review log date
+                                    if (diffDays >= 3) {
+                                        newLogData.type = 'Finished';
+                                        studentData.qaida_finished = { ...studentData.qaida_finished, [lesson]: true };
+                                        // Auto-transition Qaida -> Sifarah
+                                        if (lesson === QAIDA_LESSON_COUNT) {
+                                            const allFinished = Array.from({ length: QAIDA_LESSON_COUNT }, (_, i) => i + 1)
+                                                .every(l => studentData.qaida_finished?.[l]);
+                                            if (allFinished) {
+                                                studentData.stage = 'Sifarah';
+                                            }
+                                        }
+                                    } else {
+                                        newLogData.type = 'Review';
+                                    }
+                                } else {
+                                    newLogData.type = 'Review';
+                                }
+
+                                if (newLogData.type !== 'Finished') {
+                                    studentData.qaida_review_count = { ...studentData.qaida_review_count, [lesson]: currentReviews + 1 };
+                                }
+                            }
+
+                        } else { // Sifarah, Quran Reading, Hifz
+                            newLogData.start_surah = parseInt(data['start-surah']);
+                            newLogData.start_ayah = parseInt(data['start-ayah']);
+                            newLogData.end_surah = parseInt(data['end-surah']);
+                            newLogData.end_ayah = parseInt(data['end-ayah']);
+
+                            // --- Range Overlap Detection & Breakdown ---
+                            const { newAyahs, reviewAyahs, coverageUpdates, newRanges, reviewRanges } = this.calculateLogBreakdown(
+                                studentData,
+                                newLogData.start_surah, newLogData.start_ayah,
+                                newLogData.end_surah, newLogData.end_ayah,
+                                newLogData.fluency_rating
+                            );
+
+                            newLogData.new_ayahs = newAyahs;
+                            newLogData.review_ayahs = reviewAyahs;
+                            // NEW: Store the calculated, non-sequential ranges for accurate history rendering
+                            newLogData.new_ranges = newRanges; 
+                            newLogData.review_ranges = reviewRanges;
+
+                            // --- Coverage Map Update (Stage-Specific) ---
+if (newLogData.stage === 'Hifz') {
+    studentData.hifz_coverage = { ...(studentData.hifz_coverage || {}), ...coverageUpdates };
+} else if (newLogData.stage === 'Quran Reading' || newLogData.stage === 'Sifarah') {
+    studentData.reading_coverage = { ...(studentData.reading_coverage || {}), ...coverageUpdates };
+}
+                            // --- Sifarah Counter Update (Atomic) ---
+                            if (newLogData.new_ayahs > 0 && newLogData.start_surah >= SIFARAH_START && newLogData.end_surah <= SIFARAH_END) {
+                                studentData.sifarah_completed_ayahs = (studentData.sifarah_completed_ayahs || 0) + newLogData.new_ayahs;
+                            }
+
+                            // --- Stage Transition Check (Sifarah -> Quran Reading) ---
+                            if (student.stage === 'Sifarah') {
+                                const newSifarahCount = studentData.sifarah_completed_ayahs;
+                                if (newSifarahCount >= TOTAL_SIFARAH_AYAHS) {
+                                    studentData.stage = 'Quran Reading';
+                                }
+                            }
                         }
 
-                        const result = await response.json();
-                        const candidate = result.candidates?.[0];
+                        // --- 3. Final Commit ---
+                        // Update student document
+                        transaction.update(studentRef, studentData);
 
-                        if (candidate && candidate.content?.parts?.[0]?.text) {
-                            resultText = candidate.content.parts[0].text;
-                            break; 
-                        } else {
-                            throw new Error("API response structure missing text content.");
-                        }
+                        // --- 3. Final Commit ---
+                        // Update student document
+                        transaction.update(studentRef, studentData);
 
-                    } catch (error) {
-                        attempt++;
-                        if (attempt < maxRetries) {
-                            const delay = Math.pow(2, attempt) * 1000; 
-                            await new Promise(resolve => setTimeout(resolve, delay));
-                        } else {
-                            throw error; 
-                        }
+                        // Write new log document using the pre-generated reference
+                        transaction.set(newLogDocRef, newLogData);
+                    });
+
+                    messageDiv.textContent = 'Log submitted successfully!';
+                    messageDiv.className = 'mt-3 text-sm font-medium text-green-600';
+                    form.reset(); // Clear form on success
+                    document.getElementById('notes').required = student.stage !== 'Qaida'; // Reset required state
+                    this.state.currentStudent.stage = student.stage; // Keep current stage (or update if transitioned)
+                    // The onSnapshot listeners will update the UI automatically.
+
+                } catch (error) {
+                    console.error("Log Transaction Failed:", error);
+                    messageDiv.textContent = `Transaction Failed: ${error.message}`;
+                    messageDiv.className = 'mt-3 text-sm font-medium text-red-600';
+                } finally {
+                    submitBtn.disabled = false;
+                }
+            },
+
+            validateLogData: function(student, data) {
+                if (student.stage === 'Qaida') {
+                    const lesson = parseInt(data['qaida-lesson']);
+                    if (isNaN(lesson) || lesson < 1 || lesson > QAIDA_LESSON_COUNT) {
+                        throw new Error(`Invalid Qaida lesson number. Must be 1 to ${QAIDA_LESSON_COUNT}.`);
+                    }
+                } else { // Sifarah, Quran Reading, Hifz
+                    const sSurah = parseInt(data['start-surah']);
+                    const sAyah = parseInt(data['start-ayah']);
+                    const eSurah = parseInt(data['end-surah']);
+                    const eAyah = parseInt(data['end-ayah']);
+                    const notes = data.notes || '';
+                    const rating = parseInt(data['fluency-rating']);
+
+                    if (notes.length > 500) {
+                        throw new Error("Notes/Comment must be under 500 characters.");
+                    }
+                    if (!this.validateSurahAyah(sSurah, sAyah)) {
+                        throw new Error(`Invalid Start Surah/Ayah: ${sSurah}:${sAyah}`);
+                    }
+                    if (!this.validateSurahAyah(eSurah, eAyah)) {
+                        throw new Error(`Invalid End Surah/Ayah: ${eSurah}:${eAyah}`);
+                    }
+                    if (!this.isRangeValid(sSurah, sAyah, eSurah, eAyah)) {
+                        throw new Error("Start of recitation must be before or the same as the End of recitation.");
+                    }
+
+                    // Stage-specific range checks
+                    if (student.stage === 'Sifarah' && (sSurah < SIFARAH_START || eSurah > SIFARAH_END)) {
+                        throw new Error(`Sifarah stage must only log Surahs ${SIFARAH_START} to ${SIFARAH_END}.`);
+                    }
+
+                    if (student.stage === 'Hifz' && !data['recitation-type']) {
+                        throw new Error("Recitation Type is required for Hifz stage.");
                     }
                 }
+            },
+
+            // Replace with the following code:
+            calculateLogBreakdown: function(studentData, sSurah, sAyah, eSurah, eAyah, rating) {
+                let newAyahs = 0;
+                let reviewAyahs = 0;
+                let coverageUpdates = {};
                 
-                output.textContent = resultText;
+                // NEW: Arrays to store the fragmented ranges
+                let newRanges = [];
+                let reviewRanges = [];
+                
+                // Helper to add/update ranges
+                const updateRanges = (type, currentSurah, currentAyah) => {
+                    const targetArray = type === 'new' ? newRanges : reviewRanges;
 
-            } catch (error) {
-                console.error("Gemini API Error:", error);
-                output.textContent = "Sorry, I couldn't generate the progress report right now. Please try again later. (Error: " + error.message + ")";
-            } finally {
-                btn.disabled = false;
-                icon.classList.remove('hidden');
-                spinner.classList.add('hidden');
+                    // If the last range in the array is contiguous with the current ayah, extend it
+                    const lastRange = targetArray[targetArray.length - 1];
+                    
+                    if (lastRange) {
+                        // Check if the current Ayah is the sequential next after the last range's end point
+                        const [expectedSurah, expectedAyah] = this.getNextSequentialAyah(lastRange.end_surah, lastRange.end_ayah);
+                        
+                        if (currentSurah === expectedSurah && currentAyah === expectedAyah) {
+                            // Contiguous, so extend the last range
+                            lastRange.end_surah = currentSurah;
+                            lastRange.end_ayah = currentAyah;
+                            return; // Range extended, no new push
+                        }
+                    } 
+                    
+                    // Not contiguous or no existing range, push the current ayah as a new range (start=end)
+                    targetArray.push({ start_surah: currentSurah, start_ayah: currentAyah, end_surah: currentSurah, end_ayah: currentAyah });
+                };
+
+
+                // Determine which coverage map to use based on the stage when the log was created
+                let coverageMap;
+                if (studentData.stage === 'Hifz') {
+                    coverageMap = studentData.hifz_coverage || {};
+                } else if (studentData.stage === 'Quran Reading' || studentData.stage === 'Sifarah') {
+                    coverageMap = studentData.reading_coverage || {};
+                } else {
+                    coverageMap = {}; // Qaida
+                }
+                const currentCoverage = coverageMap;
+                const currentStage = studentData.stage;
+
+                // Sifarah Review Override
+                const isSifarahReviewOverride = (currentStage === 'Quran Reading' || currentStage === 'Hifz') &&
+                                                sSurah >= SIFARAH_START && eSurah <= SIFARAH_END;
+
+                let currentSurah = sSurah;
+                let currentAyah = sAyah;
+
+                // Iterative Ayah processing using correct bounded loop condition
+                while (currentSurah < eSurah || (currentSurah === eSurah && currentAyah <= eAyah)) {
+                    const ayahKey = this.ayahRangeToKey(currentSurah, currentAyah);
+                    const maxRating = currentCoverage[ayahKey] || 0;
+
+                    if (isSifarahReviewOverride) {
+                        reviewAyahs++;
+                        updateRanges('review', currentSurah, currentAyah);
+                    } else {
+                        // Determine if this Ayah is "New" (has never been logged/covered before)
+                        const isNewAyah = maxRating === 0;
+
+                        if (isNewAyah) {
+                            coverageUpdates[ayahKey] = 5; // Set coverage to 5 (Mastered)
+                            newAyahs++;
+                            updateRanges('new', currentSurah, currentAyah);
+                        } else {
+                            // Ayah has been logged before, so it is a REVIEW.
+                            if (5 > maxRating) {
+                                coverageUpdates[ayahKey] = 5;
+                            }
+                            reviewAyahs++;
+                            updateRanges('review', currentSurah, currentAyah);
+                        }
+                    }
+
+                    // Move to the next ayah
+                    [currentSurah, currentAyah] = this.getNextSequentialAyah(currentSurah, currentAyah);
+
+                    // Safety break
+                    if (currentSurah > 114) break;
+                }
+                
+                // If override was active, coverageUpdates remains {}, newAyahs = 0, reviewAyahs = totalAyahsInRange
+                if (isSifarahReviewOverride) {
+                    return { newAyahs: 0, reviewAyahs: reviewAyahs, coverageUpdates: {}, newRanges, reviewRanges };
+                }
+
+                // Return the calculated values and the new fragmented ranges
+                return { newAyahs, reviewAyahs, coverageUpdates, newRanges, reviewRanges };
+            },
+
+            // --- HIFZ SPECIFIC LOGIC ---
+showHifzBulkImportModal: function() {
+    this.state.isHifzImportActive = true;
+    const student = this.state.currentStudent;
+    
+    // Format existing inventory ranges for display
+    const existingInventory = student.hifz_inventory || [];
+    const rangesText = existingInventory.map(r => `${r.start_surah}:${r.start_ayah}-${r.end_surah}:${r.end_ayah}`).join('\n');
+    
+    // Calculate and display existing inventory count
+    const ayahCount = this.calculateAyahCount(existingInventory);
+
+    // 1. Populate the existing inventory section
+    const existingDiv = document.getElementById('existing-hifz-inventory');
+    existingDiv.textContent = rangesText.length > 0 ? rangesText : 'No existing inventory recorded.';
+    document.getElementById('existing-inventory-count').textContent = ayahCount;
+
+    // 2. Clear the input area for new ranges
+    document.getElementById('hifz-ranges-input').value = '';
+    
+    // 3. Reset status and show modal
+    document.getElementById('hifz-import-status').textContent = '';
+    document.getElementById('hifz-import-modal').classList.remove('hidden');
+},
+
+            handleHifzBulkImport: async function() {
+                const student = this.state.currentStudent;
+                const statusDiv = document.getElementById('hifz-import-status');
+                const rangesInput = document.getElementById('hifz-ranges-input').value;
+                statusDiv.textContent = 'Processing...';
+                statusDiv.className = 'mt-3 text-sm font-medium text-gray-500';
+
+                if (!student || student.stage !== 'Hifz') {
+                    statusDiv.textContent = 'Error: Not in Hifz stage or no student selected.';
+                    statusDiv.className = 'mt-3 text-sm font-medium text-red-600';
+                    return;
+                }
+
+                const lines = rangesInput.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+                let validRanges = [];
+                let failedRanges = [];
+
+                // Get existing inventory (ranges previously bulk imported)
+                const existingInventory = student.hifz_inventory || [];
+                // Get existing coverage (verses marked as learned in daily logs)
+                const existingCoverage = student.hifz_coverage || {};
+
+                for (const line of lines) {
+                    const match = line.match(/^(\d+):(\d+)-(\d+):(\d+)$/);
+                    if (!match) {
+                        failedRanges.push(`Format error: ${line}`);
+                        continue;
+                    }
+
+                    const s1 = parseInt(match[1]);
+                    const a1 = parseInt(match[2]);
+                    const s2 = parseInt(match[3]);
+                    const a2 = parseInt(match[4]);
+
+                    if (!this.validateSurahAyah(s1, a1) || !this.validateSurahAyah(s2, a2) || !this.isRangeValid(s1, a1, s2, a2)) {
+                        failedRanges.push(`Invalid Ayah range or Surah count: ${line}`);
+                        continue;
+                    }
+                    
+                    // -----------------------------------------------------------------
+                    // NEW CHECK: Overlap with Verses already covered by DAILY LOGS
+                    // -----------------------------------------------------------------
+                    let currentSurah = s1;
+                    let currentAyah = a1;
+                    let isCoveredByLog = false;
+                    let overlapAyah = '';
+
+                    // Iterate over every ayah in the proposed bulk range
+                    while (currentSurah < s2 || (currentSurah === s2 && currentAyah <= a2)) {
+                        const ayahKey = this.ayahRangeToKey(currentSurah, currentAyah);
+                        
+                        // Check if the ayah exists in the existing coverage map (meaning it was logged)
+                        if (existingCoverage[ayahKey]) {
+                            isCoveredByLog = true;
+                            overlapAyah = `${currentSurah}:${currentAyah}`;
+                            break; 
+                        }
+                        
+                        [currentSurah, currentAyah] = this.getNextSequentialAyah(currentSurah, currentAyah);
+
+                        // Safety break
+                        if (currentSurah > 114) break;
+                    }
+
+                    if (isCoveredByLog) {
+                        failedRanges.push(`Overlap detected with verse ${overlapAyah}. This verse was already learned in a daily session and cannot be bulk imported.`);
+                        continue; // Skip the rest of the checks for this range
+                    }
+                    // -----------------------------------------------------------------
+
+
+                    // Old Check: Overlap with approved ranges (existing inventory from previous bulk imports)
+                    const isOverlapping = existingInventory.some(existing => this.checkOverlap({ start_surah: s1, start_ayah: a1, end_surah: s2, end_ayah: a2 }, existing));
+                    
+                    // Old Check: Overlap with other valid ranges in the current batch
+                    const isBatchOverlapping = validRanges.some(valid => this.checkOverlap({ start_surah: s1, start_ayah: a1, end_surah: s2, end_ayah: a2 }, valid));
+
+                    if (isOverlapping || isBatchOverlapping) {
+                        failedRanges.push(`Overlap detected and rejected: ${line}`);
+                    } else {
+                        validRanges.push({ start_surah: s1, start_ayah: a1, end_surah: s2, end_ayah: a2 });
+                    }
+                } // End of range parsing loop
+
+                // --- 3. Process & Save Valid Ranges to Student Document ---
+
+                if (failedRanges.length > 0) {
+                    statusDiv.innerHTML = `
+                        <p class="text-red-600 font-bold">Import failed for ${failedRanges.length} ranges. Fix and resubmit:</p>
+                        <ul class="list-disc list-inside mt-2 text-xs text-red-500 max-h-40 overflow-y-auto">
+                            ${failedRanges.map(f => `<li>${this.sanitize(f)}</li>`).join('')}
+                        </ul>
+                    `;
+                    statusDiv.className = 'mt-3 text-sm font-medium text-red-600';
+                    return;
+                }
+                
+                if (validRanges.length > 0) {
+                    try {
+                        
+                        let coverageUpdates = {};
+                        for (const range of validRanges) {
+                            let currentSurah = range.start_surah;
+                            let currentAyah = range.start_ayah;
+                            
+                            while (currentSurah < range.end_surah || (currentSurah === range.end_surah && currentAyah <= range.end_ayah)) {
+                                const ayahKey = this.ayahRangeToKey(currentSurah, currentAyah);
+                                coverageUpdates[ayahKey] = 5; 
+                                
+                                [currentSurah, currentAyah] = this.getNextSequentialAyah(currentSurah, currentAyah);
+                            }
+                        }
+                        
+                        const studentRef = doc(db, `artifacts/${APP_ID}/public/data/students`, student.id);
+                        
+                        await updateDoc(studentRef, {
+                            // Merge the new ranges with the existing inventory
+                            hifz_inventory: [...existingInventory, ...validRanges], 
+                            // Merge the new coverage map with the existing coverage map
+                            hifz_coverage: { 
+                                ...(existingCoverage), 
+                                ...coverageUpdates 
+                            }
+                        });
+
+                        statusDiv.textContent = `Successfully imported ${validRanges.length} valid ranges (${Object.keys(coverageUpdates).length} total ayahs added to inventory). Inventory and coverage updated.`;
+                        statusDiv.className = 'mt-3 text-sm font-medium text-green-600';
+                        this.closeModal('hifz-import-modal');
+
+                    } catch (error) {
+                        console.error("Hifz Bulk Import save error:", error);
+                        statusDiv.textContent = `Failed to save inventory: ${error.message}`;
+                        statusDiv.className = 'mt-3 text-sm font-medium text-red-600';
+                    } finally {
+                        this.state.isHifzImportActive = false;
+                    }
+                } else {
+                    statusDiv.textContent = 'No valid, non-overlapping ranges were entered.';
+                    statusDiv.className = 'mt-3 text-sm font-medium text-red-600';
+                }
+            },
+
+            checkOverlap: function(rangeA, rangeB) {
+                // Returns true if rangeA and rangeB overlap
+                // Represent ranges as single numbers for comparison: Surah*1000 + Ayah
+                const aStart = rangeA.start_surah * 1000 + rangeA.start_ayah;
+                const aEnd = rangeA.end_surah * 1000 + rangeA.end_ayah;
+                const bStart = rangeB.start_surah * 1000 + rangeB.start_ayah;
+                const bEnd = rangeB.end_surah * 1000 + rangeB.end_ayah;
+
+                // Overlap occurs if A starts before B ends AND A ends after B starts
+                return aStart <= bEnd && aEnd >= bStart;
+            },
+
+            calculateHifzPace: function(student) {
+                if (student.stage !== 'Hifz' || this.state.logs.length === 0) return 0;
+
+                const hifzLogs = this.state.logs.filter(log => log.stage === 'Hifz' && log.new_ayahs > 0);
+
+                if (hifzLogs.length === 0) return 0;
+
+                let totalNewAyahs = 0;
+                let firstLogDate = hifzLogs[hifzLogs.length - 1].timestamp.toDate(); // Oldest log
+                let lastLogDate = hifzLogs[0].timestamp.toDate(); // Newest log
+
+                hifzLogs.forEach(log => {
+                    totalNewAyahs += log.new_ayahs;
+                });
+
+                const timeDiff = lastLogDate.getTime() - firstLogDate.getTime();
+                const dayDiff = timeDiff / (1000 * 3600 * 24);
+
+                if (dayDiff < 1) return totalNewAyahs; // If only 1 day of logging, return total
+
+                return (totalNewAyahs / dayDiff).toFixed(2);
             }
-        }
+        };
 
-
-        // --- Main Execution ---
-        window.onload = initFirebase;
+        // Initialize the application once the window is loaded
+        window.onload = app.init.bind(app);
+        window.app = app; // Expose app to global scope for inline handlers
     </script>
 </body>
 </html>
