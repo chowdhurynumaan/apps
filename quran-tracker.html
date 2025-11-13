@@ -12,10 +12,13 @@
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f7f9fc;
+            scroll-behavior: smooth; /* Enables smooth animated scroll for navigational jumps */
+            will-change: transform; /* Performance hint for main layout */
         }
         /* Custom scrollbar for log list */
-        .custom-scroll::-webkit-scrollbar {
-            width: 6px;
+        .custom-scroll {
+            -webkit-overflow-scrolling: touch; /* Essential for smooth kinetic scrolling on iOS/mobile */
+            will-change: scroll-position; /* Performance hint for scrolling areas */
         }
         .custom-scroll::-webkit-scrollbar-thumb {
             background: #9ca3af;
