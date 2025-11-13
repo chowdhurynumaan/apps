@@ -57,8 +57,7 @@
         <span id="student-name-display" class="text-xl font-semibold hidden"></span>
     </header>
 
-<div id="app-container" class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-4 md:p-6 overflow-y-auto" style="margin-top: 64px; max-height: calc(100vh - 96px);">
-        <!-- Sidebar Menu -->
+<div id="app-container" class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-4 md:p-6 flex flex-col h-full overflow-hidden" style="margin-top: 64px; max-height: calc(100vh - 96px);">        <!-- Sidebar Menu -->
         <div>
             <div>
 </body>
@@ -91,11 +90,7 @@
                         <li><a href="#" onclick="app.setFilter('Male', 'Hifz'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Male" data-stage="Hifz">Hifz</a></li>
                     </ul>
                 </div>
-                <div class="pt-4 border-t border-gray-200">
-                    <button onclick="app.showAddStudentModal(); app.toggleMenu();" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out">
-                        + Add New Student
-                    </button>
-                </div>
+                
             </div>
         </div>
                 
@@ -105,14 +100,20 @@
         <div id="menu-backdrop" onclick="app.toggleMenu()" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden"></div>
 
         <!-- Main Student List View -->
-        <div id="student-list-view">
-                        <div class="mb-6">
-    <input type="text" id="search-student" placeholder="Search by name..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm" oninput="app.handleSearch(this.value)">
-</div>
-            <div id="student-list" class="space-y-3">
-                <!-- Student list items will be injected here -->
+<div id="student-list-view" class="flex flex-col flex-grow overflow-hidden">            <div id="fixed-header-container" class="pb-4 border-b border-gray-200">
+                <div class="flex space-x-2 mb-0">
+                    <input type="text" id="search-student" placeholder="Search by name..." class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm" oninput="app.handleSearch(this.value)">
+                    <button onclick="app.showAddStudentModal()" class="flex-shrink-0 w-12 h-12 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-md transition duration-150 ease-in-out flex items-center justify-center" aria-label="Add New Student">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    </button>
+                </div>
             </div>
-            <p id="no-students" class="text-gray-500 text-center py-8 hidden">No students found.</p>
+            
+            <div id="student-list-scroll-container" class="flex-grow overflow-y-auto custom-scroll pt-4">
+                <div id="student-list" class="space-y-3">
+                    </div>
+                <p id="no-students" class="text-gray-500 text-center py-8 hidden">No students found.</p>
+            </div>
         </div>
 
         <!-- Student Detail and Logging View -->
