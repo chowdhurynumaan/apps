@@ -49,10 +49,51 @@
 <body class="p-4 md:p-8 min-h-screen">
 
     <div id="app-container" class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-4 md:p-6">
-        <header class="mb-6 pb-4 border-b border-gray-100">
-            <h1 class="text-3xl font-extrabold text-blue-600">Student Progress Tracker</h1>
+        <header class="mb-6 pb-4 border-b border-gray-100 relative">
+            <div class="flex items-center justify-between">
+                <button id="menu-toggle" onclick="app.toggleMenu()" class="text-gray-500 hover:text-blue-600 focus:outline-none p-2 -ml-2">
+                    <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
+                <h1 class="text-3xl font-extrabold text-blue-600 ml-4 flex-grow">Student Progress Tracker</h1>
+            </div>
             <p id="auth-status" class="text-xs text-gray-500 mt-1"></p>
         </header>
+
+        <div id="sidebar-menu" class="fixed top-0 left-0 h-full w-64 bg-white shadow-2xl z-50 transition-transform transform -translate-x-full" style="padding-top: 60px;">
+            <div class="p-4 space-y-4">
+                <h3 class="text-xl font-bold text-gray-800 border-b pb-2 mb-2">Filters</h3>
+
+                <div class="border-b border-gray-200 pb-2">
+                    <p class="font-bold text-lg text-pink-600 mb-2">Female</p>
+                    <ul class="space-y-1 ml-2">
+                        <li><a href="#" onclick="app.setFilter('Female', 'Qaida'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Female" data-stage="Qaida">Qaida</a></li>
+                        <li><a href="#" onclick="app.setFilter('Female', 'Quran Reading'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Female" data-stage="Quran Reading">Quran</a></li>
+                        <li><a href="#" onclick="app.setFilter('Female', 'Sifarah'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Female" data-stage="Sifarah">Sifara</a></li>
+                        <li><a href="#" onclick="app.setFilter('Female', 'Hifz'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Female" data-stage="Hifz">Hifz</a></li>
+                    </ul>
+                </div>
+
+                <div class="border-b border-gray-200 pb-2">
+                    <p class="font-bold text-lg text-blue-600 mb-2">Boys</p>
+                    <ul class="space-y-1 ml-2">
+                        <li><a href="#" onclick="app.setFilter('Male', 'Qaida'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Male" data-stage="Qaida">Qaida</a></li>
+                        <li><a href="#" onclick="app.setFilter('Male', 'Quran Reading'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Male" data-stage="Quran Reading">Quran</a></li>
+                        <li><a href="#" onclick="app.setFilter('Male', 'Sifarah'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Male" data-stage="Sifarah">Sifara</a></li>
+                        <li><a href="#" onclick="app.setFilter('Male', 'Hifz'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Male" data-stage="Hifz">Hifz</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <button onclick="app.clearFilter()" class="w-full bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold py-2 px-4 rounded-lg transition duration-150">
+                        Show All Students
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="menu-backdrop" onclick="app.toggleMenu()" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden"></div>
 
         <!-- Main Student List View -->
         <div id="student-list-view">
@@ -161,6 +202,13 @@
                         <div class="mb-4">
                             <label for="student-name-input" class="block text-sm font-medium text-gray-700">Student Name</label>
                             <input type="text" id="student-name-input" required class="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div class="mb-4">
+                            <label for="student-gender-input" class="block text-sm font-medium text-gray-700">Gender</label>
+                            <select id="student-gender-input" required class="mt-1 block w-full pl-3 pr-10 py-3 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md shadow-sm">
+                                <option value="Female">Female</option>
+                                <option value="Male">Male (Boys)</option>
+                            </select>
                         </div>
                         <div class="mb-6">
                             <label for="student-stage-input" class="block text-sm font-medium text-gray-700">Initial Stage</label>
@@ -283,6 +331,8 @@
                 studentToEditId: null,
                 studentToDeleteId: null,
                 isHifzImportActive: false,
+                currentGenderFilter: null, // NEW: Filter for Gender ('Female', 'Male', or null for all)
+                currentStageFilter: null, // NEW: Filter for Stage ('Qaida', 'Hifz', etc., or null for all)
                 userPrefs: {
                     autoFillNext: localStorage.getItem('autoFillNext') === 'true'
                 }
@@ -367,15 +417,66 @@
                 }, (error) => console.error("Error fetching logs:", error));
             },
 
+            // --- MENU AND FILTER LOGIC ---
+            toggleMenu: function() {
+                const menu = document.getElementById('sidebar-menu');
+                const backdrop = document.getElementById('menu-backdrop');
+                menu.classList.toggle('-translate-x-full');
+                backdrop.classList.toggle('hidden');
+                // Set the correct menu item as active
+                this.updateMenuActiveState();
+            },
+
+            setFilter: function(gender, stage) {
+                this.state.currentGenderFilter = gender;
+                this.state.currentStageFilter = stage;
+                this.renderStudentList();
+                this.toggleMenu(); // Close menu after selection
+                // Update header title to reflect filter
+                const stageName = stage.replace(' Reading', '');
+                document.querySelector('h2.text-2xl').textContent = `${gender}'s ${stageName} Students`;
+                document.getElementById('search-student').value = ''; // Clear search when filter is applied
+                this.state.filterText = '';
+            },
+
+            clearFilter: function() {
+                this.state.currentGenderFilter = null;
+                this.state.currentStageFilter = null;
+                this.state.filterText = '';
+                document.getElementById('search-student').value = '';
+                this.renderStudentList();
+                this.toggleMenu(); // Close menu after selection
+                document.querySelector('h2.text-2xl').textContent = 'Students';
+            },
+
+            updateMenuActiveState: function() {
+                document.querySelectorAll('.menu-item').forEach(item => {
+                    item.classList.remove('bg-blue-100', 'font-semibold', 'text-blue-700');
+                    if (item.getAttribute('data-gender') === this.state.currentGenderFilter &&
+                        item.getAttribute('data-stage') === this.state.currentStageFilter) {
+                        item.classList.add('bg-blue-100', 'font-semibold', 'text-blue-700');
+                    }
+                });
+            },
+
             // --- UI RENDERING ---
             renderStudentList: function() {
                 const list = document.getElementById('student-list');
                 const noStudents = document.getElementById('no-students');
                 list.innerHTML = '';
 
-                const filteredStudents = this.state.students.filter(student =>
-                    student.name.toLowerCase().includes(this.state.filterText.toLowerCase())
-                );
+                const filteredStudents = this.state.students.filter(student => {
+                    // Filter by search text
+                    const matchesSearch = student.name.toLowerCase().includes(this.state.filterText.toLowerCase());
+
+                    // Filter by Gender
+                    const matchesGender = !this.state.currentGenderFilter || student.gender === this.state.currentGenderFilter;
+
+                    // Filter by Stage
+                    const matchesStage = !this.state.currentStageFilter || student.stage === this.state.currentStageFilter;
+
+                    return matchesSearch && matchesGender && matchesStage;
+                });
 
                 if (filteredStudents.length === 0) {
                     noStudents.classList.remove('hidden');
@@ -388,13 +489,14 @@
                         item.innerHTML = `
                             <div>
                                 <p class="text-lg font-bold text-gray-800">${this.sanitize(student.name)}</p>
-                                <p class="text-sm text-blue-600 font-medium">${student.stage}</p>
+                                <p class="text-sm text-blue-600 font-medium">${student.gender} | ${student.stage}</p>
                             </div>
                             <span class="text-xs text-gray-500">ID: ${this.sanitize(student.id)}</span>
                         `;
                         list.appendChild(item);
                     });
                 }
+                this.updateMenuActiveState(); // Ensure the menu state reflects the current filter
             },
 
             renderStudentDetails: function(student) {
@@ -836,33 +938,29 @@
             showEditStudentModal: function(student) {
                 this.state.isEditMode = true;
                 this.state.studentToEditId = student.id;
-                document.getElementById('student-modal-title').textContent = `Edit Student: ${student.name}`;
+                document.getElementById('student-modal-title').textContent = 'Edit Student';
                 document.getElementById('student-modal-btn').textContent = 'Save Changes';
                 document.getElementById('student-name-input').value = student.name;
+                document.getElementById('student-gender-input').value = student.gender || 'Female'; // NEW: Populate gender
                 document.getElementById('student-stage-input').value = student.stage;
-                document.getElementById('student-modal-error').textContent = '';
                 document.getElementById('target-date-input').value = student.targetCompletionDate || '';
+                document.getElementById('student-modal-error').textContent = '';
                 document.getElementById('student-modal').classList.remove('hidden');
             },
 
             handleStudentSave: async function(event) {
                 event.preventDefault();
+                const form = document.getElementById('student-form');
                 const btn = document.getElementById('student-modal-btn');
                 const originalText = btn.textContent;
                 btn.disabled = true;
-                btn.textContent = 'Saving...';
+                btn.textContent = this.state.isEditMode ? 'Saving...' : 'Adding...';
                 document.getElementById('student-modal-error').textContent = '';
 
-                if (!db) {
-                    document.getElementById('student-modal-error').textContent = 'Database not ready. Please wait a moment and try again.';
-                    btn.disabled = false;
-                    btn.textContent = originalText;
-                    return;
-                }
-                
                 const name = document.getElementById('student-name-input').value.trim();
+                const gender = document.getElementById('student-gender-input').value; // NEW
                 const stage = document.getElementById('student-stage-input').value;
-                const targetCompletionDate = document.getElementById('target-date-input').value.trim();
+                const targetCompletionDate = document.getElementById('target-date-input').value || null;
 
                 if (!name || name.length > 100) {
                     document.getElementById('student-modal-error').textContent = 'Name is required and must be under 100 characters.';
@@ -873,31 +971,32 @@
 
                 try {
                     const data = {
-    name: this.sanitize(name),
-    stage: stage,
-    sifarah_completed_ayahs: 0,
-    qaida_review_count: {},
-    qaida_first_review_date: {},
-    qaida_finished: {},
-        hifz_coverage: {}, // New: Hifz-specific map
-        reading_coverage: {}, // New: Reading/Sifarah-specific map
-        hifz_inventory: [],
-        targetCompletionDate: targetCompletionDate, // NEW
-    };
+                        name: this.sanitize(name),
+                        gender: gender, // NEW FIELD
+                        stage: stage,
+                        sifarah_completed_ayahs: 0,
+                        qaida_review_count: {},
+                        qaida_first_review_date: {},
+                        qaida_finished: {},
+                        hifz_coverage: {}, // New: Hifz-specific map
+                        reading_coverage: {}, // New: Reading/Sifarah-specific map
+                        hifz_inventory: [],
+                        targetCompletionDate: targetCompletionDate, // NEW
+                    };
 
                     if (this.state.isEditMode) {
-                    // Update existing student (only name, stage, and target date are user-editable here)
-                    const studentDocRef = doc(db, `artifacts/${APP_ID}/public/data/students`, this.state.studentToEditId);
-                    await updateDoc(studentDocRef, {
-                        name: this.sanitize(name),
-                        stage: stage,
-                        targetCompletionDate: targetCompletionDate, // NEW
-                    });
-                } else {
-                    // Create new student
-                    await addDoc(collection(db, `artifacts/${APP_ID}/public/data/students`), data);
-                }
-
+                        // Update existing student (only name, stage, gender, and target date are user-editable here)
+                        const studentDocRef = doc(db, `artifacts/${APP_ID}/public/data/students`, this.state.studentToEditId);
+                        await updateDoc(studentDocRef, {
+                            name: this.sanitize(name),
+                            gender: gender, // UPDATE GENDER
+                            stage: stage,
+                            targetCompletionDate: targetCompletionDate, // NEW
+                        });
+                    } else {
+                        // Create new student
+                        await addDoc(collection(db, `artifacts/${APP_ID}/public/data/students`), data);
+                    }
                     this.closeModal('student-modal');
                 } catch (error) {
                     console.error("Student save error:", error);
@@ -947,6 +1046,12 @@
             // --- SEARCH AND MODAL HELPERS ---
             handleSearch: function(text) {
                 this.state.filterText = text;
+                // Clear active stage/gender filter when user starts searching
+                if (text) {
+                    this.state.currentGenderFilter = null;
+                    this.state.currentStageFilter = null;
+                    document.querySelector('h2.text-2xl').textContent = 'Students';
+                }
                 this.renderStudentList();
             },
 
