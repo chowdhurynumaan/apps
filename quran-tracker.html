@@ -47,22 +47,31 @@
     </script>
 </head>
 <body class="p-4 md:p-8 min-h-screen">
+    <body class="p-4 md:p-8 min-h-screen">
+    <header class="fixed top-0 left-0 w-full bg-blue-600 text-white p-3 shadow-lg z-40 flex items-center justify-between h-16">
+        <div class="flex items-center space-x-4">
+            <button onclick="app.toggleMenu()" class="text-white hover:text-blue-200 transition duration-150 p-2 rounded-full">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
+            <h1 class="text-xl font-bold">Student Progress Tracker</h1>
+        </div>
+        <span id="student-name-display" class="text-xl font-semibold hidden"></span>
+    </header>
 
-    <div id="app-container" class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-4 md:p-6">
-        <header class="mb-6 pb-4 border-b border-gray-100 relative">
-            <div class="flex items-center justify-between">
-                <button id="menu-toggle" onclick="app.toggleMenu()" class="text-gray-500 hover:text-blue-600 focus:outline-none p-2 -ml-2">
-                    <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                    </svg>
-                </button>
-                <h1 class="text-3xl font-extrabold text-blue-600 ml-4 flex-grow">Student Progress Tracker</h1>
-            </div>
-            <p id="auth-status" class="text-xs text-gray-500 mt-1"></p>
-        </header>
+    <div id="app-container" class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-4 md:p-6 mt-20">
+
+        <!-- Sidebar Menu -->
+        <div>
+            <div>
+</body>
 
         <div id="sidebar-menu" class="fixed top-0 left-0 h-full w-64 bg-white shadow-2xl z-50 transition-transform transform -translate-x-full" style="padding-top: 60px;">
             <div class="p-4 space-y-4">
+                <div>
+                    <button onclick="app.clearFilter()" class="w-full bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold py-2 px-4 rounded-lg transition duration-150">
+                        Show All Students
+                    </button>
+                </div>
                 <h3 class="text-xl font-bold text-gray-800 border-b pb-2 mb-2">Filters</h3>
 
                 <div class="border-b border-gray-200 pb-2">
@@ -76,7 +85,7 @@
                 </div>
 
                 <div class="border-b border-gray-200 pb-2">
-                    <p class="font-bold text-lg text-blue-600 mb-2">Boys</p>
+                    <p class="font-bold text-lg text-blue-600 mb-2">Male</p>
                     <ul class="space-y-1 ml-2">
                         <li><a href="#" onclick="app.setFilter('Male', 'Qaida'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Male" data-stage="Qaida">Qaida</a></li>
                         <li><a href="#" onclick="app.setFilter('Male', 'Quran Reading'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Male" data-stage="Quran Reading">Quran</a></li>
@@ -84,12 +93,14 @@
                         <li><a href="#" onclick="app.setFilter('Male', 'Hifz'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Male" data-stage="Hifz">Hifz</a></li>
                     </ul>
                 </div>
-
-                <div>
-                    <button onclick="app.clearFilter()" class="w-full bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold py-2 px-4 rounded-lg transition duration-150">
-                        Show All Students
+                <div class="pt-4 border-t border-gray-200">
+                    <button onclick="app.showAddStudentModal(); app.toggleMenu();" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out">
+                        + Add New Student
                     </button>
                 </div>
+            </div>
+        </div>
+                
             </div>
         </div>
 
@@ -98,12 +109,9 @@
         <!-- Main Student List View -->
         <div id="student-list-view">
             <h2 class="text-2xl font-semibold text-gray-800 mb-4">Students</h2>
-            <div class="flex flex-col md:flex-row gap-3 mb-6">
-                <input type="text" id="search-student" placeholder="Search by name..." class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm" oninput="app.handleSearch(this.value)">
-                <button onclick="app.showAddStudentModal()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out whitespace-nowrap">
-                    Add New Student
-                </button>
-            </div>
+            <div class="mb-6">
+    <input type="text" id="search-student" placeholder="Search by name..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm" oninput="app.handleSearch(this.value)">
+</div>
             <div id="student-list" class="space-y-3">
                 <!-- Student list items will be injected here -->
             </div>
@@ -207,7 +215,7 @@
                             <label for="student-gender-input" class="block text-sm font-medium text-gray-700">Gender</label>
                             <select id="student-gender-input" required class="mt-1 block w-full pl-3 pr-10 py-3 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md shadow-sm">
                                 <option value="Female">Female</option>
-                                <option value="Male">Male (Boys)</option>
+                                <option value="Male">Male</option>
                             </select>
                         </div>
                         <div class="mb-6">
@@ -339,32 +347,28 @@
             },
             // --- FIREBASE INIT AND AUTH ---
             init: async function() {
-                try {
-                    if (Object.keys(FIREBASE_CONFIG).length === 0) {
-                        document.getElementById('auth-status').textContent = 'Error: Firebase config not found.';
-                        return;
-                    }
+    try {
+        if (Object.keys(FIREBASE_CONFIG).length === 0) {
+            console.error('Error: Firebase config not found.');
+            return;
+        }
 
-                    const firebaseApp = initializeApp(FIREBASE_CONFIG);
-                    db = getFirestore(firebaseApp);
-                    auth = getAuth(firebaseApp);
-                    setLogLevel('debug'); // Enable Firestore logging
+        const firebaseApp = initializeApp(FIREBASE_CONFIG);
+        db = getFirestore(firebaseApp);
+        auth = getAuth(firebaseApp);
+        setLogLevel('debug'); // Enable Firestore logging
 
-                    document.getElementById('auth-status').textContent = 'Initializing...';
+        await this.handleAuth();
 
-                    await this.handleAuth();
+        this.state.isAuthReady = true;
+        this.setupListeners();
+        this.renderStudentList();
+        document.getElementById('auto-fill-next').checked = this.state.userPrefs.autoFillNext;
 
-                    this.state.isAuthReady = true;
-                    this.setupListeners();
-                    this.renderStudentList();
-                    document.getElementById('auth-status').textContent = `Ready. App ID: ${APP_ID}`;
-                    document.getElementById('auto-fill-next').checked = this.state.userPrefs.autoFillNext;
-
-                } catch (error) {
-                    console.error("Firebase Initialization Error:", error);
-                    document.getElementById('auth-status').textContent = `Initialization Failed: ${error.message}`;
-                }
-            },
+    } catch (error) {
+        console.error("Firebase Initialization Error:", error);
+    }
+},
 
             handleAuth: async function() {
                 // Sign in anonymously to ensure a user ID is available for Firestore rules
