@@ -527,11 +527,12 @@
                 let totalScopeName, scopeCompleted, totalScope;
 
                 if (student.stage === 'Qaida') {
-                    const completedLessons = Object.values(student.qaida_finished || {}).filter(f => f).length;
-                    scopeCompleted = completedLessons;
-                    totalScope = QAIDA_LESSON_COUNT;
-                    totalScopeName = 'Lessons';
-                } else if (student.stage === 'Sifarah') {
+        // BUG FIX: Count all lessons that have been logged at least once (i.e., have an entry in qaida_review_count)
+        const startedLessons = Object.keys(student.qaida_review_count || {}).length;
+        scopeCompleted = startedLessons;
+        totalScope = QAIDA_LESSON_COUNT;
+        totalScopeName = 'Lessons';
+    } else if (student.stage === 'Sifarah') {
                     scopeCompleted = student.sifarah_completed_ayahs || 0;
                     totalScope = TOTAL_SIFARAH_AYAHS;
                     totalScopeName = 'Ayahs';
