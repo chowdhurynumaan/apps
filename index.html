@@ -275,17 +275,24 @@
         /**
          * Calculates the Daily Class Score (DCS) out of 100 based on number of students.
          */
+        /**
+         * Calculates the Daily Class Score (DCS) out of 100 based on number of students.
+         */
         const calculateDailyScore = (report) => {
             // CRITICAL DEFENSE: Use 0 if a key is missing from the report object
             const totalStudents = report.totalStudents || 0;
             const presentToday = report.presentToday || 0;
+            const tardyToday = report.tardyToday || 0;
             const progressReportBrought = report.progressReportBrought || 0;
             const progressReportSigned = report.progressReportSigned || 0;
 
             if (totalStudents <= 0) return 0; 
             
-            // Attendance (50%) + Report Brought (25%) + Report Signed (25%)
-            const attendanceScore = 50 * (Math.min(presentToday, totalStudents) / totalStudents);
+            // Attendance (50%) [Present=1, Tardy=0.5] + Report Brought (25%) + Report Signed (25%)
+            // We clamp (Present + Tardy) to Total just in case data is temporarily inconsistent
+            const attendanceVal = Math.min(presentToday + (tardyToday * 0.5), totalStudents);
+            
+            const attendanceScore = 50 * (attendanceVal / totalStudents);
             const broughtScore = 25 * (Math.min(progressReportBrought, totalStudents) / totalStudents);
             const signedScore = 25 * (Math.min(progressReportSigned, totalStudents) / totalStudents);
             
@@ -342,19 +349,25 @@
             // Default values
             const defaultTotal = report.totalStudents || '';
             const defaultPresent = report.presentToday || '';
+            const defaultTardy = report.tardyToday || '';
             const defaultBrought = report.progressReportBrought || '';
             const defaultSigned = report.progressReportSigned || '';
+
+            // Calculate absent for display if data exists
+            let defaultAbsent = '';
+            if (defaultTotal !== '' && defaultPresent !== '') {
+                defaultAbsent = parseInt(defaultTotal) - (parseInt(defaultPresent) + (parseInt(defaultTardy) || 0));
+            }
 
             const sectionType = classDef.id.startsWith('Girls') ? 'Girls' : 'Boys';
             const cardBgColor = sectionType === 'Girls' ? 'bg-pink-50' : 'bg-blue-50';
 
             // --- Form Inputs ---
-            const createInput = (id, label, placeholder, value, isRequired = true) => `
+            const createInput = (id, label, placeholder, value, isReadOnly = false) => `
                 <div class="flex flex-col space-y-1">
-                    <label for="${id}" class="text-sm font-medium text-gray-700">${label} ${isRequired ? '<span class="text-red-500">*</span>' : ''}</label>
+                    <label for="${id}" class="text-sm font-medium text-gray-700">${label}</label>
                     <input type="number" id="${id}" placeholder="${placeholder}" value="${value}" 
-                           min="0" ${isRequired ? 'required' : ''}
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 transition duration-150">
+                           min="0" ${isReadOnly ? 'readonly disabled class="w-full px-3 py-2 border border-gray-200 bg-gray-100 text-gray-500 rounded-lg shadow-sm"' : 'required class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"'} >
                 </div>
             `;
 
@@ -364,13 +377,17 @@
                 <p class="text-sm text-gray-500 mb-4 border-b pb-2">Reports for: <span class="font-semibold text-indigo-600">${getDisplayDate(selectedDateId)}</span></p>
 
                 <div class="grid grid-cols-2 gap-4 p-4 ${cardBgColor} rounded-xl">
-                    ${createInput('input-totalStudents', 'Total Students in Class', 'e.g., 30', defaultTotal)}
-                    ${createInput('input-presentToday', 'Students Present Today', 'e.g., 28', defaultPresent)}
-                    ${createInput('input-progressReportBrought', 'Progress Reports Brought', 'e.g., 25', defaultBrought)}
-                    ${createInput('input-progressReportSigned', 'Progress Reports Signed', 'e.g., 22', defaultSigned)}
+                    ${createInput('input-totalStudents', 'Total Students', 'e.g., 30', defaultTotal)}
+                    ${createInput('input-absentToday', 'Absent (Auto)', 'Calc', defaultAbsent, true)}
+                    
+                    ${createInput('input-presentToday', 'Present', 'e.g., 28', defaultPresent)}
+                    ${createInput('input-tardyToday', 'Tardy', 'e.g., 0', defaultTardy)}
+                    
+                    ${createInput('input-progressReportBrought', 'Reports Brought', 'e.g., 25', defaultBrought)}
+                    ${createInput('input-progressReportSigned', 'Reports Signed', 'e.g., 22', defaultSigned)}
                 </div>
                 
-                <p class="text-xs text-red-500 mt-3 text-center">Note: All fields are required and must be non-negative integers.</p>
+                <p class="text-xs text-red-500 mt-3 text-center">Note: Absent is calculated automatically (Total - Present - Tardy).</p>
                 
                 <div class="mt-4 p-3 bg-gray-100 rounded-lg shadow-inner flex justify-between items-center text-sm text-gray-700 font-medium">
                     <span class="text-2xs sm:text-sm">Score calculation is automatic upon saving.</span>
@@ -382,20 +399,24 @@
         /**
          * Checks the validity of the input fields and returns the report object or null.
          */
+        /**
+         * Checks the validity of the input fields and returns the report object or null.
+         */
         const checkInputValidity = (classId) => {
             const totalStudents = parseInt(document.getElementById('input-totalStudents').value.trim());
             const presentToday = parseInt(document.getElementById('input-presentToday').value.trim());
+            const tardyToday = parseInt(document.getElementById('input-tardyToday').value.trim());
             const progressReportBrought = parseInt(document.getElementById('input-progressReportBrought').value.trim());
             const progressReportSigned = parseInt(document.getElementById('input-progressReportSigned').value.trim());
 
-            if (isNaN(totalStudents) || isNaN(presentToday) || isNaN(progressReportBrought) || isNaN(progressReportSigned) ||
-                totalStudents < 0 || presentToday < 0 || progressReportBrought < 0 || progressReportSigned < 0) {
+            if (isNaN(totalStudents) || isNaN(presentToday) || isNaN(tardyToday) || isNaN(progressReportBrought) || isNaN(progressReportSigned) ||
+                totalStudents < 0 || presentToday < 0 || tardyToday < 0 || progressReportBrought < 0 || progressReportSigned < 0) {
                 showMessage('Input Error', 'Please ensure all fields are filled with non-negative numbers.');
                 return null;
             }
 
-            if (presentToday > totalStudents) {
-                showMessage('Input Error', 'Students Present Today cannot exceed Total Students in Class.');
+            if ((presentToday + tardyToday) > totalStudents) {
+                showMessage('Input Error', 'Present + Tardy cannot exceed Total Students.');
                 return null;
             }
             if (progressReportBrought > totalStudents) {
@@ -414,6 +435,7 @@
                 className: classDef.name,
                 totalStudents: totalStudents,
                 presentToday: presentToday,
+                tardyToday: tardyToday,
                 progressReportBrought: progressReportBrought,
                 progressReportSigned: progressReportSigned,
                 // Server timestamp will be added on save
@@ -772,17 +794,10 @@
         // Locate and replace the ENTIRE 'renderClassList' function with the code below.
 const renderClassList = () => {
     const container = document.getElementById('scores-view');
-    
-    // We clear the scores container to redraw the class list.
     container.innerHTML = '';
     
-    // ... [Omitted: Step 1 (mapping all class data)] ...
-
-    // Step 1: Map all class data, including a numeric score value for ranking
+    // Step 1: Map all class data
     const allClassesInitial = CLASS_DEFINITIONS.map(classDef => {
-        // ... [Rest of Step 1 remains UNCHANGED] ...
-        
-        // Accumulator data mapping and Daily Score calculation...
         const report = currentReports[classDef.id] || {}; 
         const rawAccumulated = currentAccumulatedScores[classDef.id] || {};
         
@@ -794,18 +809,11 @@ const renderClassList = () => {
         };
         
         const dailyReportHasData = report.totalStudents !== undefined && report.totalStudents !== 0 && Object.keys(report).length > 1;
-
-        const dailyScoreValue = dailyReportHasData 
-            ? calculateDailyScore(report) 
-            : -1; 
-
+        const dailyScoreValue = dailyReportHasData ? calculateDailyScore(report) : -1; 
         const dailyScoreText = dailyReportHasData ? `${dailyScoreValue.toFixed(2)}` : 'N/A';
         
         const isCumulativeData = accumulated.daysCount > 0;
-        const averageScore = isCumulativeData 
-            ? (accumulated.totalScore / accumulated.daysCount)
-            : 0;
-
+        const averageScore = isCumulativeData ? (accumulated.totalScore / accumulated.daysCount) : 0;
         const cumulativeAvgText = averageScore.toFixed(2); 
 
         const cumulativeTitle = isCumulativeData 
@@ -817,6 +825,8 @@ const renderClassList = () => {
         
         const totalStudents = report.totalStudents || 0;
         const presentToday = report.presentToday || 0;
+        const tardyToday = report.tardyToday || 0;
+        const absentToday = totalStudents > 0 ? (totalStudents - presentToday - tardyToday) : 0;
         const reportBrought = report.progressReportBrought || 0;
         const reportSigned = report.progressReportSigned || 0;
         
@@ -830,32 +840,27 @@ const renderClassList = () => {
             cumulativeTitle, 
             totalStudents,
             presentToday,
+            tardyToday,
+            absentToday,
             reportBrought,
             reportSigned
         };
     });
 
-    // Step 2: Determine Ranks for the Top 3
+    // Step 2: Determine Ranks
     const rankMap = calculateRanks(allClassesInitial);
     
-    // Step 3: Re-map to add the 'rank' property to each class object and separate into groups
+    // Step 3: Re-map
     let girlsClasses = [];
     let boysClasses = [];
     
     allClassesInitial.forEach(c => {
-        const classWithRank = {
-            ...c,
-            rank: rankMap.get(c.id) || 0 // 0 means no rank
-        };
-        
-        if (c.id.startsWith('Girls')) {
-            girlsClasses.push(classWithRank);
-        } else {
-            boysClasses.push(classWithRank);
-        }
+        const classWithRank = { ...c, rank: rankMap.get(c.id) || 0 };
+        if (c.id.startsWith('Girls')) girlsClasses.push(classWithRank);
+        else boysClasses.push(classWithRank);
     });
 
-    // --- NEW: Helper function to render a section (Girls or Boys) ---
+    // --- Helper function to render a section ---
     const renderSection = (classes, title, headerColor, headerBg) => {
         if (classes.length === 0) return '';
 
@@ -866,16 +871,9 @@ const renderClassList = () => {
                 </h2>
                 <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
                     ${classes.map(c => {
-                        // Determine card color (remains in the original card logic)
                         const cardBgColor = c.id.startsWith('Girls') ? 'bg-pink-50' : 'bg-blue-50';
-
-                        // Calculate width for the progress bar based on cumulative average score
                         const avgScoreWidth = Math.min(parseFloat(c.averageScore), 100).toFixed(0);
-                        
-                        // Determine Color for Present Count (Green if high, Red if low)
                         const presentColor = c.presentToday >= (c.totalStudents * 0.9) ? 'text-green-600' : 'text-red-500';
-
-                        // Calculate Trophy HTML
                         const trophyHtml = getTrophyHtml(c.rank);
                         
                         return `
@@ -896,25 +894,30 @@ const renderClassList = () => {
                                     <p class="text-2xs text-gray-500 font-semibold mr-1 leading-none">Daily:</p>
                                     <p class="font-extrabold text-base text-indigo-700 leading-none">${c.dailyScoreText}%</p>
                                 </div>
-                                <div class="flex justify-between items-center text-center w-full pb-1 border-b border-gray-100 divide-x divide-gray-200">
+                                <div class="grid grid-cols-5 gap-0 text-center w-full pb-1 border-b border-gray-100 divide-x divide-gray-200">
                                     
-                                    <div class="flex-1 flex flex-col px-1">
-                                        <span class="text-2xs text-gray-500 font-medium leading-none">Tot</span>
-                                        <span class="text-xs font-bold text-gray-800 leading-snug">${c.totalStudents}</span>
-                                    </div>
-
-                                    <div class="flex-1 flex flex-col px-1">
-                                        <span class="text-2xs text-gray-500 font-medium leading-none">Prt</span>
+                                    <div class="flex flex-col">
+                                        <span class="text-2xs text-gray-500 font-medium leading-none">P</span>
                                         <span class="text-xs font-bold ${presentColor} leading-snug">${c.presentToday}</span>
                                     </div>
+                                    
+                                    <div class="flex flex-col">
+                                        <span class="text-2xs text-gray-500 font-medium leading-none">T</span>
+                                        <span class="text-xs font-bold text-gray-600 leading-snug">${c.tardyToday}</span>
+                                    </div>
+                                    
+                                    <div class="flex flex-col">
+                                        <span class="text-2xs text-gray-500 font-medium leading-none">A</span>
+                                        <span class="text-xs font-bold text-red-600 leading-snug">${c.absentToday}</span>
+                                    </div>
 
-                                    <div class="flex-1 flex flex-col px-1">
-                                        <span class="text-2xs text-gray-500 font-medium leading-none">Rpt</span>
+                                    <div class="flex flex-col">
+                                        <span class="text-2xs text-gray-500 font-medium leading-none">R</span>
                                         <span class="text-xs font-bold text-gray-800 leading-snug">${c.reportBrought}</span>
                                     </div>
 
-                                    <div class="flex-1 flex flex-col px-1">
-                                        <span class="text-2xs text-gray-500 font-medium leading-none">Sig</span>
+                                    <div class="flex flex-col">
+                                        <span class="text-2xs text-gray-500 font-medium leading-none">S</span>
                                         <span class="text-xs font-bold text-gray-800 leading-snug">${c.reportSigned}</span>
                                     </div>
                                 </div>
@@ -930,7 +933,6 @@ const renderClassList = () => {
             </div>
         `;
     }
-    // --- END: Helper function to render a section ---
 
     // Step 4: Render both sections
     let htmlContent = '';
@@ -939,7 +941,6 @@ const renderClassList = () => {
     
     container.innerHTML = htmlContent;
 
-    // --- EMPTY/INFO MESSAGE LOGIC ---
     if (allClassesInitial.length === 0) {
          container.innerHTML = `<p class="text-center text-gray-500 italic py-10">No class data found. Check definitions or initialization.</p>`;
     } else if (allClassesInitial.every(c => c.performance.text === 'No Data')) {
@@ -968,6 +969,9 @@ const renderClassList = () => {
         /**
          * Renders the detail entry panel structure for the selected class into the modal content area.
          */
+        /**
+         * Renders the detail entry panel structure for the selected class into the modal content area.
+         */
         const renderModalContent = (classId) => {
             const classDef = CLASS_DEFINITIONS.find(c => c.id === classId);
             if (!classDef) return;
@@ -977,7 +981,7 @@ const renderClassList = () => {
             const statusColor = isEditable ? 'text-indigo-700' : 'text-gray-500';
 
             if (!currentReports[classId]) {
-                currentReports[classId] = { totalStudents: 0, presentToday: 0, progressReportBrought: 0, progressReportSigned: 0 };
+                currentReports[classId] = { totalStudents: 0, presentToday: 0, tardyToday: 0, progressReportBrought: 0, progressReportSigned: 0 };
             }
 
             selectedClassId = classId;
@@ -986,8 +990,12 @@ const renderClassList = () => {
             // CRITICAL DEFENSE: Use 0 if the field is missing from the report object
             const totalStudents = report.totalStudents || 0;
             const presentToday = report.presentToday || 0;
+            const tardyToday = report.tardyToday || 0;
             const reportBrought = report.progressReportBrought || 0;
             const reportSigned = report.progressReportSigned || 0;
+            
+            // Calculate Absent
+            const absentToday = totalStudents > 0 ? Math.max(0, totalStudents - presentToday - tardyToday) : 0;
 
             document.getElementById('details-panel-content').innerHTML = `
                 <div class="p-4 space-y-4 shadow-none border-none">
@@ -1004,26 +1012,39 @@ const renderClassList = () => {
 
                     <div class="space-y-4">
                         <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label for="totalStudents" class="block text-xs font-medium text-gray-700 mb-1">Total Students in Class</label>
+                            <div class="col-span-2 sm:col-span-1">
+                                <label for="totalStudents" class="block text-xs font-medium text-gray-700 mb-1">Total Students</label>
                                 <input type="number" id="totalStudents" value="${totalStudents}" oninput="updateReportEntry('${classId}', 'totalStudents', this.value)"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-lg ${disabledAttr ? 'bg-gray-100' : ''}" placeholder="0" min="0" ${disabledAttr}>
                             </div>
-                            <div>
-                                <label for="presentToday" class="block text-xs font-medium text-gray-700 mb-1">Students Present Today</label>
+                            <div class="col-span-2 sm:col-span-1">
+                                <label for="absentToday" class="block text-xs font-medium text-gray-500 mb-1">Absent (Auto-calc)</label>
+                                <input type="number" id="absentToday" value="${absentToday}" readonly disabled
+                                    class="w-full px-3 py-2 border border-gray-200 bg-gray-100 text-red-600 font-bold rounded-lg shadow-sm font-mono text-lg" placeholder="0">
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                             <div>
+                                <label for="presentToday" class="block text-xs font-medium text-gray-700 mb-1">Present Today</label>
                                 <input type="number" id="presentToday" value="${presentToday}" oninput="updateReportEntry('${classId}', 'presentToday', this.value)"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-lg ${disabledAttr ? 'bg-gray-100' : ''}" placeholder="0" min="0" ${disabledAttr}>
+                            </div>
+                             <div>
+                                <label for="tardyToday" class="block text-xs font-medium text-gray-700 mb-1">Tardy Today</label>
+                                <input type="number" id="tardyToday" value="${tardyToday}" oninput="updateReportEntry('${classId}', 'tardyToday', this.value)"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-lg ${disabledAttr ? 'bg-gray-100' : ''}" placeholder="0" min="0" ${disabledAttr}>
                             </div>
                         </div>
 
                         <div class="space-y-3 pt-2 border-t border-dashed">
                             <div>
-                                <label for="reportBrought" class="block text-xs font-medium text-gray-700 mb-1">Students Who Brought Progress Report</label>
+                                <label for="reportBrought" class="block text-xs font-medium text-gray-700 mb-1">Progress Reports Brought</label>
                                 <input type="number" id="reportBrought" value="${reportBrought}" oninput="updateReportEntry('${classId}', 'progressReportBrought', this.value)"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-lg ${disabledAttr ? 'bg-gray-100' : ''}" placeholder="0" min="0" ${disabledAttr}>
                             </div>
                             <div>
-                                <label for="reportSigned" class="block text-xs font-medium text-gray-700 mb-1">Students with Signed Progress Report</label>
+                                <label for="reportSigned" class="block text-xs font-medium text-gray-700 mb-1">Progress Reports Signed</label>
                                 <input type="number" id="reportSigned" value="${reportSigned}" oninput="updateReportEntry('${classId}', 'progressReportSigned', this.value)"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-lg ${disabledAttr ? 'bg-gray-100' : ''}" placeholder="0" min="0" ${disabledAttr}>
                             </div>
@@ -1068,6 +1089,9 @@ const renderClassList = () => {
         /**
          * Updates the local state object for the selected class report and performs data integrity checks.
          */
+        /**
+         * Updates the local state object for the selected class report and performs data integrity checks.
+         */
         window.updateReportEntry = (classId, key, value) => {
             if (selectedDateId !== todayDateId) return;
 
@@ -1075,44 +1099,65 @@ const renderClassList = () => {
             if (isNaN(numValue) || numValue < 0) numValue = 0;
             
             if (!currentReports[classId]) {
-                currentReports[classId] = { totalStudents: 0, presentToday: 0, progressReportBrought: 0, progressReportSigned: 0 };
+                currentReports[classId] = { totalStudents: 0, presentToday: 0, tardyToday: 0, progressReportBrought: 0, progressReportSigned: 0 };
             }
 
             currentReports[classId][key] = numValue;
 
-            const totalStudents = currentReports[classId].totalStudents || 0;
-            const dependentKeys = ['presentToday', 'progressReportBrought', 'progressReportSigned'];
-            
-            // Logic to ensure dependent counts do not exceed totalStudents
-            if (key === 'totalStudents') {
-                dependentKeys.forEach(depKey => {
-                    const depValue = currentReports[classId][depKey] || 0;
-                    if (depValue > totalStudents) {
-                        currentReports[classId][depKey] = totalStudents;
-                        
-                        let inputId = null;
-                        if (depKey === 'presentToday') inputId = 'presentToday';
-                        else if (depKey === 'progressReportBrought') inputId = 'reportBrought';
-                        else if (depKey === 'progressReportSigned') inputId = 'reportSigned';
-                        
-                        // Must update the input element value to reflect the correction
-                        const inputElement = document.getElementById(inputId);
-                        if (inputElement) inputElement.value = totalStudents;
-                    }
-                });
-            } else if (dependentKeys.includes(key) && numValue > totalStudents) {
-                currentReports[classId][key] = totalStudents; 
-                
-                // Must update the input element value to reflect the correction
-                let inputId = null;
-                if (key === 'presentToday') inputId = 'presentToday';
-                else if (key === 'progressReportBrought') inputId = 'reportBrought';
-                else if (key === 'progressReportSigned') inputId = 'reportSigned';
+            // Retrieve latest values
+            const total = currentReports[classId].totalStudents || 0;
+            let present = currentReports[classId].presentToday || 0;
+            let tardy = currentReports[classId].tardyToday || 0;
 
-                const inputElement = document.getElementById(inputId);
-                if (inputElement) inputElement.value = totalStudents;
+            // 1. Logic to ensure (Present + Tardy) does not exceed Total
+            if (key === 'presentToday' || key === 'tardyToday' || key === 'totalStudents') {
+                
+                if (present + tardy > total) {
+                    // If user edited present, scale back tardy; if user edited tardy, scale back present
+                    // Or simplistically: clamp the one being edited?
+                    // Better UX: Adjust the *other* value if possible, or just cap. 
+                    // Strict cap:
+                    if (key === 'presentToday') {
+                        // If present is too high, reduce it to total - tardy
+                        // Actually, better to just clamp input.
+                        if (numValue > total) {
+                            currentReports[classId][key] = total;
+                            document.getElementById(key).value = total;
+                            // recalculate
+                            present = currentReports[classId].presentToday;
+                        }
+                        // If still overflow (e.g. total=30, present=20, tardy=15 -> total 35), reduce Tardy? 
+                        // No, just let input validation catch the combination or auto-adjust absent.
+                    }
+                }
+                
+                // Calculate Absent
+                const absent = Math.max(0, total - (present + tardy));
+                const absentInput = document.getElementById('absentToday');
+                if (absentInput) absentInput.value = absent;
             }
+
+            // 2. Standard overflow checks for Reports
+            const dependentKeys = ['progressReportBrought', 'progressReportSigned'];
             
+            if (key === 'totalStudents') {
+                // Check all
+                ['presentToday', 'tardyToday', 'progressReportBrought', 'progressReportSigned'].forEach(k => {
+                     if ((currentReports[classId][k] || 0) > total) {
+                         currentReports[classId][k] = total;
+                         // Update DOM
+                         let elId = k === 'progressReportBrought' ? 'reportBrought' : k === 'progressReportSigned' ? 'reportSigned' : k;
+                         const el = document.getElementById(elId);
+                         if(el) el.value = total;
+                     }
+                });
+            } else if (dependentKeys.includes(key) && numValue > total) {
+                currentReports[classId][key] = total;
+                let inputId = key === 'progressReportBrought' ? 'reportBrought' : 'reportSigned';
+                const inputElement = document.getElementById(inputId);
+                if (inputElement) inputElement.value = total;
+            }
+
             updateModalScoreDisplay(classId);
             document.getElementById('modal-save-button').disabled = false;
         };
