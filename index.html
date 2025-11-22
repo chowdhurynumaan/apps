@@ -278,6 +278,9 @@
         /**
          * Calculates the Daily Class Score (DCS) out of 100 based on number of students.
          */
+        /**
+         * Calculates the Daily Class Score (DCS) out of 100 based on number of students.
+         */
         const calculateDailyScore = (report) => {
             // CRITICAL DEFENSE: Use 0 if a key is missing from the report object
             const totalStudents = report.totalStudents || 0;
@@ -343,6 +346,9 @@
          * @param {object} report - The current daily report data for this class/day.
          * @returns {string} The full HTML string for the form.
          */
+        /**
+         * Generates the HTML form for data entry inside the modal.
+         */
         const renderReportForm = (classDef, report) => {
             const isReportEntered = report.totalStudents !== undefined && report.totalStudents !== 0;
 
@@ -396,6 +402,9 @@
             `;
         };
         
+        /**
+         * Checks the validity of the input fields and returns the report object or null.
+         */
         /**
          * Checks the validity of the input fields and returns the report object or null.
          */
@@ -894,8 +903,13 @@ const renderClassList = () => {
                                     <p class="text-2xs text-gray-500 font-semibold mr-1 leading-none">Daily:</p>
                                     <p class="font-extrabold text-base text-indigo-700 leading-none">${c.dailyScoreText}%</p>
                                 </div>
-                                <div class="grid grid-cols-5 gap-0 text-center w-full pb-1 border-b border-gray-100 divide-x divide-gray-200">
+                                <div class="grid grid-cols-6 gap-0 text-center w-full pb-1 border-b border-gray-100 divide-x divide-gray-200">
                                     
+                                    <div class="flex flex-col">
+                                        <span class="text-2xs text-gray-500 font-medium leading-none">T</span>
+                                        <span class="text-xs font-bold text-gray-800 leading-snug">${c.totalStudents}</span>
+                                    </div>
+
                                     <div class="flex flex-col">
                                         <span class="text-2xs text-gray-500 font-medium leading-none">P</span>
                                         <span class="text-xs font-bold ${presentColor} leading-snug">${c.presentToday}</span>
@@ -966,6 +980,9 @@ const renderClassList = () => {
         }
 
 
+        /**
+         * Renders the detail entry panel structure for the selected class into the modal content area.
+         */
         /**
          * Renders the detail entry panel structure for the selected class into the modal content area.
          */
@@ -1089,9 +1106,6 @@ const renderClassList = () => {
         /**
          * Updates the local state object for the selected class report and performs data integrity checks.
          */
-        /**
-         * Updates the local state object for the selected class report and performs data integrity checks.
-         */
         window.updateReportEntry = (classId, key, value) => {
             if (selectedDateId !== todayDateId) return;
 
@@ -1113,21 +1127,13 @@ const renderClassList = () => {
             if (key === 'presentToday' || key === 'tardyToday' || key === 'totalStudents') {
                 
                 if (present + tardy > total) {
-                    // If user edited present, scale back tardy; if user edited tardy, scale back present
-                    // Or simplistically: clamp the one being edited?
-                    // Better UX: Adjust the *other* value if possible, or just cap. 
-                    // Strict cap:
                     if (key === 'presentToday') {
-                        // If present is too high, reduce it to total - tardy
-                        // Actually, better to just clamp input.
+                        // If input exceeds total, clamp to Total. The user must adjust manually if Tardy is involved.
                         if (numValue > total) {
                             currentReports[classId][key] = total;
                             document.getElementById(key).value = total;
-                            // recalculate
                             present = currentReports[classId].presentToday;
                         }
-                        // If still overflow (e.g. total=30, present=20, tardy=15 -> total 35), reduce Tardy? 
-                        // No, just let input validation catch the combination or auto-adjust absent.
                     }
                 }
                 
