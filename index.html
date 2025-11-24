@@ -167,6 +167,7 @@
             getFirestore, 
             doc, 
             setDoc, 
+            updateDoc,
             onSnapshot, 
             collection, 
             serverTimestamp,
@@ -174,7 +175,10 @@
             setLogLevel,
             getDoc,
             addDoc,
-            writeBatch
+            writeBatch,
+            query, // <-- New
+            where, // <-- New
+            orderBy // <-- New
         } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
         // --- FIREBASE CONFIGURATION (CRITICAL: Using user-provided config as base) ---
         
@@ -370,33 +374,41 @@ const ensureUserName = async () => {
         };
 
         /**
- * Fetches and renders the log history for a specific class into the modal.
+ * Fetches and renders the log history for a specific class from the NEW audit_trail subcollection.
  */
 const fetchAndRenderLogHistory = (classId) => {
-    // New path: /data/daily_attendance_reports/[dateID]/[classID]/audit_trail
-    // The report document for the specific class is now the parent of the audit trail subcollection.
-    // New Path: /data/daily_attendance_reports/[dateID]/classes/[classID]/audit_trail
-    const reportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', selectedDateId, 'classes', classId);
-    const logsRef = collection(reportDocRef, 'audit_trail');
+    // NEW PATH: Listen to the audit_trail subcollection under the date document
+    const auditTrailColRef = collection(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', selectedDateId, 'audit_trail');
     const logHistoryContainer = document.getElementById('log-history-container');
     if (!logHistoryContainer) return;
 
-    // Simple unsubscribe if we switch classes (optional but good practice)
+    // Build a query to fetch ALL logs for the day, sorted by time.
+    // This avoids the composite index requirement by removing the 'where' filter.
+    const logsQuery = query(
+        auditTrailColRef,
+        orderBy('timestamp', 'desc')
+    );
+
+    // Simple unsubscribe if we switch classes
     if (window.logHistoryUnsubscribe) {
         window.logHistoryUnsubscribe();
     }
 
     // Set up a real-time listener for the logs
-    window.logHistoryUnsubscribe = onSnapshot(logsRef, (querySnapshot) => {
+    window.logHistoryUnsubscribe = onSnapshot(logsQuery, (querySnapshot) => {
         let logHtml = '';
-        if (querySnapshot.empty) {
+        const allLogs = [];
+        
+        // 1. Fetch ALL logs for the date
+        querySnapshot.forEach(doc => allLogs.push(doc.data()));
+
+        // 2. Filter logs client-side to only show the selected class
+        const logs = allLogs.filter(log => log.classId === classId);
+
+        if (logs.length === 0) {
             logHtml = '<p class="text-sm text-gray-500 italic text-center py-4">No log history found for this class.</p>';
         } else {
-            // Sort by timestamp descending
-            const logs = [];
-            querySnapshot.forEach(doc => logs.push(doc.data()));
-            logs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-
+            // Logs are already sorted by time (via the simplified query) and now filtered by class
             logHtml = logs.map(log => `
                         <div class="border-b border-gray-100 py-2 last:border-b-0">
                             <p class="text-xs font-semibold text-gray-800">${log.userName || 'Unknown User'}</p>
@@ -840,52 +852,63 @@ const handleAppReady = () => {
 const setupFirestoreListeners = () => {
     if (!isAuthReady) return; 
 
-    // 1. Daily Report Listener - LISTEN TO THE NEW 'classes' SUBCOLLECTION
-    // Path: /artifacts/{appId}/public/data/daily_attendance_reports/{dateID}/classes
-    const dailyReportsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', selectedDateId, 'classes');
+    // 1. Daily Report Listener - LISTEN TO THE SINGLE DOCUMENT PER DATE
+// Path: /artifacts/{appId}/public/data/daily_attendance_reports/{dateID}
+const dailyReportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', selectedDateId);
 
-    // Unsubscribe from old listener if it exists
-    if (window.dailyReportUnsubscribe) {
-        window.dailyReportUnsubscribe();
-    }
+// Unsubscribe from old listener if it exists
+if (window.dailyReportUnsubscribe) {
+    window.dailyReportUnsubscribe();
+}
     
     // Store the selectedDateId at the time the listener is created
     // This allows us to check if the data returned is for the date the user is currently viewing.
     const expectedDateId = selectedDateId;
 
-    window.dailyReportUnsubscribe = onSnapshot(dailyReportsCollectionRef, (querySnapshot) => {
-        const newReports = {};
+    window.dailyReportUnsubscribe = onSnapshot(dailyReportDocRef, (docSnapshot) => {
+    const newReports = {};
+    const expectedDateId = selectedDateId; 
+    
+    // If the document exists, its fields are the class reports
+    if (docSnapshot.exists()) {
+        const data = docSnapshot.data();
         
-        querySnapshot.forEach((doc) => {
-            // The document ID is the class ID in the new structure
-            const classId = doc.id; 
-            newReports[classId] = doc.data();
+        // Iterate through all fields in the document
+        Object.keys(data).forEach(key => {
+            // Filter out non-class fields (like 'audit_trail' and 'lastUpdated')
+            // This assumes all class IDs contain a hyphen, e.g., 'Boys-1A'.
+            if (key !== 'audit_trail' && key !== 'lastUpdated' && key.includes('-')) {
+                newReports[key] = data[key];
+            }
         });
+    } else {
+        console.log(`No daily report document found for ${expectedDateId}.`);
+    }
 
-        // Update the global state
-        currentReports = newReports;
-        
-        console.log(`Daily Reports updated for ${expectedDateId} (Collection Fetch):`, currentReports);
-        
-        // Re-render the class tiles with the fresh data (Uses renderClassList for consistency)
-        renderClassList(); 
+    // Update the global state
+    currentReports = newReports;
+    console.log(`Daily Reports updated for ${expectedDateId} (Document Fetch):`, currentReports);
+    // Re-render the class tiles with the fresh data (Uses renderClassList for consistency)
+    renderClassList();
+    // If the modal is open, ensure it reflects the latest data
+    if (selectedClassId && !document.getElementById('report-modal').classList.contains('hidden')) {
+        openReportModal(selectedClassId);
+    }
 
-        // If the modal is open, ensure it reflects the latest data
-        if (selectedClassId && document.getElementById('report-modal').classList.contains('hidden') === false) {
-            updateModalContent(selectedClassId);
-        }
-
-        // Only hide the loading overlay if we successfully fetched data for the currently selected date.
-        // This fixes the "stuck in loading" issue when switching dates.
-        if (selectedDateId === expectedDateId) {
-            document.getElementById('initial-message').classList.add('hidden');
-        }
-
-    }, (error) => {
-        console.error(`Error fetching daily report collection for ${expectedDateId}:`, error);
-        // Always hide the overlay on error, regardless of the date, to unblock the UI.
-        document.getElementById('initial-message').classList.add('hidden');
-    });
+    // Hide the initial message overlay once data is received
+    const initialMessage = document.getElementById('initial-message');
+    if (!initialMessage.classList.contains('hidden')) {
+        initialMessage.classList.add('hidden');
+    }
+}, (error) => {
+    console.error("Error fetching daily reports:", error);
+    // Display error, but keep the UI minimally functional
+    currentReports = {};
+    renderClassList();
+    document.getElementById('initial-message-text').textContent = "Error loading daily reports. See console.";
+    document.getElementById('error-details').textContent = `Firestore Error: ${error.message}`;
+    document.getElementById('error-details').classList.remove('hidden');
+});
 
     // 2. Listener for Accumulated Scores (Always uses the latest data for overall ranking)
     if (!window.accumulatedScoresUnsubscribe) {
@@ -1402,35 +1425,45 @@ window.saveClassReport = async () => {
     const newDailyScore = calculateDailyScore(report);
     let message = ''; // Initialize message for use in the final success block
 
-    // 1. Transaction to atomically update the daily report and create the localized audit log
     try {
-        await runTransaction(db, async (transaction) => {
-            // Document reference for the Daily Report: /data/daily_attendance_reports/[dateID]/classes/[classID] (8 segments - valid path)
-            const dailyReportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', todayDateId, 'classes', classId);
+    // 1. Transaction for Daily Report (update fields) and Audit Log (create new document)
+    await runTransaction(db, async (transaction) => {
+        // A. Daily Report Document Reference (single document per date)
+        const dailyReportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', todayDateId);
 
-            // A. Update Final State: Write the report data to the new document path.
-            const dailyReportPayload = { 
-                ...report, 
-                dailyScore: newDailyScore,
-                lastUpdated: serverTimestamp(),
-                // Keep the document structure simple with only the report data fields
-            };
-            transaction.set(dailyReportDocRef, dailyReportPayload);
+        // 1. Prepare the Daily Report Payload (Map Field) - Uses serverTimestamp() correctly
+        const dailyReportPayload = {
+            lastUpdated: serverTimestamp(),
+            dailyScore: newDailyScore, 
+            ...report
+        };
 
-            // B. Create Log Entry: Write to the new audit_trail subcollection
-            const auditTrailColRef = collection(dailyReportDocRef, 'audit_trail');
-            const logEntry = {
-                userName: currentUserName,
-                userId: userId,
-                action: action,
-                timestamp: serverTimestamp(),
-                score: newDailyScore, // Log the score at the time of entry
-                reportData: dailyReportPayload // Log the full report payload for history
-            };
-            // Note: Since we use runTransaction, we must use transaction.set with an auto-generated doc reference
-            transaction.set(doc(auditTrailColRef), logEntry);
-        });
+        // Create update object for the main document
+        const updates = {
+            [classId]: dailyReportPayload, 
+        };
+        
+        // Set/Merge the main report update
+        transaction.set(dailyReportDocRef, updates, { merge: true });
 
+        // B. Audit Log Subcollection Reference
+        const auditTrailColRef = collection(dailyReportDocRef, 'audit_trail');
+        
+        // 2. Prepare the Log Entry (for the new subcollection document)
+        // Since this is a TOP-LEVEL field in a new document, serverTimestamp() is valid here.
+        const logEntry = {
+            classId: classId, // Add class ID for filtering in read logic (Step 2.2 uses this)
+            userName: currentUserName,
+            userId: userId,
+            action: action,
+            timestamp: serverTimestamp(), // FIX: Valid here as it's a top-level field
+            score: newDailyScore, 
+            reportData: dailyReportPayload // Safe to nest serverTimestamp here.
+        };
+
+        // Add the new log entry document to the subcollection
+        transaction.set(doc(auditTrailColRef), logEntry);
+    });
         // 2. Separate Transaction for Accumulated Score Update
         // This existing logic ensures safe read-modify-write for cumulative totals.
 
