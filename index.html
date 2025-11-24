@@ -133,6 +133,21 @@
                 </button>
             </div>
         </div>
+        <div id="name-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-80 z-40 flex items-center justify-center p-4" onclick="event.stopPropagation()">
+            <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full" onclick="event.stopPropagation()">
+                <h3 class="text-xl font-bold mb-3 text-indigo-700">Action Required: Enter Your Name</h3>
+                <p class="text-sm text-gray-700 mb-4">Please enter your name for accountability logs. This ensures your entries are logged correctly.</p>
+                
+                <label for="name-input" class="block text-sm font-medium text-gray-700 mb-1">Your Name (e.g., Jane Smith)</label>
+                <input type="text" id="name-input" 
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 mb-4" 
+                       placeholder="Enter your name" required>
+
+                <button id="save-name-btn" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50">
+                    Save Name and Continue
+                </button>
+            </div>
+        </div>
     </main>
 
     <!-- Firebase SDK Imports -->
@@ -156,9 +171,11 @@
             collection, 
             serverTimestamp,
             runTransaction,
-            setLogLevel
+            setLogLevel,
+            getDoc,
+            addDoc,
+            writeBatch
         } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
-
         // --- FIREBASE CONFIGURATION (CRITICAL: Using user-provided config as base) ---
         
         const USER_PROVIDED_FIREBASE_CONFIG = {
@@ -197,6 +214,7 @@
         let currentAccumulatedScores = {}; // Accumulated scores (all classes)
         let selectedClassId = null; 
         let isSaving = false;
+        let currentUserName = null; // New global variable to hold the user's name
         
         const getTodayDateId = () => {
             const now = new Date();
@@ -225,6 +243,61 @@
         ];
         
         // --- UTILITY FUNCTIONS ---
+        
+        /**
+         * Shows a custom modal to prompt the user for their name, returning a Promise 
+         * that resolves with the name or rejects if cancelled/empty.
+         */
+        const promptForUserName = () => {
+            return new Promise((resolve, reject) => {
+                const nameModal = document.getElementById('name-modal');
+                const nameInput = document.getElementById('name-input');
+                const saveButton = document.getElementById('save-name-btn');
+                
+                // Clear any previous input and show the modal
+                nameInput.value = '';
+                saveButton.disabled = true;
+                nameModal.classList.remove('hidden');
+
+                const validateAndSave = () => {
+                    const name = nameInput.value.trim();
+                    if (name) {
+                        nameModal.classList.add('hidden');
+                        cleanupListeners();
+                        resolve(name);
+                    } else {
+                        // Optionally provide visual feedback for empty input
+                        nameInput.focus();
+                        showMessage('Input Needed', 'Please enter a valid name to proceed.');
+                    }
+                };
+                
+                const handleKeydown = (e) => {
+                    // Enable save button on input change
+                    saveButton.disabled = nameInput.value.trim().length === 0;
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (!saveButton.disabled) {
+                            validateAndSave();
+                        }
+                    }
+                };
+
+                const cleanupListeners = () => {
+                    saveButton.removeEventListener('click', validateAndSave);
+                    nameInput.removeEventListener('input', handleKeydown);
+                    nameInput.removeEventListener('keydown', handleKeydown);
+                };
+
+                // Add listeners
+                saveButton.addEventListener('click', validateAndSave);
+                nameInput.addEventListener('input', handleKeydown);
+                nameInput.addEventListener('keydown', handleKeydown);
+                
+                // Set focus to the input field
+                nameInput.focus();
+            });
+        };
 
         /**
          * Custom function to display a message to the user (replaces alert()).
@@ -235,6 +308,7 @@
             document.getElementById('message-text').textContent = text;
             box.classList.remove('hidden');
         };
+        
 
         /**
          * Closes the modal.
@@ -243,6 +317,104 @@
             document.getElementById('report-modal').classList.add('hidden');
             selectedClassId = null;
         }
+        /**
+ * Prompts the user for their name if it hasn't been set, then fetches it from Firestore.
+ * If not in Firestore, prompts the user and saves it to Firestore (and local state).
+ * Sets the global currentUserName.
+ */
+const ensureUserName = async () => {
+    // If we already have a name in memory, return.
+    if (currentUserName) return; 
+
+    // 1. Try reading from Firestore
+    const userDocRef = doc(db, 'users', userId);
+    try {
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists() && userDoc.data().userName) {
+            currentUserName = userDoc.data().userName;
+            console.log("User name fetched from Firestore:", currentUserName);
+            return;
+        }
+    } catch (error) {
+        console.error("Error fetching user name from Firestore:", error);
+        // Continue to prompt if fetch fails
+    }
+
+    // 2. If no name found, actively prompt the user using the custom modal
+    try {
+        const name = await promptForUserName();
+        if (name) {
+            currentUserName = name;
+            
+            // 3. Save the newly entered name to Firestore
+            await setDoc(userDocRef, { 
+                userName: name,
+                lastLogin: serverTimestamp()
+            }, { merge: true });
+            console.log(`User name "${name}" saved to Firestore.`);
+        }
+    } catch (error) {
+        // User cancelled or an error occurred. currentUserName remains null.
+        console.log("Name entry cancelled or failed:", error.message);
+    }
+};
+
+        /**
+         * Formats a Firebase timestamp for display.
+         */
+        const formatTimestamp = (timestamp) => {
+            if (!timestamp) return 'N/A';
+            // Firebase timestamps can be an object with 'seconds' and 'nanoseconds'
+            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+            return date.toLocaleString();
+        };
+
+        /**
+ * Fetches and renders the log history for a specific class into the modal.
+ */
+const fetchAndRenderLogHistory = (classId) => {
+    // New path: /data/daily_attendance_reports/[dateID]/[classID]/audit_trail
+    // The report document for the specific class is now the parent of the audit trail subcollection.
+    // New Path: /data/daily_attendance_reports/[dateID]/classes/[classID]/audit_trail
+    const reportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', selectedDateId, 'classes', classId);
+    const logsRef = collection(reportDocRef, 'audit_trail');
+    const logHistoryContainer = document.getElementById('log-history-container');
+    if (!logHistoryContainer) return;
+
+    // Simple unsubscribe if we switch classes (optional but good practice)
+    if (window.logHistoryUnsubscribe) {
+        window.logHistoryUnsubscribe();
+    }
+
+    // Set up a real-time listener for the logs
+    window.logHistoryUnsubscribe = onSnapshot(logsRef, (querySnapshot) => {
+        let logHtml = '';
+        if (querySnapshot.empty) {
+            logHtml = '<p class="text-sm text-gray-500 italic text-center py-4">No log history found for this class.</p>';
+        } else {
+            // Sort by timestamp descending
+            const logs = [];
+            querySnapshot.forEach(doc => logs.push(doc.data()));
+            logs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
+            logHtml = logs.map(log => `
+                        <div class="border-b border-gray-100 py-2 last:border-b-0">
+                            <p class="text-xs font-semibold text-gray-800">${log.userName || 'Unknown User'}</p>
+                            <p class="text-2xs text-gray-500">${formatTimestamp(log.timestamp)}</p>
+                            <p class="text-xs text-gray-600">Action: ${log.action || 'Report Saved/Updated'}</p>
+                        </div>
+                    `).join('');
+        }
+        
+        logHistoryContainer.innerHTML = `
+                    <h3 class="text-lg font-bold text-gray-700 border-b pb-1 mb-2">Accountability Log</h3>
+                    ${logHtml}
+                `;
+    }, (error) => {
+        console.error("Error fetching log history:", error);
+        logHistoryContainer.innerHTML = '<p class="text-sm text-red-500 italic text-center py-4">Error loading log history.</p>';
+    });
+};
 
         /**
          * Converts YYYY-MM-DD date ID to a display format.
@@ -525,12 +697,13 @@
                 const dailyReportDocRef = doc(db, 'users', userId, 'dailyReports', selectedDateId, 'classes', classId);
                 
                 // Add metadata for the database record
-                const dataToSave = {
-                    ...newReport,
-                    dateId: selectedDateId,
-                    userId: userId,
-                    timestamp: serverTimestamp(), // Use server timestamp for accurate ordering/timing
-                };
+            const dataToSave = {
+                ...newReport,
+                dateId: selectedDateId,
+                userId: userId,
+                userName: currentUserName, // <<< NEW LINE: Store the user's name
+                timestamp: serverTimestamp(), // Use server timestamp for accurate ordering/timing
+            };
 
                 // --- TRANSACTION to Update Daily Report and Accumulated Scores ---
                 await runTransaction(db, async (transaction) => {
@@ -598,23 +771,21 @@
         };
 
         // --- FIREBASE AND AUTHENTICATION ---
-        
-        const handleAppReady = () => {
-            document.getElementById('date-selector').value = todayDateId;
-            
-            const initialMessage = document.getElementById('initial-message');
-            document.getElementById('loading-spinner').classList.add('hidden');
-            document.getElementById('initial-message-text').textContent = "Authentication Complete! Fetching data...";
-            
-            setupFirestoreListeners();
 
-            // Set a small delay before hiding the loading overlay, ensuring data fetch is initiated
-            setTimeout(() => {
-                // CRITICAL: Render the initial empty/placeholder UI immediately
-                renderClassList();
-                initialMessage.classList.add('hidden'); // This is the only place we hide the overlay
-            }, 500);
-        };
+const handleAppReady = () => {
+    document.getElementById('date-selector').value = todayDateId;
+    const initialMessage = document.getElementById('initial-message');
+    document.getElementById('loading-spinner').classList.add('hidden');
+    document.getElementById('initial-message-text').textContent = "Authentication Complete! Fetching data...";
+    setupFirestoreListeners();
+    // Set a small delay before hiding the loading overlay, ensuring data fetch is initiated
+    setTimeout(() => {
+        // CRITICAL: Render the initial empty/placeholder UI immediately
+        renderClassList();
+        initialMessage.classList.add('hidden');
+        // This is the only place we hide the overlay
+    }, 500);
+};
 
 
         const initializeFirebase = () => {
@@ -1068,6 +1239,10 @@ const renderClassList = () => {
                         </div>
                     </div>
                 </div>
+                
+                <div id="log-history-container" class="mt-6 p-4 bg-gray-50 rounded-xl shadow-inner max-h-64 overflow-y-auto">
+                    <p class="text-sm text-gray-400 italic text-center">Loading log history...</p>
+                </div>
             `;
             
             updateModalScoreDisplay(classId);
@@ -1099,6 +1274,9 @@ const renderClassList = () => {
             selectedClassId = classId;
             renderModalContent(classId);
             document.getElementById('report-modal').classList.remove('hidden');
+            
+            // CRITICAL NEW CALL: Fetch and display log history when modal opens
+            fetchAndRenderLogHistory(classId);
         };
 
         // --- DATA INPUT & PROCESSING ---
@@ -1169,149 +1347,165 @@ const renderClassList = () => {
         };
 
         /**
-         * Executes the save operation for a single class.
-         */
-        window.saveClassReport = async () => {
-            if (selectedDateId !== todayDateId) {
-                showMessage('Access Denied', 'You can only save or modify reports for the current date.');
-                return;
-            }
-            const classId = selectedClassId;
-            if (isSaving || !isAuthReady || !classId) return;
-
-            isSaving = true;
-            const saveButton = document.getElementById('modal-save-button');
-            const buttonText = document.getElementById('modal-save-button-text');
-            const spinner = document.getElementById('modal-save-spinner');
-
-            saveButton.disabled = true;
-            buttonText.textContent = 'Saving...';
-            spinner.classList.remove('hidden');
-
-            const report = currentReports[classId];
-            if (!report || report.totalStudents <= 0) {
-                showMessage('Save Failed', `Cannot save report for ${classId}. Please enter the total number of students.`);
-                isSaving = false;
-                saveButton.disabled = false;
-                buttonText.textContent = 'Save and Close Report';
-                spinner.classList.add('hidden');
-                return;
-            }
-
-            try {
-                // 1. Write the daily report entry
-                const dailyReportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', todayDateId);
-                const updatePayload = { [classId]: { ...report, lastUpdated: serverTimestamp() } };
-                await setDoc(dailyReportDocRef, updatePayload, { merge: true });
-
-                // 2. Update Accumulated Score using a Transaction
-                const newDailyScore = calculateDailyScore(report);
-                const accumulatedDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'accumulated_class_scores', classId);
-                let cumulativeUpdateSuccessful = false;
-                let message = '';
-
-                await runTransaction(db, async (transaction) => {
-                    const accumulatedDoc = await transaction.get(accumulatedDocRef);
-                    
-                    // CRITICAL DEFENSE: Get data with defaults
-                    const data = accumulatedDoc.exists() ? accumulatedDoc.data() : {};
-                    let totalScore = data.totalScore || 0;
-                    let daysCount = data.daysCount || 0;
-                    let lastReportDate = data.lastReportDate || '';
-                    let lastScoreContribution = data.lastScoreContribution || 0;
-                    let updateRequired = false;
-
-                    // *** CRITICAL PATCH FOR LEGACY DATA ***
-                    if (accumulatedDoc.exists() && lastReportDate === todayDateId && lastScoreContribution === 0 && totalScore > 0) {
-                        console.warn(`[LEGACY DATA FIX] Re-aligning lastScoreContribution from totalScore (${totalScore}) for same-day correction on ${classId}.`);
-                        lastScoreContribution = totalScore;
-                    }
-                    // *** END LEGACY PATCH ***
-                    
-                    if (lastReportDate !== todayDateId) {
-                        // CASE A: NEW DAY - Add new score and increment day count
-                        totalScore += newDailyScore;
-                        daysCount += 1;
-                        lastReportDate = todayDateId;
-                        message = `Report for ${classId} saved successfully, and cumulative score added for a new day.`;
-                        updateRequired = true;
-                    } else if (newDailyScore !== lastScoreContribution) {
-                        // CASE B: SAME DAY, SCORE CHANGED - Correct the score contribution
-                        
-                        // Subtract the old contribution (which is now correctly aligned, even for legacy docs)
-                        totalScore -= lastScoreContribution; 
-                        
-                        // Add the new score
-                        totalScore += newDailyScore;        
-                        
-                        // Day count remains the same
-                        daysCount = daysCount;              
-                        
-                        message = `Report for ${classId} saved successfully. Cumulative score corrected from ${lastScoreContribution.toFixed(2)}% to ${newDailyScore.toFixed(2)}% for today.`;
-                        updateRequired = true;
-                    } else {
-                        // CASE C: SAME DAY, NO CHANGE
-                        message = `Report for ${classId} saved successfully. Cumulative score was already counted for today with the same value.`;
-                    }
-                    
-                    if (updateRequired) {
-                        lastScoreContribution = newDailyScore; // Update the contribution to the new score
-                        cumulativeUpdateSuccessful = true;
-
-                        // Ensure we don't save an average if daysCount somehow ended up 0
-                        const averageScore = daysCount > 0 ? totalScore / daysCount : 0;
-
-                        transaction.set(accumulatedDocRef, {
-                            classId: classId,
-                            totalScore: totalScore,
-                            daysCount: daysCount,
-                            averageScore: averageScore,
-                            lastReportDate: lastReportDate,
-                            lastScoreContribution: lastScoreContribution, 
-                            lastUpdated: serverTimestamp()
-                        }, { merge: true });
-                    }
-                });
-                
-                showMessage('Success!', message);
-                renderClassList();
-                closeModal();
-
-            } catch (error) {
-                console.error(`Error saving report for ${classId}:`, error);
-                showMessage('Error', `Failed to save report for ${classId}: ${error.message}`);
-                
-            } finally {
-                isSaving = false;
-                saveButton.disabled = false;
-                buttonText.textContent = 'Save and Close Report';
-                spinner.classList.add('hidden');
-            }
-        };
-
-        // --- INITIALIZATION ---
-        
-        window.onload = () => {
-            initializeFirebase();
-        };
-        
-        // Copy user ID utility
-document.getElementById('user-id-display-mobile').addEventListener('click', () => {
-    const idText = document.getElementById('user-id-display-mobile').textContent;
-    const id = idText.replace('ID: ', '');
-    try {
-        const tempInput = document.createElement('textarea');
-        tempInput.value = id;
-        document.body.appendChild(tempInput);
-        tempInput.select();
-        document.execCommand('copy');
-        document.body.removeChild(tempInput);
-        showMessage('Copied!', `User ID: ${id} has been copied to your clipboard.`);
-    } catch (err) {
-        console.error('Could not copy text: ', err);
-        showMessage('Error', 'Failed to copy User ID to clipboard.');
+ * Executes the save operation for a single class.
+ */
+window.saveClassReport = async () => {
+    if (selectedDateId !== todayDateId) {
+        showMessage('Access Denied', 'You can only save or modify reports for the current date.');
+        return;
     }
-});
+    const classId = selectedClassId;
+    if (isSaving || !isAuthReady || !classId) return;
+
+    // CRITICAL: Re-check user name before saving for accountability
+    await ensureUserName();
+    if (!currentUserName) {
+        showMessage('Action Blocked', 'You must enter your name to save a report for accountability.');
+        return;
+    }
+
+    isSaving = true;
+    const saveButton = document.getElementById('modal-save-button');
+    const buttonText = document.getElementById('modal-save-button-text');
+    const spinner = document.getElementById('modal-save-spinner');
+    saveButton.disabled = true;
+    buttonText.textContent = 'Saving...';
+    spinner.classList.remove('hidden');
+
+    const report = currentReports[classId];
+    if (!report || report.totalStudents <= 0) {
+        showMessage('Save Failed', `Cannot save report for ${classId}. Please enter the total number of students.`);
+        isSaving = false;
+        saveButton.disabled = false;
+        buttonText.textContent = 'Save and Close Report';
+        spinner.classList.add('hidden');
+        return;
+    }
+
+    // Determine if this is an update or new entry for logging
+    const isUpdate = currentReports[classId]?.lastUpdated !== undefined;
+    const action = isUpdate ? 'Report Update' : 'New Report Entry';
+    const newDailyScore = calculateDailyScore(report);
+    let message = ''; // Initialize message for use in the final success block
+
+    // 1. Transaction to atomically update the daily report and create the localized audit log
+    try {
+        await runTransaction(db, async (transaction) => {
+            // Document reference for the Daily Report: /data/daily_attendance_reports/[dateID]/classes/[classID] (8 segments - valid path)
+            const dailyReportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', todayDateId, 'classes', classId);
+
+            // A. Update Final State: Write the report data to the new document path.
+            const dailyReportPayload = { 
+                ...report, 
+                dailyScore: newDailyScore,
+                lastUpdated: serverTimestamp(),
+                // Keep the document structure simple with only the report data fields
+            };
+            transaction.set(dailyReportDocRef, dailyReportPayload);
+
+            // B. Create Log Entry: Write to the new audit_trail subcollection
+            const auditTrailColRef = collection(dailyReportDocRef, 'audit_trail');
+            const logEntry = {
+                userName: currentUserName,
+                userId: userId,
+                action: action,
+                timestamp: serverTimestamp(),
+                score: newDailyScore, // Log the score at the time of entry
+                reportData: dailyReportPayload // Log the full report payload for history
+            };
+            // Note: Since we use runTransaction, we must use transaction.set with an auto-generated doc reference
+            transaction.set(doc(auditTrailColRef), logEntry);
+        });
+
+        // 2. Separate Transaction for Accumulated Score Update
+        // This existing logic ensures safe read-modify-write for cumulative totals.
+
+        const accumulatedDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'accumulated_class_scores', classId);
+        
+        await runTransaction(db, async (transaction) => {
+            const accumulatedDoc = await transaction.get(accumulatedDocRef);
+            
+            // CRITICAL DEFENSE: Get data with defaults
+            const data = accumulatedDoc.exists() ? accumulatedDoc.data() : {};
+            let newTotalScore = data.totalScore || 0;
+            let newDaysCount = data.daysCount || 0;
+            let lastReportDate = data.lastReportDate || '';
+            let lastScoreContribution = data.lastScoreContribution || 0;
+
+            // *** CRITICAL PATCH FOR LEGACY DATA (from original code) *** // Ensures lastScoreContribution is not zero if totalScore is positive for same-day correction
+            if (accumulatedDoc.exists() && lastReportDate === todayDateId && lastScoreContribution === 0 && newTotalScore > 0) {
+                console.warn(`[LEGACY DATA FIX] Re-aligning lastScoreContribution from totalScore (${newTotalScore}) for same-day correction on ${classId}.`);
+                lastScoreContribution = newTotalScore;
+            }
+            // *** END LEGACY PATCH ***
+
+            if (lastReportDate !== todayDateId) {
+                // CASE A: NEW DAY - Add new score and increment day count
+                newTotalScore += newDailyScore;
+                newDaysCount += 1;
+                lastReportDate = todayDateId;
+                message = `Report for ${classId} saved successfully, and cumulative score added for a new day.`;
+                lastScoreContribution = newDailyScore; // Update contribution
+            } else if (newDailyScore !== lastScoreContribution) {
+                // CASE B: SAME DAY, SCORE CHANGED - Correct the score contribution
+                // Subtract the old contribution
+                newTotalScore -= lastScoreContribution;
+                // Add the new score
+                newTotalScore += newDailyScore;
+                // Day count remains the same
+                message = `Report for ${classId} updated successfully. Cumulative score corrected from ${lastScoreContribution.toFixed(2)} to ${newDailyScore.toFixed(2)}.`;
+                lastScoreContribution = newDailyScore; // Update contribution
+            } else {
+                // CASE C: SAME DAY, NO CHANGE (or initial save without accumulated data)
+                message = `Report for ${classId} saved successfully (no cumulative score change).`;
+            }
+            
+            // Final update of the accumulated score document
+            transaction.set(accumulatedDocRef, {
+                totalScore: newTotalScore,
+                daysCount: newDaysCount,
+                lastReportDate: todayDateId,
+                lastScoreContribution: lastScoreContribution
+            });
+        });
+        
+        showMessage('Success!', message); // Use the more detailed message
+        // Close the modal after successful save
+        closeModal();
+    } catch (error) {
+        console.error(`Error saving report for ${classId}:`, error);
+        showMessage('Error', `Failed to save report for ${classId}: ${error.message}`);
+    } finally {
+        isSaving = false;
+        saveButton.disabled = false;
+        buttonText.textContent = 'Save and Close Report';
+        spinner.classList.add('hidden');
+    }
+};
+
+                // --- INITIALIZATION ---
+                
+                window.onload = () => {
+                    initializeFirebase();
+                };
+                
+                // Copy user ID utility
+        document.getElementById('user-id-display-mobile').addEventListener('click', () => {
+            const idText = document.getElementById('user-id-display-mobile').textContent;
+            const id = idText.replace('ID: ', '');
+            try {
+                const tempInput = document.createElement('textarea');
+                tempInput.value = id;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempInput);
+                showMessage('Copied!', `User ID: ${id} has been copied to your clipboard.`);
+            } catch (err) {
+                console.error('Could not copy text: ', err);
+                showMessage('Error', 'Failed to copy User ID to clipboard.');
+            }
+        });
     </script>
     <script>
         // ... all your other existing functions (initializeFirebase, handleDateChange, showMessage, etc.) ...
