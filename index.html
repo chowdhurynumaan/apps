@@ -774,17 +774,11 @@ const fetchAndRenderLogHistory = (classId) => {
 
 const handleAppReady = () => {
     document.getElementById('date-selector').value = todayDateId;
-    const initialMessage = document.getElementById('initial-message');
-    document.getElementById('loading-spinner').classList.add('hidden');
+    // We ensure the spinner is visible and rely on setupFirestoreListeners to hide the loading message when data is received.
+    document.getElementById('loading-spinner').classList.remove('hidden'); // Ensure spinner is visible
     document.getElementById('initial-message-text').textContent = "Authentication Complete! Fetching data...";
-    setupFirestoreListeners();
-    // Set a small delay before hiding the loading overlay, ensuring data fetch is initiated
-    setTimeout(() => {
-        // CRITICAL: Render the initial empty/placeholder UI immediately
-        renderClassList();
-        initialMessage.classList.add('hidden');
-        // This is the only place we hide the overlay
-    }, 500);
+    setupFirestoreListeners(); // Set up listeners
+    // REMOVED: The setTimeout logic. The listener will now correctly hide the overlay once data is available.
 };
 
 
@@ -843,56 +837,76 @@ const handleAppReady = () => {
         };
 
         // --- FIRESTORE LISTENERS ---
+const setupFirestoreListeners = () => {
+    if (!isAuthReady) return; 
 
-        const setupFirestoreListeners = () => {
-            if (!isAuthReady) return;
+    // 1. Daily Report Listener - LISTEN TO THE NEW 'classes' SUBCOLLECTION
+    // Path: /artifacts/{appId}/public/data/daily_attendance_reports/{dateID}/classes
+    const dailyReportsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', selectedDateId, 'classes');
 
-            // 1. Listener for the SELECTED DATE's Daily Reports (Changes with date selector)
-            const dailyReportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', selectedDateId);
-            
-            // Unsubscribe existing listener if present
-            if (window.dailyReportUnsubscribe) {
-                window.dailyReportUnsubscribe();
-            }
+    // Unsubscribe from old listener if it exists
+    if (window.dailyReportUnsubscribe) {
+        window.dailyReportUnsubscribe();
+    }
+    
+    // Store the selectedDateId at the time the listener is created
+    // This allows us to check if the data returned is for the date the user is currently viewing.
+    const expectedDateId = selectedDateId;
 
-            window.dailyReportUnsubscribe = onSnapshot(dailyReportDocRef, (docSnapshot) => {
-                // IMPORTANT: The document should only contain class entries. 
-                // We trust the security rules to ensure only valid data is present.
-                currentReports = docSnapshot.exists() ? docSnapshot.data() : {};
-                console.log(`Daily Reports updated for ${selectedDateId}:`, currentReports);
-                renderClassList(); // Re-render when daily report data updates
-                
-                // Hide the loading overlay immediately after data is received
-                document.getElementById('initial-message').classList.add('hidden'); 
-                
-                if (selectedClassId && document.getElementById('report-modal').classList.contains('hidden') === false) {
-                    renderModalContent(selectedClassId);
-                }
-            }, (error) => {
-                console.error(`Error fetching daily report for ${selectedDateId}:`, error);
-                // Note: We don't hide the whole UI on data fetch errors, just log and continue.
-                document.getElementById('initial-message').classList.add('hidden'); 
+    window.dailyReportUnsubscribe = onSnapshot(dailyReportsCollectionRef, (querySnapshot) => {
+        const newReports = {};
+        
+        querySnapshot.forEach((doc) => {
+            // The document ID is the class ID in the new structure
+            const classId = doc.id; 
+            newReports[classId] = doc.data();
+        });
+
+        // Update the global state
+        currentReports = newReports;
+        
+        console.log(`Daily Reports updated for ${expectedDateId} (Collection Fetch):`, currentReports);
+        
+        // Re-render the class tiles with the fresh data (Uses renderClassList for consistency)
+        renderClassList(); 
+
+        // If the modal is open, ensure it reflects the latest data
+        if (selectedClassId && document.getElementById('report-modal').classList.contains('hidden') === false) {
+            updateModalContent(selectedClassId);
+        }
+
+        // Only hide the loading overlay if we successfully fetched data for the currently selected date.
+        // This fixes the "stuck in loading" issue when switching dates.
+        if (selectedDateId === expectedDateId) {
+            document.getElementById('initial-message').classList.add('hidden');
+        }
+
+    }, (error) => {
+        console.error(`Error fetching daily report collection for ${expectedDateId}:`, error);
+        // Always hide the overlay on error, regardless of the date, to unblock the UI.
+        document.getElementById('initial-message').classList.add('hidden');
+    });
+
+    // 2. Listener for Accumulated Scores (Always uses the latest data for overall ranking)
+    if (!window.accumulatedScoresUnsubscribe) {
+        const scoresCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'accumulated_class_scores');
+        
+        window.accumulatedScoresUnsubscribe = onSnapshot(scoresCollectionRef, (querySnapshot) => {
+            const newScores = {};
+            querySnapshot.forEach(doc => {
+                newScores[doc.id] = doc.data();
             });
-
-
-            // 2. Listener for Accumulated Scores (Always uses the latest data for overall ranking)
-            if (!window.accumulatedScoresUnsubscribe) {
-                const scoresCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'accumulated_class_scores');
-                
-                window.accumulatedScoresUnsubscribe = onSnapshot(scoresCollectionRef, (querySnapshot) => {
-                    const scores = {};
-                    querySnapshot.forEach(doc => {
-                        scores[doc.id] = doc.data();
-                    });
-                    currentAccumulatedScores = scores;
-                    console.log("Accumulated Scores updated:", currentAccumulatedScores);
-                    renderClassList(); // Re-render when accumulated score data updates
-                }, (error) => {
-                    console.error("Error fetching accumulated scores:", error);
-                    // Note: We don't hide the whole UI on data fetch errors, just log and continue.
-                });
+            currentAccumulatedScores = newScores;
+            console.log('Accumulated Scores updated:', currentAccumulatedScores);
+            // Re-render only if the main class list is visible
+            if (document.getElementById('initial-message').classList.contains('hidden')) {
+                renderClassList(); // Use renderClassList for consistency
             }
-        };
+        }, (error) => {
+            console.error("Error fetching accumulated scores:", error);
+        });
+    }
+};
 
         // --- RENDERING FUNCTIONS (UI/UX) ---
 
