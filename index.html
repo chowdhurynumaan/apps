@@ -1929,7 +1929,7 @@ const renderClassList = () => {
     container.innerHTML = htmlContent;
 
     if (allClassesInitial.length === 0) {
-         container.innerHTML = `<p class="text-center text-gray-500 italic py-10">No class data found. Check definitions or initialization.</p>`;
+         container.innerHTML = `<p class="text-center text-gray-500 italic py-10">No class added. Please contact admin</p>`;
     } else if (allClassesInitial.every(c => c.performance.text === 'No Data')) {
          container.insertAdjacentHTML('afterbegin', `<p class="text-center text-sm font-semibold text-gray-600 bg-yellow-50 p-2 rounded-lg mb-4">Database is empty. Click any class card to enter today's first report!</p>`);
     }
