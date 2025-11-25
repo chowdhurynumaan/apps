@@ -17,7 +17,7 @@
             padding: 1rem;
         }
         .kanban-column-container {
-            /* Fix for mobile responsiveness on smaller screens */
+            /* Ensures the container respects max-width while staying fluid on mobile */
             max-width: 95vw;
         }
         .kanban-column-body {
@@ -75,7 +75,8 @@
                 class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition duration-150"
                 onkeypress="if(event.key === 'Enter') document.getElementById('addTaskBtn').click()"
             >
-            <div class="flex space-x-3">
+            <!-- Start Mobile Optimization: Stacks inputs vertically on small screens -->
+            <div class="flex flex-col space-y-3 sm:flex-row sm:space-x-3 sm:space-y-0">
                 <select id="taskPriority" class="p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 flex-1 min-w-0">
                     <option value="Medium">Priority: Medium</option>
                     <option value="High" class="text-red-600 font-medium">Priority: High</option>
@@ -89,12 +90,14 @@
                 <button 
                     id="addTaskBtn"
                     onclick="window.addTask()"
-                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-4 rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 flex items-center justify-center"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-4 rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 flex items-center justify-center sm:w-auto w-full"
                     title="Add Task"
                 >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    <span class="ml-2 sm:hidden">Add Task</span>
                 </button>
             </div>
+            <!-- End Mobile Optimization -->
         </div>
 
         <!-- Kanban Board Columns -->
