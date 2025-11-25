@@ -168,9 +168,18 @@
             setLogLevel 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Global variables provided by the environment
+        // HARDCODED Firebase Configuration (as requested)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDRaDBwREGN97WwD2f4qRIstITCPkuCmlM",
+            authDomain: "studio-9055014166-6a231.firebaseapp.com",
+            projectId: "studio-9055014166-6a231",
+            storageBucket: "studio-9055014166-6a231.firebasestorage.app",
+            messagingSenderId: "125612098548",
+            appId: "1:125612098548:web:4797791f5a33dc36256fa1"
+        };
+        
+        // Global variables provided by the Canvas environment (required for data path)
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
 
         let app, db, auth, userId = null;
@@ -233,10 +242,7 @@
 
         async function initFirebase() {
             try {
-                if (Object.keys(firebaseConfig).length === 0) {
-                    throw new Error("Firebase configuration is missing.");
-                }
-
+                // Since firebaseConfig is now hardcoded, no check for empty config needed
                 app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
