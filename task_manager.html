@@ -89,12 +89,83 @@
         .side-menu.active {
             right: 0;
         }
+        /* Status Change Modal */
+        .status-modal {
+            position: fixed;
+            bottom: -100%;
+            left: 0;
+            width: 100%;
+            background-color: white;
+            z-index: 60;
+            transition: bottom 0.3s ease;
+            box-shadow: 0 -4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 20px 20px 0 0;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        .status-modal.active {
+            bottom: 0;
+        }
     </style>
 </head>
 <body class="antialiased">
 
     <!-- Hamburger Menu Overlay -->
     <div id="menuOverlay" class="menu-overlay" onclick="window.toggleMenu()"></div>
+
+    <!-- Status Change Modal -->
+    <div id="statusModal" class="status-modal">
+        <div class="p-6 space-y-4">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between border-b pb-3">
+                <h3 class="text-lg font-bold text-gray-900">Move Task</h3>
+                <button onclick="window.closeStatusModal()" class="p-2 rounded-lg hover:bg-gray-100 transition duration-150">
+                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <!-- Task Description Display -->
+            <div class="bg-gray-50 p-3 rounded-lg">
+                <p id="modalTaskDescription" class="text-sm text-gray-700 font-medium"></p>
+            </div>
+
+            <!-- Status Options -->
+            <div class="space-y-2">
+                <button 
+                    onclick="window.changeTaskStatus('todo')"
+                    class="w-full p-4 rounded-lg border-2 border-indigo-200 bg-indigo-50 hover:bg-indigo-100 transition duration-150 flex items-center justify-between active:scale-95"
+                >
+                    <div class="flex items-center space-x-3">
+                        <div class="w-3 h-3 rounded-full bg-indigo-500"></div>
+                        <span class="font-semibold text-gray-800">To Do</span>
+                    </div>
+                    <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </button>
+                
+                <button 
+                    onclick="window.changeTaskStatus('in-progress')"
+                    class="w-full p-4 rounded-lg border-2 border-yellow-200 bg-yellow-50 hover:bg-yellow-100 transition duration-150 flex items-center justify-between active:scale-95"
+                >
+                    <div class="flex items-center space-x-3">
+                        <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                        <span class="font-semibold text-gray-800">In Progress</span>
+                    </div>
+                    <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </button>
+                
+                <button 
+                    onclick="window.changeTaskStatus('done')"
+                    class="w-full p-4 rounded-lg border-2 border-green-200 bg-green-50 hover:bg-green-100 transition duration-150 flex items-center justify-between active:scale-95"
+                >
+                    <div class="flex items-center space-x-3">
+                        <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                        <span class="font-semibold text-gray-800">Done</span>
+                    </div>
+                    <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Side Menu -->
     <div id="sideMenu" class="side-menu">
@@ -219,8 +290,6 @@
                 <div 
                     id="todoColumn" 
                     class="kanban-column-body space-y-4"
-                    ondragover="allowDrop(event)"
-                    ondrop="drop(event, 'todo')"
                 >
                     <p id="loadingIndicator" class="text-center text-gray-500 p-4">Loading tasks...</p>
                 </div>
@@ -234,8 +303,6 @@
                 <div 
                     id="inProgressColumn" 
                     class="kanban-column-body space-y-4"
-                    ondragover="allowDrop(event)"
-                    ondrop="drop(event, 'in-progress')"
                 >
                 </div>
             </div>
@@ -248,8 +315,6 @@
                 <div 
                     id="doneColumn" 
                     class="kanban-column-body space-y-4"
-                    ondragover="allowDrop(event)"
-                    ondrop="drop(event, 'done')"
                 >
                 </div>
             </div>
@@ -297,6 +362,7 @@
         let app, db, auth, userId = null;
         let isAuthReady = false;
         let boardMode = 'personal'; // 'personal' or 'shared'
+        let currentTaskForStatusChange = null; // Track task being moved
         
         // Mapping for priority sorting (High=3, Medium=2, Low=1)
         const PRIORITY_MAP = { 'High': 3, 'Medium': 2, 'Low': 1 };
@@ -427,6 +493,40 @@
         }
 
         // --------------------------------------------------------
+        // STATUS CHANGE MODAL
+        // --------------------------------------------------------
+
+        window.openStatusModal = function(taskId, taskDescription, currentStatus) {
+            currentTaskForStatusChange = { id: taskId, currentStatus: currentStatus };
+            document.getElementById('modalTaskDescription').textContent = taskDescription;
+            document.getElementById('statusModal').classList.add('active');
+            document.getElementById('menuOverlay').classList.add('active');
+        }
+
+        window.closeStatusModal = function() {
+            document.getElementById('statusModal').classList.remove('active');
+            if (!document.getElementById('sideMenu').classList.contains('active')) {
+                document.getElementById('menuOverlay').classList.remove('active');
+            }
+            currentTaskForStatusChange = null;
+        }
+
+        window.changeTaskStatus = async function(newStatus) {
+            if (!currentTaskForStatusChange) return;
+            
+            const { id, currentStatus } = currentTaskForStatusChange;
+            if (currentStatus === newStatus) {
+                closeStatusModal();
+                showMessage('Task is already in that status', 'info');
+                return;
+            }
+
+            await window.updateTaskStatus(id, newStatus);
+            closeStatusModal();
+            showMessage(`Task moved to ${newStatus.replace('-', ' ')}`, 'success');
+        }
+
+        // --------------------------------------------------------
         // BOARD MODE SWITCHING
         // --------------------------------------------------------
 
@@ -542,33 +642,6 @@
             }
         }
 
-
-        // --------------------------------------------------------
-        // DRAG AND DROP LOGIC
-        // --------------------------------------------------------
-
-        window.drag = function(ev) {
-            ev.dataTransfer.setData("text/plain", ev.target.id);
-            ev.currentTarget.classList.add('opacity-50');
-        }
-
-        window.dragEnd = function(ev) {
-            ev.currentTarget.classList.remove('opacity-50');
-        }
-
-        window.allowDrop = function(ev) {
-            ev.preventDefault();
-        }
-
-        window.drop = function(ev, newStatus) {
-            ev.preventDefault();
-            const taskId = ev.dataTransfer.getData("text/plain");
-            
-            if (taskId) {
-                window.updateTaskStatus(taskId, newStatus);
-            }
-        }
-
         // --------------------------------------------------------
         // REAL-TIME LISTENER & RENDERING
         // --------------------------------------------------------
@@ -672,18 +745,22 @@
 
 
         /**
-         * Creates a DOM element for a single task, now with drag attributes.
+         * Creates a DOM element for a single task with tap/click to change status.
          */
         function createTaskElement(task) {
             const item = document.createElement('div');
             const isDone = task.status === 'done';
             
-            item.id = task.id; // Crucial for drag-and-drop
-            item.draggable = true;
-            item.ondragstart = window.drag;
-            item.ondragend = window.dragEnd;
+            item.id = task.id;
 
-            item.className = `task-item flex items-start justify-between p-4 bg-white rounded-lg hover:shadow-md ${isDone ? 'opacity-70' : ''}`;
+            item.className = `task-item flex items-start justify-between p-4 bg-white rounded-lg hover:shadow-md cursor-pointer ${isDone ? 'opacity-70' : ''}`;
+
+            // Tap to open status change modal
+            item.onclick = function(e) {
+                // Don't trigger if clicking delete button
+                if (e.target.closest('.delete-btn')) return;
+                window.openStatusModal(task.id, task.description, task.status);
+            };
 
             // Priority Badge Styling
             let priorityColor = 'bg-gray-400';
@@ -742,7 +819,7 @@
             
             // Delete Button
             const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'p-1 rounded-full text-red-500 hover:bg-red-100 transition duration-150 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2';
+            deleteBtn.className = 'delete-btn p-1 rounded-full text-red-500 hover:bg-red-100 transition duration-150 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2';
             deleteBtn.title = 'Delete Task';
             deleteBtn.onclick = () => window.deleteTask(task.id); 
             deleteBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>`;
