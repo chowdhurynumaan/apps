@@ -538,15 +538,21 @@ const fetchAndRenderLogHistory = (classId) => {
 
             // Default values
             const defaultTotal = report.totalStudents || '';
-            const defaultPresent = report.presentToday || '';
+            const defaultPresentOnTime = report.presentToday || '';
             const defaultTardy = report.tardyToday || '';
             const defaultBrought = report.progressReportBrought || '';
             const defaultSigned = report.progressReportSigned || '';
 
-            // Calculate absent for display if data exists
+            // Calculate Present Total and Absent for display if data exists
+            let defaultPresentTotal = '';
             let defaultAbsent = '';
-            if (defaultTotal !== '' && defaultPresent !== '') {
-                defaultAbsent = parseInt(defaultTotal) - (parseInt(defaultPresent) + (parseInt(defaultTardy) || 0));
+            if (defaultPresentOnTime !== '' || defaultTardy !== '') {
+                const onTime = parseInt(defaultPresentOnTime) || 0;
+                const tardy = parseInt(defaultTardy) || 0;
+                defaultPresentTotal = onTime + tardy;
+            }
+            if (defaultTotal !== '' && defaultPresentTotal !== '') {
+                defaultAbsent = parseInt(defaultTotal) - parseInt(defaultPresentTotal);
             }
 
             const sectionType = classDef.id.startsWith('Girls') ? 'Girls' : 'Boys';
@@ -570,14 +576,17 @@ const fetchAndRenderLogHistory = (classId) => {
                     ${createInput('input-totalStudents', 'Total Students', 'e.g., 30', defaultTotal)}
                     ${createInput('input-absentToday', 'Absent (Auto)', 'Calc', defaultAbsent, true)}
                     
-                    ${createInput('input-presentToday', 'Present', 'e.g., 28', defaultPresent)}
-                    ${createInput('input-tardyToday', 'Tardy', 'e.g., 0', defaultTardy)}
+                    ${createInput('input-presentOnTime', 'Present On-Time', 'e.g., 25', defaultPresentOnTime)}
+                    ${createInput('input-tardyToday', 'Present Tardy', 'e.g., 3', defaultTardy)}
+                    
+                    ${createInput('input-presentTotal', 'Present Total (Auto)', 'Calc', defaultPresentTotal, true)}
+                    <div></div>
                     
                     ${createInput('input-progressReportBrought', 'Reports Brought', 'e.g., 25', defaultBrought)}
                     ${createInput('input-progressReportSigned', 'Reports Signed', 'e.g., 22', defaultSigned)}
                 </div>
                 
-                <p class="text-xs text-red-500 mt-3 text-center">Note: Absent is calculated automatically (Total - Present - Tardy).</p>
+                <p class="text-xs text-indigo-600 mt-3 text-center font-semibold">✨ Present Total = On-Time + Tardy | Absent = Total - Present Total</p>
                 
                 <div class="mt-4 p-3 bg-gray-100 rounded-lg shadow-inner flex justify-between items-center text-sm text-gray-700 font-medium">
                     <span class="text-2xs sm:text-sm">Score calculation is automatic upon saving.</span>
@@ -597,19 +606,21 @@ const fetchAndRenderLogHistory = (classId) => {
          */
         const checkInputValidity = (classId) => {
             const totalStudents = parseInt(document.getElementById('input-totalStudents').value.trim());
-            const presentToday = parseInt(document.getElementById('input-presentToday').value.trim());
+            const presentOnTime = parseInt(document.getElementById('input-presentOnTime').value.trim());
             const tardyToday = parseInt(document.getElementById('input-tardyToday').value.trim());
             const progressReportBrought = parseInt(document.getElementById('input-progressReportBrought').value.trim());
             const progressReportSigned = parseInt(document.getElementById('input-progressReportSigned').value.trim());
 
-            if (isNaN(totalStudents) || isNaN(presentToday) || isNaN(tardyToday) || isNaN(progressReportBrought) || isNaN(progressReportSigned) ||
-                totalStudents < 0 || presentToday < 0 || tardyToday < 0 || progressReportBrought < 0 || progressReportSigned < 0) {
+            if (isNaN(totalStudents) || isNaN(presentOnTime) || isNaN(tardyToday) || isNaN(progressReportBrought) || isNaN(progressReportSigned) ||
+                totalStudents < 0 || presentOnTime < 0 || tardyToday < 0 || progressReportBrought < 0 || progressReportSigned < 0) {
                 showMessage('Input Error', 'Please ensure all fields are filled with non-negative numbers.');
                 return null;
             }
 
-            if ((presentToday + tardyToday) > totalStudents) {
-                showMessage('Input Error', 'Present + Tardy cannot exceed Total Students.');
+            const presentTotal = presentOnTime + tardyToday;
+            
+            if (presentTotal > totalStudents) {
+                showMessage('Input Error', 'Present On-Time + Tardy cannot exceed Total Students.');
                 return null;
             }
             if (progressReportBrought > totalStudents) {
@@ -627,7 +638,7 @@ const fetchAndRenderLogHistory = (classId) => {
                 classId: classId,
                 className: classDef.name,
                 totalStudents: totalStudents,
-                presentToday: presentToday,
+                presentToday: presentOnTime,
                 tardyToday: tardyToday,
                 progressReportBrought: progressReportBrought,
                 progressReportSigned: progressReportSigned,
@@ -1214,13 +1225,14 @@ const renderClassList = () => {
 
             // CRITICAL DEFENSE: Use 0 if the field is missing from the report object
             const totalStudents = report.totalStudents || 0;
-            const presentToday = report.presentToday || 0;
+            const presentOnTime = report.presentToday || 0;
             const tardyToday = report.tardyToday || 0;
             const reportBrought = report.progressReportBrought || 0;
             const reportSigned = report.progressReportSigned || 0;
             
-            // Calculate Absent
-            const absentToday = totalStudents > 0 ? Math.max(0, totalStudents - presentToday - tardyToday) : 0;
+            // Calculate Present Total and Absent
+            const presentTotal = presentOnTime + tardyToday;
+            const absentToday = totalStudents > 0 ? Math.max(0, totalStudents - presentTotal) : 0;
 
             document.getElementById('details-panel-content').innerHTML = `
                 <div class="p-4 space-y-4 shadow-none border-none">
@@ -1237,28 +1249,36 @@ const renderClassList = () => {
 
                     <div class="space-y-4">
                         <div class="grid grid-cols-2 gap-4">
-                            <div class="col-span-2 sm:col-span-1">
+                            <div>
                                 <label for="totalStudents" class="block text-xs font-medium text-gray-700 mb-1">Total Students</label>
                                 <input type="number" id="totalStudents" value="${totalStudents}" oninput="updateReportEntry('${classId}', 'totalStudents', this.value)"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-lg ${disabledAttr ? 'bg-gray-100' : ''}" placeholder="0" min="0" ${disabledAttr}>
                             </div>
-                            <div class="col-span-2 sm:col-span-1">
-                                <label for="absentToday" class="block text-xs font-medium text-gray-500 mb-1">Absent (Auto-calc)</label>
-                                <input type="number" id="absentToday" value="${absentToday}" readonly disabled
-                                    class="w-full px-3 py-2 border border-gray-200 bg-gray-100 text-red-600 font-bold rounded-lg shadow-sm font-mono text-lg" placeholder="0">
+                            <div>
+                                <label for="presentTotal" class="block text-xs font-medium text-blue-700 mb-1">Present Total (Auto)</label>
+                                <input type="number" id="presentTotal" value="${presentTotal}" readonly disabled
+                                    class="w-full px-3 py-2 border border-blue-200 bg-blue-50 text-blue-700 font-bold rounded-lg shadow-sm font-mono text-lg" placeholder="0">
                             </div>
                         </div>
                         
                         <div class="grid grid-cols-2 gap-4">
-                             <div>
-                                <label for="presentToday" class="block text-xs font-medium text-gray-700 mb-1">Present - On Time (P)</label>
-                                <input type="number" id="presentToday" value="${presentToday}" oninput="updateReportEntry('${classId}', 'presentToday', this.value)"
+                            <div>
+                                <label for="presentOnTime" class="block text-xs font-medium text-gray-700 mb-1">Present On-Time</label>
+                                <input type="number" id="presentOnTime" value="${presentOnTime}" oninput="updateReportEntry('${classId}', 'presentToday', this.value)"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-lg ${disabledAttr ? 'bg-gray-100' : ''}" placeholder="0" min="0" ${disabledAttr}>
                             </div>
-                             <div>
-                                <label for="tardyToday" class="block text-xs font-medium text-gray-700 mb-1">Present - Tardy (T)</label>
-                                <input type="number" id="tardyToday" value="${tardyToday}" oninput="updateReportEntry('${classId}', 'tardyToday', this.value)"
+                            <div>
+                                <label for="presentTardy" class="block text-xs font-medium text-gray-700 mb-1">Present Tardy</label>
+                                <input type="number" id="presentTardy" value="${tardyToday}" oninput="updateReportEntry('${classId}', 'tardyToday', this.value)"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-lg ${disabledAttr ? 'bg-gray-100' : ''}" placeholder="0" min="0" ${disabledAttr}>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1">
+                            <div>
+                                <label for="absentTotal" class="block text-xs font-medium text-red-700 mb-1">Absent Total (Auto)</label>
+                                <input type="number" id="absentTotal" value="${absentToday}" readonly disabled
+                                    class="w-full px-3 py-2 border border-red-200 bg-red-50 text-red-700 font-bold rounded-lg shadow-sm font-mono text-lg" placeholder="0">
                             </div>
                         </div>
 
@@ -1331,30 +1351,68 @@ const renderClassList = () => {
                 currentReports[classId] = { totalStudents: 0, presentToday: 0, tardyToday: 0, progressReportBrought: 0, progressReportSigned: 0 };
             }
 
+            // Retrieve total first to validate before setting
+            const total = currentReports[classId].totalStudents || 0;
+            
+            // Clamp the value if it's presentToday or tardyToday and exceeds total
+            if (key === 'presentToday' || key === 'tardyToday') {
+                if (numValue > total) {
+                    numValue = total;
+                    const inputElement = document.getElementById(key === 'presentToday' ? 'presentOnTime' : 'presentTardy');
+                    if (inputElement) inputElement.value = numValue;
+                }
+            }
+            
             currentReports[classId][key] = numValue;
 
-            // Retrieve latest values
-            const total = currentReports[classId].totalStudents || 0;
-            let present = currentReports[classId].presentToday || 0;
+            // Retrieve latest values after setting
+            let presentOnTime = currentReports[classId].presentToday || 0;
             let tardy = currentReports[classId].tardyToday || 0;
 
-            // 1. Logic to ensure (Present + Tardy) does not exceed Total
+            // 1. Logic to ensure (Present On-Time + Tardy) does not exceed Total
             if (key === 'presentToday' || key === 'tardyToday' || key === 'totalStudents') {
                 
-                if (present + tardy > total) {
+                const presentTotal = presentOnTime + tardy;
+                
+                if (presentTotal > total) {
+                    // Prioritize the most recent change by adjusting the other field
                     if (key === 'presentToday') {
-                        // If input exceeds total, clamp to Total. The user must adjust manually if Tardy is involved.
-                        if (numValue > total) {
-                            currentReports[classId][key] = total;
-                            document.getElementById(key).value = total;
-                            present = currentReports[classId].presentToday;
+                        // Adjust tardy to fit
+                        currentReports[classId].tardyToday = Math.max(0, total - presentOnTime);
+                        tardy = currentReports[classId].tardyToday;
+                        const tardyInput = document.getElementById('presentTardy');
+                        if (tardyInput) tardyInput.value = tardy;
+                    } else if (key === 'tardyToday') {
+                        // Adjust present on-time to fit
+                        currentReports[classId].presentToday = Math.max(0, total - tardy);
+                        presentOnTime = currentReports[classId].presentToday;
+                        const presentInput = document.getElementById('presentOnTime');
+                        if (presentInput) presentInput.value = presentOnTime;
+                    } else if (key === 'totalStudents') {
+                        // If total decreases, clamp both values
+                        if (presentOnTime > total) {
+                            currentReports[classId].presentToday = total;
+                            presentOnTime = total;
+                            const presentInput = document.getElementById('presentOnTime');
+                            if (presentInput) presentInput.value = presentOnTime;
+                        }
+                        if (tardy > total) {
+                            currentReports[classId].tardyToday = 0;
+                            tardy = 0;
+                            const tardyInput = document.getElementById('presentTardy');
+                            if (tardyInput) tardyInput.value = tardy;
                         }
                     }
                 }
                 
+                // Update Present Total (Auto)
+                const finalPresentTotal = presentOnTime + tardy;
+                const presentTotalInput = document.getElementById('presentTotal');
+                if (presentTotalInput) presentTotalInput.value = finalPresentTotal;
+                
                 // Calculate Absent
-                const absent = Math.max(0, total - (present + tardy));
-                const absentInput = document.getElementById('absentToday');
+                const absent = Math.max(0, total - finalPresentTotal);
+                const absentInput = document.getElementById('absentTotal');
                 if (absentInput) absentInput.value = absent;
             }
 

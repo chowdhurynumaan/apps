@@ -3,214 +3,947 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Class Tracker</title>
+    <title>Manager Dashboard - Class Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
         
         html, body { 
-            height: 100%;
-            min-height: 100vh;
             font-family: 'Inter', sans-serif; 
             background-color: #f4f7f9; 
-            display: flex;
-            flex-direction: column;
         }
 
-        /* Styling for each day cell in the calendar */
-        .calendar-day {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 60px; 
-            border-radius: 8px;
-            cursor: default;
-            transition: all 0.2s;
-            line-height: 1; /* Keep things compact */
+        .stat-card {
+            animation: slideIn 0.4s ease-out;
         }
 
-        /* The "Signal Light" element */
-        .signal-light {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-top: 4px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
-        /* Green Light ON state */
-        .light-on {
-            background-color: #10B981; /* Green-500 */
-            box-shadow: 0 0 8px #34D399; /* Glow effect */
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+
+        .metric-card {
+            transition: all 0.3s;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
         
-        /* Light OFF state */
-        .light-off {
-            background-color: #D1D5DB; /* Gray-400 */
-            border: 1px solid #9CA3AF;
+        /* Mobile menu animation */
+        .mobile-nav-slide {
+            transition: max-height 0.3s ease-in-out;
+        }
+        
+        /* Match index.html text size */
+        .text-2xs {
+            font-size: 0.65rem;
         }
     </style>
 </head>
-<body class="p-4 sm:p-8">
-
-    <header class="mb-6 flex justify-between items-center border-b pb-4">
-        <h1 class="text-3xl font-extrabold text-gray-800">📊 Daily Report Dashboard</h1>
-        <a href="index.html" class="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition duration-150">
-            < Home
-        </a>
-    </header>
-
-    <main class="flex-grow max-w-4xl mx-auto w-full">
-        <div id="calendar-container" class="bg-white p-6 rounded-xl shadow-lg">
-            <h2 id="month-display" class="text-xl font-bold text-gray-700 mb-4 text-center">Loading...</h2>
-            
-            <div class="grid grid-cols-7 text-center text-sm font-semibold text-gray-500 border-b pb-2 mb-2">
-                <span>Sun</span>
-                <span>Mon</span>
-                <span>Tue</span>
-                <span>Wed</span>
-                <span>Thu</span>
-                <span>Fri</span>
-                <span>Sat</span>
-            </div>
-            
-            <div id="calendar-grid" class="grid grid-cols-7 gap-1">
-                </div>
-            
-            <p id="loading-status" class="text-center text-gray-500 mt-6">Fetching daily reports...</p>
+<body class="flex flex-col h-full">
+    <!-- Header Section -->
+<header class="flex-shrink-0 bg-white shadow-lg p-3 border-b border-gray-200 sticky top-0 z-20">
+    <div class="max-w-7xl mx-auto flex justify-between items-center h-8">
+        
+        <button id="menu-toggle" aria-label="Toggle navigation menu" 
+        class="p-2 -ml-2 text-indigo-700 hover:text-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded flex-shrink-0">
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+            </svg>
+        </button>
+        
+        <h1 class="text-xl font-extrabold text-indigo-700 flex-grow text-center sm:text-left">
+            <span class="mr-1">📊</span> Dashboard
+        </h1>
+        
+        <div class="flex items-center space-x-2 flex-shrink-0">
+            <input type="date" id="date-selector" 
+                   class="px-2 py-1 border border-indigo-300 rounded-lg text-xs font-semibold text-gray-700 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition duration-150 w-28">
         </div>
-    </main>
+    </div>
+    
+<div id="mobile-nav-menu" class="hidden bg-white border-t border-gray-200 py-2 absolute w-full left-0 top-full shadow-xl z-10">
+        <div class="flex flex-col space-y-2 px-4">
+            <a href="index.html" class="px-3 py-2 text-sm text-center bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold shadow-md">
+                📚 Attendance Tracker
+            </a>
+            <a href="quran-tracker.html" class="px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
+                📖 Quran Tracker
+            </a>
+        </div>
+    </div>
+</header>
 
-    <script type="module">
-        // --- FIREBASE CONFIGURATION (REPLACE THIS WITH YOUR ACTUAL CONFIG FROM index.html) ---
-        const firebaseConfig = {
-  apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJpMJihQ",
-  authDomain: "apps-e1163.firebaseapp.com",
-  projectId: "apps-e1163",
-  storageBucket: "apps-e1163.firebasestorage.app",
-  messagingSenderId: "855206153422",
-  appId: "1:855206153422:web:2a1366b2e7825304c3d49f",
-  measurementId: "G-7YCKESJB8T"
-};
-        };
-        // ---------------------------------------------------------------------------------
-
-        let USER_ID = localStorage.getItem('class_tracker_user_id'); 
-        let database;
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
-        const initializeFirebase = () => {
-            if (!firebase.apps.length) {
-                firebase.initializeApp(firebaseConfig);
-            }
-            database = firebase.database();
-            
-            if (!USER_ID) {
-                document.getElementById('loading-status').textContent = 'Error: User ID not found. Please log in on the main page.';
-                return;
-            }
-            
-            renderCalendar();
-        };
-
-        const formatDate = (date) => {
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`; // Format: YYYY-MM-DD
-        };
-
-        const getMonthName = (date) => {
-            return date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-        };
+        <!-- Loading State -->
+        <div id="loadingState" class="text-center py-12">
+            <div class="text-6xl mb-4">⏳</div>
+            <p class="text-xl text-gray-600">Loading dashboard data...</p>
+        </div>
         
-        // Fetches all daily reports for the current user
-        const fetchDailyReports = async () => {
-            return new Promise((resolve, reject) => {
-                const reportsRef = database.ref(`users/${USER_ID}/dailyReports`);
+        <!-- No Data State -->
+        <div id="noDataState" class="hidden text-center py-12">
+            <div class="text-6xl mb-4">📭</div>
+            <p class="text-xl text-gray-600 mb-2">No attendance data found</p>
+            <p class="text-sm text-gray-500">Enter attendance data in index.html first</p>
+        </div>
+        
+        <!-- Main Dashboard Content -->
+        <div id="dashboardContent" class="hidden">
+        
+        <!-- ==================== ATTENDANCE OVERVIEW ==================== -->
+        <section class="mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">👥 Attendance Overview</h2>
+            
+            <!-- Latest School Day Summary -->
+            <div class="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-4 sm:mb-6">
+                <h3 class="text-lg sm:text-xl font-semibold text-gray-700 mb-3 sm:mb-4" id="latestDayTitle">Latest School Day</h3>
+                <div id="latestDaySummary" class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                    <!-- Will be populated by JS -->
+                </div>
+            </div>
+
+            <!-- 30-Day Attendance Trends -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-4">📈 30-Day Attendance Trends</h3>
+                <div class="chart-container">
+                    <canvas id="attendanceTrendsChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Class-by-Class Comparison -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-4">📊 Class-by-Class Comparison</h3>
+                <div class="chart-container">
+                    <canvas id="classComparisonChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== PROGRESS REPORT TRACKING ==================== -->
+        <section class="mb-8">
+            <h2 class="text-xl sm:text-2xl font-bold text-gray-800 mb-4">📝 Progress Report Tracking</h2>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
+                <div class="bg-white rounded-lg shadow-md p-6 metric-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-600 text-sm">Reports Distributed</p>
+                            <p class="text-3xl font-bold text-blue-600" id="reportsDistributed">-</p>
+                        </div>
+                        <div class="text-4xl">📤</div>
+                    </div>
+                </div>
                 
-                reportsRef.once('value', snapshot => {
-                    const reports = snapshot.val() || {};
-                    resolve(reports);
-                }, error => {
-                    console.error("Firebase fetch error:", error);
-                    reject(error);
+                <div class="bg-white rounded-lg shadow-md p-6 metric-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-600 text-sm">Reports Brought Back</p>
+                            <p class="text-3xl font-bold text-green-600" id="reportsBrought">-</p>
+                        </div>
+                        <div class="text-4xl">📥</div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow-md p-6 metric-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-600 text-sm">Reports Signed</p>
+                            <p class="text-3xl font-bold text-purple-600" id="reportsSigned">-</p>
+                        </div>
+                        <div class="text-4xl">✍️</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Missing Signatures Follow-up List -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-4">⚠️ Missing Signatures - Follow-up Required</h3>
+                <div id="missingSignaturesList">
+                    <!-- Will be populated by JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== PERFORMANCE METRICS ==================== -->
+        <section class="mb-8">
+            <h2 class="text-xl sm:text-2xl font-bold text-gray-800 mb-4">🏆 Performance Metrics</h2>
+            
+            <!-- Best/Worst Performing Classes -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold text-green-700 mb-4">🥇 Best Performing Classes</h3>
+                    <div id="bestClasses">
+                        <!-- Will be populated by JS -->
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold text-red-700 mb-4">📉 Classes Needing Support</h3>
+                    <div id="worstClasses">
+                        <!-- Will be populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Perfect Attendance & Interventions -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold text-blue-700 mb-4">⭐ Perfect Attendance</h3>
+                    <div id="perfectAttendance">
+                        <!-- Will be populated by JS -->
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold text-orange-700 mb-4">🚨 Students Needing Intervention</h3>
+                    <div id="interventionList">
+                        <!-- Will be populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== PREDICTIVE INSIGHTS ==================== -->
+        <section class="mb-8">
+            <h2 class="text-xl sm:text-2xl font-bold text-gray-800 mb-4">🔮 Predictive Insights</h2>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div class="bg-white rounded-lg shadow-md p-6 metric-card">
+                    <div class="text-center">
+                        <p class="text-gray-600 text-sm mb-2">Attendance Trend</p>
+                        <div id="trendDirection" class="text-4xl mb-2">-</div>
+                        <p id="trendText" class="text-lg font-semibold text-gray-700">-</p>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow-md p-6 metric-card">
+                    <div class="text-center">
+                        <p class="text-gray-600 text-sm mb-2">Expected Next Day Attendance</p>
+                        <p id="expectedAttendance" class="text-3xl font-bold text-blue-600 mb-2">-</p>
+                        <p class="text-sm text-gray-500">Based on 30-day average</p>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow-md p-6 metric-card">
+                    <div class="text-center">
+                        <p class="text-gray-600 text-sm mb-2">Parent Engagement Score</p>
+                        <p id="engagementScore" class="text-3xl font-bold text-purple-600 mb-2">-</p>
+                        <p class="text-sm text-gray-500">Signature rate</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== GENDER ANALYSIS ==================== -->
+        <section class="mb-8">
+            <h2 class="text-xl sm:text-2xl font-bold text-gray-800 mb-4">👥 Gender Analysis</h2>
+            
+            <!-- Girls vs Boys Performance Cards -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+                <div class="bg-pink-50 rounded-lg shadow-md p-6 border-2 border-pink-200">
+                    <h3 class="text-xl font-semibold text-pink-700 mb-4">👧 Girls Performance</h3>
+                    <div id="girlsStats" class="space-y-3">
+                        <!-- Will be populated by JS -->
+                    </div>
+                </div>
+                
+                <div class="bg-blue-50 rounded-lg shadow-md p-6 border-2 border-blue-200">
+                    <h3 class="text-xl font-semibold text-blue-700 mb-4">👦 Boys Performance</h3>
+                    <div id="boysStats" class="space-y-3">
+                        <!-- Will be populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gender Gap Analysis -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-4">📊 Gender Gap Analysis</h3>
+                <div class="chart-container">
+                    <canvas id="genderComparisonChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        </div><!-- End dashboardContent -->
+
+    </div>
+
+    <!-- Firebase & Chart.js Scripts -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js';
+        import { getFirestore, collection, getDocs, query, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js';
+        import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js';
+
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJpMJihQ",
+            authDomain: "apps-e1163.firebaseapp.com",
+            projectId: "apps-e1163",
+            storageBucket: "apps-e1163.firebasestorage.app",
+            messagingSenderId: "855206153422",
+            appId: "1:855206153422:web:2a1366b2e7825304c3d49f",
+            measurementId: "G-7YCKESJB8T"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const appId = 'apps-e1163';
+
+        let allData = [];
+        let chartInstances = {};
+        let selectedDate = null;
+        
+        console.log('Dashboard initialized with appId:', appId);
+
+        // Helper: Get most recent school day
+        function getMostRecentSchoolDay(data) {
+            if (!data || data.length === 0) return null;
+            return data.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+        }
+
+        // Populate date picker
+        function populateDatePicker() {
+            const dateInput = document.getElementById('date-selector');
+            
+            // Set to most recent date by default
+            if (allData.length > 0) {
+                dateInput.value = allData[0].date;
+            }
+            
+            // Add change listener
+            dateInput.addEventListener('change', (e) => {
+                selectedDate = e.target.value;
+                
+                // Check if data exists for this date
+                const dayData = allData.find(d => d.date === selectedDate);
+                if (dayData) {
+                    renderDashboard();
+                } else {
+                    // Show message if no data for selected date
+                    document.getElementById('latestDayTitle').textContent = 
+                        `No data for ${new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}`;
+                    document.getElementById('latestDaySummary').innerHTML = 
+                        '<p class="text-gray-500 col-span-4 text-center py-8">No attendance data recorded for this date</p>';
+                }
+            });
+        }
+
+        // Get selected day data
+        function getSelectedDayData() {
+            if (!selectedDate) return getMostRecentSchoolDay(allData);
+            return allData.find(d => d.date === selectedDate) || allData[0];
+        }
+
+        // Helper: Get last 30 days of data
+        function getLast30Days(data) {
+            const sorted = [...data].sort((a, b) => new Date(b.date) - new Date(a.date));
+            return sorted.slice(0, 30).reverse();
+        }
+
+        // Helper: Calculate attendance rate
+        function calculateAttendanceRate(present, total) {
+            if (!total) return 0;
+            return ((present / total) * 100).toFixed(1);
+        }
+
+        // ==================== LOAD DATA ====================
+        async function loadData() {
+            const loadingTimeout = setTimeout(() => {
+                console.error('Loading timed out after 10 seconds');
+                document.getElementById('loadingState').innerHTML = `
+                    <div class="text-6xl mb-4">⚠️</div>
+                    <p class="text-xl text-red-600 mb-2">Loading timed out</p>
+                    <p class="text-sm text-gray-600">Check browser console (F12) for errors</p>
+                    <button onclick="location.reload()" class="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg">Retry</button>
+                `;
+            }, 10000);
+
+            try {
+                console.log('Starting data load...');
+                
+                // Authenticate first
+                console.log('Authenticating...');
+                const userCred = await signInAnonymously(auth);
+                console.log('Authentication successful, UID:', userCred.user.uid);
+                
+                const collectionPath = `artifacts/${appId}/public/data/daily_attendance_reports`;
+                console.log('Querying collection:', collectionPath);
+                
+                const q = query(
+                    collection(db, collectionPath),
+                    limit(50)
+                );
+                
+                console.log('Fetching documents...');
+                const snapshot = await getDocs(q);
+                
+                clearTimeout(loadingTimeout);
+                console.log('Documents found:', snapshot.size);
+                
+                allData = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    console.log('Document:', doc.id, data);
+                    allData.push({
+                        id: doc.id,
+                        date: data.date || doc.id, // Use doc ID as date if date field missing
+                        classes: data.classes || data // Support both structures
+                    });
+                });
+
+                console.log('Total data loaded:', allData.length);
+                
+                // Hide loading, show content or no-data message
+                document.getElementById('loadingState').classList.add('hidden');
+                
+                if (allData.length === 0) {
+                    document.getElementById('noDataState').classList.remove('hidden');
+                } else {
+                    // Sort by date descending
+                    allData.sort((a, b) => new Date(b.date) - new Date(a.date));
+                    
+                    // Populate date picker
+                    populateDatePicker();
+                    
+                    // Select most recent date by default
+                    selectedDate = allData[0].date;
+                    
+                    document.getElementById('dashboardContent').classList.remove('hidden');
+                    renderDashboard();
+                }
+            } catch (error) {
+                clearTimeout(loadingTimeout);
+                console.error('Error loading data:', error);
+                console.error('Error details:', error.message, error.code);
+                document.getElementById('loadingState').innerHTML = `
+                    <div class="text-6xl mb-4">❌</div>
+                    <p class="text-xl text-red-600 mb-2">Error: ${error.message}</p>
+                    <p class="text-sm text-gray-600 mb-4">Code: ${error.code || 'unknown'}</p>
+                    <button onclick="location.reload()" class="px-6 py-2 bg-blue-600 text-white rounded-lg">Retry</button>
+                `;
+            }
+        }
+
+        // ==================== RENDER DASHBOARD ====================
+        function renderDashboard() {
+            renderAttendanceOverview();
+            renderProgressReports();
+            renderPerformanceMetrics();
+            renderPredictiveInsights();
+            renderGenderAnalysis();
+            
+            // Update last updated time (no longer needed - removed from header)
+        }
+
+        // ==================== ATTENDANCE OVERVIEW ====================
+        function renderAttendanceOverview() {
+            const latest = getSelectedDayData();
+            if (!latest) return;
+
+            // Update title with date
+            const dateObj = new Date(latest.date);
+            document.getElementById('latestDayTitle').textContent = 
+                `Latest School Day - ${dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}`;
+
+            // Calculate totals
+            let totalStudents = 0, totalPresent = 0, totalTardy = 0, totalAbsent = 0;
+            
+            Object.values(latest.classes).forEach(cls => {
+                totalStudents += cls.totalStudents || 0;
+                totalPresent += cls.presentToday || 0;
+                totalTardy += cls.tardyToday || 0;
+            });
+            
+            totalAbsent = totalStudents - totalPresent - totalTardy;
+
+            // Render summary cards
+            document.getElementById('latestDaySummary').innerHTML = `
+                <div class="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
+                    <p class="text-blue-600 text-sm font-semibold">Total Students</p>
+                    <p class="text-3xl font-bold text-blue-700">${totalStudents}</p>
+                </div>
+                <div class="bg-green-50 rounded-lg p-4 border-2 border-green-200">
+                    <p class="text-green-600 text-sm font-semibold">Present (On-Time)</p>
+                    <p class="text-3xl font-bold text-green-700">${totalPresent}</p>
+                    <p class="text-xs text-gray-600">${calculateAttendanceRate(totalPresent, totalStudents)}%</p>
+                </div>
+                <div class="bg-yellow-50 rounded-lg p-4 border-2 border-yellow-200">
+                    <p class="text-yellow-600 text-sm font-semibold">Tardy</p>
+                    <p class="text-3xl font-bold text-yellow-700">${totalTardy}</p>
+                    <p class="text-xs text-gray-600">${calculateAttendanceRate(totalTardy, totalStudents)}%</p>
+                </div>
+                <div class="bg-red-50 rounded-lg p-4 border-2 border-red-200">
+                    <p class="text-red-600 text-sm font-semibold">Absent</p>
+                    <p class="text-3xl font-bold text-red-700">${totalAbsent}</p>
+                    <p class="text-xs text-gray-600">${calculateAttendanceRate(totalAbsent, totalStudents)}%</p>
+                </div>
+            `;
+
+            // Render 30-day trends
+            render30DayTrends();
+            renderClassComparison(latest);
+        }
+
+        function render30DayTrends() {
+            const last30 = getLast30Days(allData);
+            
+            const labels = last30.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+            const presentData = [];
+            const tardyData = [];
+            const absentData = [];
+
+            last30.forEach(day => {
+                let present = 0, tardy = 0, total = 0;
+                Object.values(day.classes).forEach(cls => {
+                    total += cls.totalStudents || 0;
+                    present += cls.presentToday || 0;
+                    tardy += cls.tardyToday || 0;
+                });
+                const absent = total - present - tardy;
+                
+                presentData.push(present);
+                tardyData.push(tardy);
+                absentData.push(absent);
+            });
+
+            if (chartInstances.trendsChart) chartInstances.trendsChart.destroy();
+
+            const ctx = document.getElementById('attendanceTrendsChart').getContext('2d');
+            chartInstances.trendsChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Present',
+                            data: presentData,
+                            borderColor: '#10B981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Tardy',
+                            data: tardyData,
+                            borderColor: '#F59E0B',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Absent',
+                            data: absentData,
+                            borderColor: '#EF4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function renderClassComparison(latest) {
+            const classNames = [];
+            const attendanceRates = [];
+
+            Object.entries(latest.classes).forEach(([className, data]) => {
+                const total = data.totalStudents || 0;
+                const present = (data.presentToday || 0) + (data.tardyToday || 0);
+                const rate = parseFloat(calculateAttendanceRate(present, total));
+                
+                classNames.push(className);
+                attendanceRates.push(rate);
+            });
+
+            if (chartInstances.classChart) chartInstances.classChart.destroy();
+
+            const ctx = document.getElementById('classComparisonChart').getContext('2d');
+            chartInstances.classChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: classNames,
+                    datasets: [{
+                        label: 'Attendance Rate (%)',
+                        data: attendanceRates,
+                        backgroundColor: attendanceRates.map(rate => 
+                            rate >= 90 ? '#10B981' : rate >= 75 ? '#F59E0B' : '#EF4444'
+                        )
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, max: 100 }
+                    }
+                }
+            });
+        }
+
+        // ==================== PROGRESS REPORTS ====================
+        function renderProgressReports() {
+            const latest = getSelectedDayData();
+            if (!latest) return;
+
+            let totalDistributed = 0, totalBrought = 0, totalSigned = 0;
+            const missingSignatures = [];
+
+            Object.entries(latest.classes).forEach(([className, data]) => {
+                const distributed = data.totalStudents || 0;
+                const brought = data.progressReportBrought || 0;
+                const signed = data.progressReportSigned || 0;
+                
+                totalDistributed += distributed;
+                totalBrought += brought;
+                totalSigned += signed;
+
+                if (brought > signed) {
+                    missingSignatures.push({
+                        className,
+                        missing: brought - signed
+                    });
+                }
+            });
+
+            document.getElementById('reportsDistributed').textContent = totalDistributed;
+            document.getElementById('reportsBrought').textContent = totalBrought;
+            document.getElementById('reportsSigned').textContent = totalSigned;
+
+            // Render missing signatures list
+            if (missingSignatures.length === 0) {
+                document.getElementById('missingSignaturesList').innerHTML = 
+                    '<p class="text-green-600 text-center py-4">✅ All reports are signed!</p>';
+            } else {
+                document.getElementById('missingSignaturesList').innerHTML = missingSignatures
+                    .sort((a, b) => b.missing - a.missing)
+                    .map(item => `
+                        <div class="flex justify-between items-center border-b py-3">
+                            <span class="font-semibold text-gray-700">${item.className}</span>
+                            <span class="bg-red-100 text-red-700 px-3 py-1 rounded-full font-semibold">
+                                ${item.missing} missing signature${item.missing > 1 ? 's' : ''}
+                            </span>
+                        </div>
+                    `).join('');
+            }
+        }
+
+        // ==================== PERFORMANCE METRICS ====================
+        function renderPerformanceMetrics() {
+            const latest = getSelectedDayData();
+            if (!latest) return;
+
+            const classPerformance = [];
+            
+            console.log('Performance Metrics - Latest classes:', latest.classes);
+            
+            Object.entries(latest.classes).forEach(([className, data]) => {
+                const total = data.totalStudents || 0;
+                const onTime = data.presentToday || 0;
+                const tardy = data.tardyToday || 0;
+                const present = onTime + tardy;
+                const rate = parseFloat(calculateAttendanceRate(present, total));
+                
+                console.log(`Class ${className}:`, { total, onTime, tardy, present, rate });
+                
+                classPerformance.push({ className, rate, total, onTime, tardy, present });
+            });
+
+            classPerformance.sort((a, b) => b.rate - a.rate);
+
+            // Best performing classes
+            const best = classPerformance.slice(0, 3);
+            document.getElementById('bestClasses').innerHTML = best.map((cls, idx) => `
+                <div class="flex justify-between items-center py-2 ${idx < best.length - 1 ? 'border-b' : ''}">
+                    <div>
+                        <span class="font-semibold text-gray-700">${cls.className}</span>
+                        <p class="text-xs text-gray-500">On-Time: ${cls.onTime}/${cls.total} | Tardy: ${cls.tardy}</p>
+                    </div>
+                    <span class="text-2xl font-bold text-green-600">${cls.rate}%</span>
+                </div>
+            `).join('');
+
+            // Worst performing classes
+            const worst = classPerformance.slice(-3).reverse();
+            document.getElementById('worstClasses').innerHTML = worst.map((cls, idx) => `
+                <div class="flex justify-between items-center py-2 ${idx < worst.length - 1 ? 'border-b' : ''}">
+                    <div>
+                        <span class="font-semibold text-gray-700">${cls.className}</span>
+                        <p class="text-xs text-gray-500">On-Time: ${cls.onTime}/${cls.total} | Tardy: ${cls.tardy}</p>
+                    </div>
+                    <span class="text-2xl font-bold ${cls.rate >= 75 ? 'text-orange-600' : 'text-red-600'}">${cls.rate}%</span>
+                </div>
+            `).join('');
+
+            // Perfect attendance (classes with 100% on-time attendance)
+            const perfectClasses = Object.entries(latest.classes)
+                .filter(([_, data]) => {
+                    const total = data.totalStudents || 0;
+                    const onTime = data.presentToday || 0;
+                    return total > 0 && onTime === total;
+                });
+
+            if (perfectClasses.length === 0) {
+                document.getElementById('perfectAttendance').innerHTML = 
+                    '<p class="text-gray-500 text-center py-4">No classes with 100% on-time attendance</p>';
+            } else {
+                document.getElementById('perfectAttendance').innerHTML = perfectClasses.map(([className, data]) => `
+                    <div class="bg-blue-50 rounded-lg p-3 mb-2 border border-blue-200">
+                        <p class="font-semibold text-blue-700">${className}</p>
+                        <p class="text-sm text-gray-600">${data.totalStudents} students - all on time! 🎉</p>
+                    </div>
+                `).join('');
+            }
+
+            // Students needing intervention (chronic tardiness/absence)
+            renderInterventionList();
+        }
+
+        function renderInterventionList() {
+            const last30 = getLast30Days(allData);
+            const classAttendance = {};
+
+            // Calculate average attendance for each class
+            last30.forEach(day => {
+                Object.entries(day.classes).forEach(([className, data]) => {
+                    if (!classAttendance[className]) {
+                        classAttendance[className] = { total: 0, present: 0, days: 0 };
+                    }
+                    classAttendance[className].total += data.totalStudents || 0;
+                    classAttendance[className].present += (data.presentToday || 0) + (data.tardyToday || 0);
+                    classAttendance[className].days++;
                 });
             });
-        };
+
+            const interventionNeeded = [];
+            Object.entries(classAttendance).forEach(([className, data]) => {
+                const avgTotal = data.total / data.days;
+                const avgPresent = data.present / data.days;
+                const rate = parseFloat(calculateAttendanceRate(avgPresent, avgTotal));
+                
+                if (rate < 75) {
+                    interventionNeeded.push({ className, rate });
+                }
+            });
+
+            if (interventionNeeded.length === 0) {
+                document.getElementById('interventionList').innerHTML = 
+                    '<p class="text-green-600 text-center py-4">✅ All classes performing well!</p>';
+            } else {
+                document.getElementById('interventionList').innerHTML = interventionNeeded
+                    .sort((a, b) => a.rate - b.rate)
+                    .map(item => `
+                        <div class="bg-orange-50 rounded-lg p-3 mb-2 border border-orange-200">
+                            <p class="font-semibold text-orange-700">${item.className}</p>
+                            <p class="text-sm text-gray-600">30-day avg: ${item.rate}% attendance</p>
+                        </div>
+                    `).join('');
+            }
+        }
+
+        // ==================== PREDICTIVE INSIGHTS ====================
+        function renderPredictiveInsights() {
+            const last30 = getLast30Days(allData);
+            if (last30.length < 2) return;
+
+            // Calculate trend
+            const recent7 = last30.slice(-7);
+            const previous7 = last30.slice(-14, -7);
+
+            let recentAvg = 0, previousAvg = 0;
+            
+            recent7.forEach(day => {
+                let total = 0, present = 0;
+                Object.values(day.classes).forEach(cls => {
+                    total += cls.totalStudents || 0;
+                    present += (cls.presentToday || 0) + (cls.tardyToday || 0);
+                });
+                recentAvg += (present / total) * 100;
+            });
+            recentAvg /= recent7.length;
+
+            previous7.forEach(day => {
+                let total = 0, present = 0;
+                Object.values(day.classes).forEach(cls => {
+                    total += cls.totalStudents || 0;
+                    present += (cls.presentToday || 0) + (cls.tardyToday || 0);
+                });
+                previousAvg += (present / total) * 100;
+            });
+            previousAvg /= previous7.length;
+
+            // Trend direction
+            const trending = recentAvg > previousAvg ? 'improving' : recentAvg < previousAvg ? 'declining' : 'stable';
+            const trendIcon = trending === 'improving' ? '📈' : trending === 'declining' ? '📉' : '➡️';
+            const trendColor = trending === 'improving' ? 'text-green-600' : trending === 'declining' ? 'text-red-600' : 'text-gray-600';
+            
+            document.getElementById('trendDirection').textContent = trendIcon;
+            document.getElementById('trendText').className = `text-lg font-semibold ${trendColor}`;
+            document.getElementById('trendText').textContent = trending.charAt(0).toUpperCase() + trending.slice(1);
+
+            // Expected attendance
+            const latest = getSelectedDayData();
+            let totalStudents = 0;
+            Object.values(latest.classes).forEach(cls => {
+                totalStudents += cls.totalStudents || 0;
+            });
+            
+            const expectedRate = recentAvg.toFixed(1);
+            const expectedCount = Math.round((totalStudents * recentAvg) / 100);
+            document.getElementById('expectedAttendance').textContent = `${expectedCount} (${expectedRate}%)`;
+
+            // Parent engagement score
+            let totalBrought = 0, totalSigned = 0;
+            Object.values(latest.classes).forEach(cls => {
+                totalBrought += cls.progressReportBrought || 0;
+                totalSigned += cls.progressReportSigned || 0;
+            });
+            
+            const engagementRate = totalBrought > 0 ? ((totalSigned / totalBrought) * 100).toFixed(1) : 0;
+            document.getElementById('engagementScore').textContent = `${engagementRate}%`;
+        }
+
+        // ==================== GENDER ANALYSIS ====================
+        function renderGenderAnalysis() {
+            const latest = getSelectedDayData();
+            if (!latest) return;
+
+            let girlsTotal = 0, girlsPresent = 0, girlsTardy = 0;
+            let boysTotal = 0, boysPresent = 0, boysTardy = 0;
+
+            Object.entries(latest.classes).forEach(([className, data]) => {
+                const isGirls = className.toLowerCase().includes('girl');
+                const total = data.totalStudents || 0;
+                const present = data.presentToday || 0;
+                const tardy = data.tardyToday || 0;
+
+                if (isGirls) {
+                    girlsTotal += total;
+                    girlsPresent += present;
+                    girlsTardy += tardy;
+                } else {
+                    boysTotal += total;
+                    boysPresent += present;
+                    boysTardy += tardy;
+                }
+            });
+
+            const girlsRate = parseFloat(calculateAttendanceRate(girlsPresent + girlsTardy, girlsTotal));
+            const boysRate = parseFloat(calculateAttendanceRate(boysPresent + boysTardy, boysTotal));
+
+            // Render stats
+            document.getElementById('girlsStats').innerHTML = `
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Total Students:</span>
+                    <span class="font-bold text-pink-700">${girlsTotal}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Present (On-Time):</span>
+                    <span class="font-bold text-green-600">${girlsPresent}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Tardy:</span>
+                    <span class="font-bold text-yellow-600">${girlsTardy}</span>
+                </div>
+                <div class="flex justify-between pt-2 border-t border-pink-200">
+                    <span class="text-gray-700 font-semibold">Attendance Rate:</span>
+                    <span class="font-bold text-2xl text-pink-700">${girlsRate}%</span>
+                </div>
+            `;
+
+            document.getElementById('boysStats').innerHTML = `
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Total Students:</span>
+                    <span class="font-bold text-blue-700">${boysTotal}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Present (On-Time):</span>
+                    <span class="font-bold text-green-600">${boysPresent}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Tardy:</span>
+                    <span class="font-bold text-yellow-600">${boysTardy}</span>
+                </div>
+                <div class="flex justify-between pt-2 border-t border-blue-200">
+                    <span class="text-gray-700 font-semibold">Attendance Rate:</span>
+                    <span class="font-bold text-2xl text-blue-700">${boysRate}%</span>
+                </div>
+            `;
+
+            // Render gender comparison chart
+            if (chartInstances.genderChart) chartInstances.genderChart.destroy();
+
+            const ctx = document.getElementById('genderComparisonChart').getContext('2d');
+            chartInstances.genderChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Attendance Rate', 'On-Time Rate', 'Tardy Rate'],
+                    datasets: [
+                        {
+                            label: 'Girls',
+                            data: [
+                                girlsRate,
+                                parseFloat(calculateAttendanceRate(girlsPresent, girlsTotal)),
+                                parseFloat(calculateAttendanceRate(girlsTardy, girlsTotal))
+                            ],
+                            backgroundColor: '#EC4899'
+                        },
+                        {
+                            label: 'Boys',
+                            data: [
+                                boysRate,
+                                parseFloat(calculateAttendanceRate(boysPresent, boysTotal)),
+                                parseFloat(calculateAttendanceRate(boysTardy, boysTotal))
+                            ],
+                            backgroundColor: '#3B82F6'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, max: 100 }
+                    }
+                }
+            });
+        }
+
+        // Initialize
+        loadData();
         
-        // Renders the calendar for the current month
-        const renderCalendar = async () => {
-            const calendarGrid = document.getElementById('calendar-grid');
-            const monthDisplay = document.getElementById('month-display');
-            const loadingStatus = document.getElementById('loading-status');
-            
-            calendarGrid.innerHTML = '';
-            loadingStatus.textContent = 'Loading daily report history...';
-            
-            let reports = {};
-            try {
-                reports = await fetchDailyReports();
-                loadingStatus.textContent = 'Data loaded successfully.';
-                loadingStatus.classList.add('hidden');
-            } catch (error) {
-                loadingStatus.textContent = 'Error loading data. Check console for details.';
-                return;
-            }
-
-            // Get date details for the current month
-            const today = new Date();
-            const year = today.getFullYear();
-            const month = today.getMonth(); 
-            
-            const firstDayOfMonth = new Date(year, month, 1);
-            const daysInMonth = new Date(year, month + 1, 0).getDate();
-            const startingDayOfWeek = firstDayOfMonth.getDay(); // 0=Sunday
-            
-            monthDisplay.textContent = getMonthName(today);
-
-            // 1. Fill in preceding empty days (padding)
-            for (let i = 0; i < startingDayOfWeek; i++) {
-                calendarGrid.insertAdjacentHTML('beforeend', '<div class="calendar-day bg-gray-50 border border-gray-100"></div>');
-            }
-            
-            // 2. Render each day of the month
-            for (let day = 1; day <= daysInMonth; day++) {
-                const currentDate = new Date(year, month, day);
-                const dateKey = formatDate(currentDate); 
-                
-                // Check if a daily report entry exists for this day
-                // The existence of reports[dateKey] indicates a submission "did that day"
-                const hasReport = !!reports[dateKey] && Object.keys(reports[dateKey]).length > 0;
-                
-                // Determine styling
-                const lightClass = hasReport ? 'light-on' : 'light-off';
-                const dayBg = hasReport ? 'bg-green-50' : 'bg-white';
-                // Highlight today's date
-                const dayText = day === today.getDate() && month === today.getMonth() ? 'font-extrabold text-indigo-700' : 'text-gray-900';
-                
-                const tooltipText = hasReport 
-                    ? `Report submitted on ${dateKey}`
-                    : `No report found on ${dateKey}`;
-
-                // HTML for the day
-                const dayHtml = `
-                    <div class="calendar-day ${dayBg} border border-gray-200" title="${tooltipText}">
-                        <span class="text-sm ${dayText}">${day}</span>
-                        <div class="signal-light ${lightClass}"></div>
-                    </div>
-                `;
-                calendarGrid.insertAdjacentHTML('beforeend', dayHtml);
-            }
-        };
-
-        // --- INITIALIZATION ---
-        window.onload = () => {
-            initializeFirebase();
-        };
-
+        // Mobile menu toggle
+        document.getElementById('menu-toggle').addEventListener('click', function() {
+            const menu = document.getElementById('mobile-nav-menu');
+            menu.classList.toggle('hidden');
+        });
     </script>
 </body>
 </html>

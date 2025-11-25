@@ -1,0 +1,2948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Class Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        
+        html, body { 
+            height: 100%;
+            min-height: 100vh;
+            font-family: 'Inter', sans-serif; 
+            background-color: #f4f7f9; 
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.3s;
+        }
+
+        body.dark-mode {
+            background-color: #1a202c;
+            color: #e2e8f0;
+        }
+
+        body.dark-mode .bg-white { background-color: #2d3748 !important; }
+        body.dark-mode .text-gray-800 { color: #e2e8f0 !important; }
+        body.dark-mode .text-gray-700 { color: #cbd5e0 !important; }
+        body.dark-mode .text-gray-600 { color: #a0aec0 !important; }
+        body.dark-mode .text-gray-500 { color: #718096 !important; }
+        body.dark-mode .border-gray-200 { border-color: #4a5568 !important; }
+        body.dark-mode .bg-gray-50 { background-color: #374151 !important; }
+
+        /* Styling for each day cell in the calendar */
+        .calendar-day {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 60px; 
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            line-height: 1;
+        }
+
+        .calendar-day:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        /* The "Signal Light" element */
+        .signal-light {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-top: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        /* Heatmap colors based on score */
+        .score-none { background-color: #F3F4F6; }
+        .score-poor { background-color: #FEE2E2; }
+        .score-fair { background-color: #FEF3C7; }
+        .score-good { background-color: #D1FAE5; }
+        .score-excellent { background-color: #A7F3D0; }
+        
+        /* Light states with colors */
+        .light-none { background-color: #D1D5DB; border: 1px solid #9CA3AF; }
+        .light-poor { background-color: #EF4444; box-shadow: 0 0 8px #F87171; }
+        .light-fair { background-color: #F59E0B; box-shadow: 0 0 8px #FBBF24; }
+        .light-good { background-color: #10B981; box-shadow: 0 0 8px #34D399; }
+        .light-excellent { background-color: #059669; box-shadow: 0 0 12px #10B981; }
+
+        .stat-card {
+            animation: slideIn 0.4s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .streak-badge {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .heatmap-cell {
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .heatmap-cell:hover {
+            transform: scale(1.05);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .alert-pulse {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+
+    <header class="mb-6 flex justify-between items-center border-b pb-4">
+        <h1 class="text-3xl font-extrabold text-gray-800">📊 Daily Report Dashboard</h1>
+        <div class="flex gap-2">
+            <button id="dark-mode-toggle" class="px-3 py-2 text-sm font-semibold bg-gray-200 hover:bg-gray-300 rounded-lg transition duration-150" title="Toggle Dark Mode">
+                🌙
+            </button>
+            <a href="index.html" class="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition duration-150">
+                ← Home
+            </a>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl mx-auto w-full">
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="stat-card bg-white p-4 rounded-xl shadow-lg border-l-4 border-indigo-500">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs font-semibold text-gray-500 uppercase">Total Reports</p>
+                        <p id="stat-total" class="text-3xl font-extrabold text-gray-800 mt-1">-</p>
+                    </div>
+                    <div class="text-3xl">📋</div>
+                </div>
+            </div>
+            
+            <div class="stat-card bg-white p-4 rounded-xl shadow-lg border-l-4 border-green-500">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs font-semibold text-gray-500 uppercase">Current Streak</p>
+                        <p id="stat-streak" class="text-3xl font-extrabold text-green-600 mt-1">-</p>
+                        <p id="stat-streak-label" class="text-2xs text-gray-500"></p>
+                    </div>
+                    <div class="text-3xl streak-badge">🔥</div>
+                </div>
+            </div>
+            
+            <div class="stat-card bg-white p-4 rounded-xl shadow-lg border-l-4 border-blue-500">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs font-semibold text-gray-500 uppercase">Completion Rate</p>
+                        <p id="stat-completion" class="text-3xl font-extrabold text-blue-600 mt-1">-%</p>
+                    </div>
+                    <div class="text-3xl">📊</div>
+                </div>
+            </div>
+            
+            <div class="stat-card bg-white p-4 rounded-xl shadow-lg border-l-4 border-yellow-500">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs font-semibold text-gray-500 uppercase">Avg Score</p>
+                        <p id="stat-avg-score" class="text-3xl font-extrabold text-yellow-600 mt-1">-</p>
+                    </div>
+                    <div class="text-3xl">⭐</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Real-Time Attendance Analytics -->
+        <div class="bg-white p-6 rounded-xl shadow-lg mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-gray-800">👥 Latest School Day Attendance</h2>
+                <span id="today-date" class="text-sm font-semibold text-indigo-600"></span>
+            </div>
+            
+            <!-- Key Metrics -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div class="p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg border-l-4 border-green-500">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <p class="text-xs font-semibold text-gray-600 uppercase">Attendance Rate</p>
+                            <p id="today-attendance-rate" class="text-3xl font-extrabold text-green-700 mt-1">-%</p>
+                            <p id="today-attendance-count" class="text-xs text-gray-600 mt-1">- of - students</p>
+                        </div>
+                        <div class="text-3xl">✅</div>
+                    </div>
+                </div>
+                
+                <div class="p-4 bg-gradient-to-br from-red-50 to-red-100 rounded-lg border-l-4 border-red-500">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <p class="text-xs font-semibold text-gray-600 uppercase">Missing Students</p>
+                            <p id="today-absent-count" class="text-3xl font-extrabold text-red-700 mt-1 alert-pulse">-</p>
+                            <p id="today-absent-pct" class="text-xs text-gray-600 mt-1">-% absent</p>
+                        </div>
+                        <div class="text-3xl">⚠️</div>
+                    </div>
+                </div>
+                
+                <div class="p-4 bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg border-l-4 border-yellow-500">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <p class="text-xs font-semibold text-gray-600 uppercase">Tardy Students</p>
+                            <p id="today-tardy-count" class="text-3xl font-extrabold text-yellow-700 mt-1">-</p>
+                            <p id="today-tardy-pct" class="text-xs text-gray-600 mt-1">-% late</p>
+                        </div>
+                        <div class="text-3xl">⏰</div>
+                    </div>
+                </div>
+                
+                <div class="p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg border-l-4 border-blue-500">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <p class="text-xs font-semibold text-gray-600 uppercase">Perfect Attendance</p>
+                            <p id="today-perfect-count" class="text-3xl font-extrabold text-blue-700 mt-1">-</p>
+                            <p class="text-xs text-gray-600 mt-1">classes at 100%</p>
+                        </div>
+                        <div class="text-3xl">🌟</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Perfect Attendance Classes List -->
+            <div id="perfect-attendance-section" class="mb-4 hidden">
+                <h3 class="text-sm font-bold text-gray-700 mb-2">🏆 Classes with Perfect Attendance Today:</h3>
+                <div id="perfect-attendance-list" class="flex flex-wrap gap-2">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+            
+            <!-- Class-by-Class Breakdown -->
+            <div>
+                <h3 class="text-sm font-bold text-gray-700 mb-3">📊 Class-by-Class Attendance</h3>
+                <div id="today-class-breakdown" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendance Heatmap -->
+        <div class="bg-white p-6 rounded-xl shadow-lg mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">🔥 Attendance Heatmap (Last 30 Days)</h2>
+            <p class="text-sm text-gray-600 mb-4">Color intensity shows attendance rate. Darker = better attendance.</p>
+            
+            <!-- Heatmap Grid -->
+            <div class="overflow-x-auto">
+                <div id="attendance-heatmap" class="inline-block min-w-full">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+            
+            <!-- Heatmap Legend -->
+            <div class="mt-4 flex items-center gap-4 text-xs">
+                <span class="font-semibold text-gray-700">Legend:</span>
+                <div class="flex items-center gap-1">
+                    <div class="w-6 h-6 bg-gray-200 border border-gray-300 rounded"></div>
+                    <span class="text-gray-600">No Data</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <div class="w-6 h-6 bg-red-200 border border-red-300 rounded"></div>
+                    <span class="text-gray-600">&lt;70%</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <div class="w-6 h-6 bg-yellow-200 border border-yellow-300 rounded"></div>
+                    <span class="text-gray-600">70-89%</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <div class="w-6 h-6 bg-green-300 border border-green-400 rounded"></div>
+                    <span class="text-gray-600">90-94%</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <div class="w-6 h-6 bg-green-500 border border-green-600 rounded"></div>
+                    <span class="text-gray-600">95-99%</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <div class="w-6 h-6 bg-green-700 border border-green-800 rounded"></div>
+                    <span class="text-gray-600">100%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trends & Patterns Analysis -->
+        <div class="bg-white p-6 rounded-xl shadow-lg mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">📊 Attendance Trends & Patterns</h2>
+            
+            <!-- Best/Worst Days -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div class="p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg border-l-4 border-green-500">
+                    <h3 class="text-sm font-bold text-gray-700 mb-2">🏆 Best Attendance Day</h3>
+                    <p id="best-day-name" class="text-2xl font-extrabold text-green-700">-</p>
+                    <p id="best-day-rate" class="text-sm text-gray-600 mt-1">-</p>
+                    <p id="best-day-date" class="text-xs text-gray-500 mt-1">-</p>
+                </div>
+                
+                <div class="p-4 bg-gradient-to-br from-red-50 to-red-100 rounded-lg border-l-4 border-red-500">
+                    <h3 class="text-sm font-bold text-gray-700 mb-2">⚠️ Worst Attendance Day</h3>
+                    <p id="worst-day-name" class="text-2xl font-extrabold text-red-700">-</p>
+                    <p id="worst-day-rate" class="text-sm text-gray-600 mt-1">-</p>
+                    <p id="worst-day-date" class="text-xs text-gray-500 mt-1">-</p>
+                </div>
+            </div>
+            
+            <!-- Weekly Attendance Graph -->
+            <div class="mb-6">
+                <h3 class="text-sm font-bold text-gray-700 mb-3">📈 Weekly Attendance Pattern (Mon-Fri)</h3>
+                <div style="position: relative; height: 250px;">
+                    <canvas id="weekly-attendance-chart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Punctuality Score Tracker -->
+            <div class="mb-6">
+                <h3 class="text-sm font-bold text-gray-700 mb-3">⏱️ Punctuality Score (30-Day Trend)</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div class="p-3 bg-blue-50 rounded-lg">
+                        <p class="text-xs text-gray-600 mb-1">Average Punctuality</p>
+                        <p id="punctuality-avg" class="text-2xl font-bold text-blue-700">-%</p>
+                        <p class="text-xs text-gray-500 mt-1">On-time arrival rate</p>
+                    </div>
+                    <div class="p-3 bg-yellow-50 rounded-lg">
+                        <p class="text-xs text-gray-600 mb-1">Total Tardy</p>
+                        <p id="punctuality-tardy-total" class="text-2xl font-bold text-yellow-700">-</p>
+                        <p class="text-xs text-gray-500 mt-1">Last 30 days</p>
+                    </div>
+                    <div class="p-3 bg-purple-50 rounded-lg">
+                        <p class="text-xs text-gray-600 mb-1">Best Punctuality</p>
+                        <p id="punctuality-best-class" class="text-lg font-bold text-purple-700">-</p>
+                        <p class="text-xs text-gray-500 mt-1">Most on-time class</p>
+                    </div>
+                </div>
+                <div style="position: relative; height: 200px;">
+                    <canvas id="punctuality-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Class Comparison & Seasonal Trends -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- Class Comparison -->
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <h3 class="text-lg font-bold text-gray-700 mb-4">🎯 Class Attendance Comparison</h3>
+                <div style="position: relative; height: 300px;">
+                    <canvas id="class-comparison-chart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Seasonal Trends -->
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <h3 class="text-lg font-bold text-gray-700 mb-4">🍃 Seasonal Trends (Monthly Average)</h3>
+                <div style="position: relative; height: 300px;">
+                    <canvas id="seasonal-trends-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Monthly Attendance Calendar View -->
+        <div class="bg-white p-6 rounded-xl shadow-lg mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">📅 Monthly Attendance Calendar</h2>
+            <p class="text-sm text-gray-600 mb-4">Current month overview - each day colored by overall attendance percentage</p>
+            
+            <div class="grid grid-cols-7 text-center text-sm font-semibold text-gray-500 border-b pb-2 mb-2">
+                <span>Sun</span>
+                <span>Mon</span>
+                <span>Tue</span>
+                <span>Wed</span>
+                <span>Thu</span>
+                <span>Fri</span>
+                <span>Sat</span>
+            </div>
+            
+            <div id="monthly-attendance-calendar" class="grid grid-cols-7 gap-2">
+                <!-- Populated dynamically -->
+            </div>
+            
+            <div class="mt-4 flex items-center gap-4 text-xs">
+                <span class="font-semibold text-gray-700">Attendance Rate:</span>
+                <div class="flex items-center gap-1">
+                    <div class="w-4 h-4 bg-gray-200 rounded"></div>
+                    <span class="text-gray-600">No Data</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <div class="w-4 h-4 bg-red-300 rounded"></div>
+                    <span class="text-gray-600">&lt;85%</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <div class="w-4 h-4 bg-yellow-300 rounded"></div>
+                    <span class="text-gray-600">85-92%</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <div class="w-4 h-4 bg-green-400 rounded"></div>
+                    <span class="text-gray-600">93-97%</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <div class="w-4 h-4 bg-green-600 rounded"></div>
+                    <span class="text-gray-600">98%+</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trends & Patterns Analysis -->
+        <div class="bg-white p-6 rounded-xl shadow-lg mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">📊 Attendance Trends & Patterns</h2>
+            
+            <!-- Best/Worst Days -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div class="p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg border-l-4 border-green-500">
+                    <h3 class="text-sm font-bold text-gray-700 mb-2">🏆 Best Attendance Day</h3>
+                    <p id="best-day-name" class="text-2xl font-extrabold text-green-700">-</p>
+                    <p id="best-day-rate" class="text-sm text-gray-600 mt-1">-</p>
+                    <p id="best-day-date" class="text-xs text-gray-500 mt-1">-</p>
+                </div>
+                
+                <div class="p-4 bg-gradient-to-br from-red-50 to-red-100 rounded-lg border-l-4 border-red-500">
+                    <h3 class="text-sm font-bold text-gray-700 mb-2">⚠️ Worst Attendance Day</h3>
+                    <p id="worst-day-name" class="text-2xl font-extrabold text-red-700">-</p>
+                    <p id="worst-day-rate" class="text-sm text-gray-600 mt-1">-</p>
+                    <p id="worst-day-date" class="text-xs text-gray-500 mt-1">-</p>
+                </div>
+            </div>
+            
+            <!-- Weekly Attendance Graph -->
+            <div class="mb-6">
+                <h3 class="text-sm font-bold text-gray-700 mb-3">📈 Weekly Attendance Pattern (Mon-Fri)</h3>
+                <div style="position: relative; height: 250px;">
+                    <canvas id="weekly-attendance-chart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Punctuality Score Tracker -->
+            <div class="mb-6">
+                <h3 class="text-sm font-bold text-gray-700 mb-3">⏱️ Punctuality Score (30-Day Trend)</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div class="p-3 bg-blue-50 rounded-lg">
+                        <p class="text-xs text-gray-600 mb-1">Average Punctuality</p>
+                        <p id="punctuality-avg" class="text-2xl font-bold text-blue-700">-%</p>
+                        <p class="text-xs text-gray-500 mt-1">On-time arrival rate</p>
+                    </div>
+                    <div class="p-3 bg-yellow-50 rounded-lg">
+                        <p class="text-xs text-gray-600 mb-1">Total Tardy</p>
+                        <p id="punctuality-tardy-total" class="text-2xl font-bold text-yellow-700">-</p>
+                        <p class="text-xs text-gray-500 mt-1">Last 30 days</p>
+                    </div>
+                    <div class="p-3 bg-purple-50 rounded-lg">
+                        <p class="text-xs text-gray-600 mb-1">Best Punctuality</p>
+                        <p id="punctuality-best-class" class="text-lg font-bold text-purple-700">-</p>
+                        <p class="text-xs text-gray-500 mt-1">Most on-time class</p>
+                    </div>
+                </div>
+                <div style="position: relative; height: 200px;">
+                    <canvas id="punctuality-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Class Comparison & Seasonal Trends -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- Class Comparison -->
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <h3 class="text-lg font-bold text-gray-700 mb-4">🎯 Class Attendance Comparison</h3>
+                <div style="position: relative; height: 300px;">
+                    <canvas id="class-comparison-chart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Seasonal Trends -->
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <h3 class="text-lg font-bold text-gray-700 mb-4">🍃 Seasonal Trends (Monthly Average)</h3>
+                <div style="position: relative; height: 300px;">
+                    <canvas id="seasonal-trends-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Monthly Attendance Calendar View -->
+        <div class="bg-white p-6 rounded-xl shadow-lg mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">📅 Monthly Attendance Calendar</h2>
+            <p class="text-sm text-gray-600 mb-4">Current month overview - each day colored by overall attendance percentage</p>
+            
+            <div class="grid grid-cols-7 text-center text-sm font-semibold text-gray-500 border-b pb-2 mb-2">
+                <span>Sun</span>
+                <span>Mon</span>
+                <span>Tue</span>
+                <span>Wed</span>
+                <span>Thu</span>
+                <span>Fri</span>
+                <span>Sat</span>
+            </div>
+            
+            <div id="monthly-attendance-calendar" class="grid grid-cols-7 gap-2">
+                <!-- Populated dynamically -->
+            </div>
+            
+            <div class="mt-4 flex items-center gap-4 text-xs">
+                <span class="font-semibold text-gray-700">Attendance Rate:</span>
+                <div class="flex items-center gap-1">
+                    <div class="w-4 h-4 bg-gray-200 rounded"></div>
+                    <span class="text-gray-600">No Data</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <div class="w-4 h-4 bg-red-300 rounded"></div>
+                    <span class="text-gray-600">&lt;85%</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <div class="w-4 h-4 bg-yellow-300 rounded"></div>
+                    <span class="text-gray-600">85-92%</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <div class="w-4 h-4 bg-green-400 rounded"></div>
+                    <span class="text-gray-600">93-97%</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <div class="w-4 h-4 bg-green-600 rounded"></div>
+                    <span class="text-gray-600">98%+</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Report Tracking -->
+        <div class="bg-white p-6 rounded-xl shadow-lg mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">📝 Progress Report Tracking</h2>
+            
+            <!-- Latest Report Status -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg border-l-4 border-blue-500">
+                    <p class="text-xs font-semibold text-gray-600 mb-1">Reports Brought</p>
+                    <p id="reports-brought-rate" class="text-3xl font-extrabold text-blue-700">-</p>
+                    <p id="reports-brought-count" class="text-xs text-gray-600 mt-1">- students</p>
+                </div>
+                
+                <div class="p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg border-l-4 border-green-500">
+                    <p class="text-xs font-semibold text-gray-600 mb-1">Signature Completion</p>
+                    <p id="signature-completion-rate" class="text-3xl font-extrabold text-green-700">-</p>
+                    <p id="signature-completion-count" class="text-xs text-gray-600 mt-1">- signed</p>
+                </div>
+                
+                <div class="p-4 bg-gradient-to-br from-red-50 to-red-100 rounded-lg border-l-4 border-red-500">
+                    <p class="text-xs font-semibold text-gray-600 mb-1">Missing Signatures</p>
+                    <p id="missing-signatures-count" class="text-3xl font-extrabold text-red-700">-</p>
+                    <p id="missing-signatures-rate" class="text-xs text-gray-600 mt-1">Need follow-up</p>
+                </div>
+                
+                <div class="p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg border-l-4 border-purple-500">
+                    <p class="text-xs font-semibold text-gray-600 mb-1">Parent Engagement</p>
+                    <p id="parent-engagement-score" class="text-3xl font-extrabold text-purple-700">-</p>
+                    <p class="text-xs text-gray-600 mt-1">Combined metric</p>
+                </div>
+            </div>
+            
+            <!-- Class Rankings by Report Return -->
+            <div class="mb-6">
+                <h3 class="text-sm font-bold text-gray-700 mb-3">🏆 Class Rankings - Best Report Return Rates (30 Days)</h3>
+                <div id="report-rankings" class="space-y-2">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+            
+            <!-- Report Compliance Trend -->
+            <div class="mb-6">
+                <h3 class="text-sm font-bold text-gray-700 mb-3">📈 Report Compliance Trend (30 Days)</h3>
+                <div style="position: relative; height: 250px;">
+                    <canvas id="report-compliance-chart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Historical Analysis Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <!-- Signature Gap Analysis -->
+                <div>
+                    <h3 class="text-sm font-bold text-gray-700 mb-3">📊 Signature Gap Analysis</h3>
+                    <div class="p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg border-l-4 border-orange-500">
+                        <p class="text-xs text-gray-600 mb-2">Brought vs Signed Gap (30 Days)</p>
+                        <p id="signature-gap-rate" class="text-4xl font-extrabold text-orange-700">-</p>
+                        <p id="signature-gap-desc" class="text-xs text-gray-600 mt-2">-</p>
+                    </div>
+                    <div class="mt-4" style="position: relative; height: 200px;">
+                        <canvas id="signature-gap-chart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Most Engaged Parents -->
+                <div>
+                    <h3 class="text-sm font-bold text-gray-700 mb-3">⭐ Most Engaged Parents (Best Signature Rates)</h3>
+                    <div id="most-engaged-parents" class="space-y-2">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Follow-up Needed List -->
+            <div>
+                <h3 class="text-sm font-bold text-gray-700 mb-3">🚨 Follow-up Needed - Classes Consistently Missing Reports</h3>
+                <div id="followup-needed-list" class="space-y-2">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Girls vs Boys Comparison -->
+        <div class="bg-white p-6 rounded-xl shadow-lg mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">👥 Girls vs Boys Comparison</h2>
+            
+            <!-- Section Performance Overview -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <!-- Girls Section -->
+                <div class="p-6 bg-gradient-to-br from-pink-50 to-pink-100 rounded-xl border-2 border-pink-300">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-bold text-pink-700">👧 Girls Section</h3>
+                        <span class="text-3xl">💕</span>
+                    </div>
+                    <div class="space-y-3">
+                        <div>
+                            <p class="text-xs text-gray-600">Average Attendance</p>
+                            <p id="girls-attendance" class="text-3xl font-extrabold text-pink-700">-%</p>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                                <p class="text-gray-600">Punctuality</p>
+                                <p id="girls-punctuality" class="text-lg font-bold text-pink-600">-%</p>
+                            </div>
+                            <div>
+                                <p class="text-gray-600">Reports Signed</p>
+                                <p id="girls-reports" class="text-lg font-bold text-pink-600">-%</p>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-600 mb-1">Overall Score</p>
+                            <div class="w-full bg-gray-200 rounded-full h-6">
+                                <div id="girls-score-bar" class="bg-pink-500 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white" style="width: 0%">0%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Boys Section -->
+                <div class="p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border-2 border-blue-300">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-bold text-blue-700">👦 Boys Section</h3>
+                        <span class="text-3xl">💙</span>
+                    </div>
+                    <div class="space-y-3">
+                        <div>
+                            <p class="text-xs text-gray-600">Average Attendance</p>
+                            <p id="boys-attendance" class="text-3xl font-extrabold text-blue-700">-%</p>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                                <p class="text-gray-600">Punctuality</p>
+                                <p id="boys-punctuality" class="text-lg font-bold text-blue-600">-%</p>
+                            </div>
+                            <div>
+                                <p class="text-gray-600">Reports Signed</p>
+                                <p id="boys-reports" class="text-lg font-bold text-blue-600">-%</p>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-600 mb-1">Overall Score</p>
+                            <div class="w-full bg-gray-200 rounded-full h-6">
+                                <div id="boys-score-bar" class="bg-blue-500 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white" style="width: 0%">0%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Gender Gap Analysis -->
+            <div class="mb-6">
+                <h3 class="text-sm font-bold text-gray-700 mb-3">📊 Gender Gap Analysis</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="p-4 bg-gray-50 rounded-lg">
+                        <p class="text-xs text-gray-600 mb-1">Attendance Gap</p>
+                        <p id="gap-attendance" class="text-2xl font-bold">-</p>
+                        <p id="gap-attendance-leader" class="text-xs text-gray-500 mt-1">-</p>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-lg">
+                        <p class="text-xs text-gray-600 mb-1">Punctuality Gap</p>
+                        <p id="gap-punctuality" class="text-2xl font-bold">-</p>
+                        <p id="gap-punctuality-leader" class="text-xs text-gray-500 mt-1">-</p>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-lg">
+                        <p class="text-xs text-gray-600 mb-1">Report Compliance Gap</p>
+                        <p id="gap-reports" class="text-2xl font-bold">-</p>
+                        <p id="gap-reports-leader" class="text-xs text-gray-500 mt-1">-</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Competitive Leaderboard -->
+            <div>
+                <h3 class="text-sm font-bold text-gray-700 mb-3">🏆 Competitive Leaderboard - Girls vs Boys</h3>
+                <div style="position: relative; height: 300px;">
+                    <canvas id="gender-comparison-chart"></canvas>
+                </div>
+                <div class="mt-4 p-4 bg-gradient-to-r from-pink-100 to-blue-100 rounded-lg">
+                    <div class="flex items-center justify-center gap-4">
+                        <div class="text-center">
+                            <p class="text-xs text-gray-600">Current Leader</p>
+                            <p id="current-leader" class="text-2xl font-extrabold">-</p>
+                        </div>
+                        <div class="text-4xl">🏆</div>
+                        <div class="text-center">
+                            <p class="text-xs text-gray-600">Lead Margin</p>
+                            <p id="lead-margin" class="text-2xl font-extrabold">-</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Predictive Insights -->
+        <div class="bg-white p-6 rounded-xl shadow-lg mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">🔮 Predictive Insights</h2>
+            
+            <!-- Absence Forecast -->
+            <div class="mb-6">
+                <h3 class="text-sm font-bold text-gray-700 mb-3">📉 Absence Forecast - High Risk Days</h3>
+                <p class="text-xs text-gray-600 mb-3">Based on historical patterns, these days typically have lower attendance</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div id="forecast-monday" class="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <p class="font-semibold text-gray-800">Monday</p>
+                        <p class="text-xs text-gray-600 mt-1">Avg: <span id="forecast-monday-avg" class="font-bold">-</span></p>
+                        <p class="text-xs text-gray-500 mt-1" id="forecast-monday-trend">-</p>
+                    </div>
+                    <div id="forecast-friday" class="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <p class="font-semibold text-gray-800">Friday</p>
+                        <p class="text-xs text-gray-600 mt-1">Avg: <span id="forecast-friday-avg" class="font-bold">-</span></p>
+                        <p class="text-xs text-gray-500 mt-1" id="forecast-friday-trend">-</p>
+                    </div>
+                    <div id="forecast-seasonal" class="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <p class="font-semibold text-gray-800">Seasonal Pattern</p>
+                        <p class="text-xs text-gray-600 mt-1">Current Trend: <span id="forecast-seasonal-trend" class="font-bold">-</span></p>
+                        <p class="text-xs text-gray-500 mt-1" id="forecast-seasonal-desc">-</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Risk Indicators -->
+            <div class="mb-6">
+                <h3 class="text-sm font-bold text-gray-700 mb-3">⚠️ Risk Indicators - Classes Trending Toward Poor Attendance</h3>
+                <div id="risk-indicators" class="space-y-2">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+            
+            <!-- Improvement Tracking -->
+            <div>
+                <h3 class="text-sm font-bold text-gray-700 mb-3">📈 Improvement Tracking - Classes Showing Progress</h3>
+                <div id="improvement-tracking" class="space-y-2">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters and Controls -->
+        <div class="bg-white p-4 rounded-xl shadow-lg mb-6">
+            <div class="flex flex-wrap gap-3 items-center justify-between">
+                <div class="flex gap-2 items-center">
+                    <label class="text-sm font-semibold text-gray-700">Filter:</label>
+                    <select id="class-filter" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="all">All Classes</option>
+                        <optgroup label="Girls">
+                            <option value="Girls-1A">Girls 1-A</option>
+                            <option value="Girls-1B">Girls 1-B</option>
+                            <option value="Girls-1C">Girls 1-C</option>
+                            <option value="Girls-2">Girls 2</option>
+                            <option value="Girls-3">Girls 3</option>
+                            <option value="Girls-4">Girls 4</option>
+                        </optgroup>
+                        <optgroup label="Boys">
+                            <option value="Boys-1A">Boys 1-A</option>
+                            <option value="Boys-1B">Boys 1-B</option>
+                            <option value="Boys-1C">Boys 1-C</option>
+                            <option value="Boys-2">Boys 2</option>
+                            <option value="Boys-3">Boys 3</option>
+                            <option value="Boys-4">Boys 4</option>
+                        </optgroup>
+                    </select>
+                </div>
+                
+                <div class="flex gap-2">
+                    <button id="export-btn" class="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition">
+                        📥 Export CSV
+                    </button>
+                    <button id="print-btn" class="px-4 py-2 bg-gray-600 text-white text-sm font-semibold rounded-lg hover:bg-gray-700 transition">
+                        🖨️ Print
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Calendar Container -->
+        <div id="calendar-container" class="bg-white p-6 rounded-xl shadow-lg mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <button id="prev-month" class="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-semibold transition">
+                    ← Prev
+                </button>
+                <h2 id="month-display" class="text-xl font-bold text-gray-700">Loading...</h2>
+                <button id="next-month" class="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-semibold transition">
+                    Next →
+                </button>
+            </div>
+            
+            <div class="grid grid-cols-7 text-center text-sm font-semibold text-gray-500 border-b pb-2 mb-2">
+                <span>Sun</span>
+                <span>Mon</span>
+                <span>Tue</span>
+                <span>Wed</span>
+                <span>Thu</span>
+                <span>Fri</span>
+                <span>Sat</span>
+            </div>
+            
+            <div id="calendar-grid" class="grid grid-cols-7 gap-1">
+            </div>
+            
+            <p id="loading-status" class="text-center text-gray-500 mt-6">Fetching daily reports...</p>
+            
+            <!-- Legend -->
+            <div class="mt-6 p-4 bg-gray-50 rounded-lg">
+                <p class="text-sm font-semibold text-gray-700 mb-2">Score Legend:</p>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                    <div class="flex items-center gap-2">
+                        <div class="signal-light light-none"></div>
+                        <span class="text-gray-600">No Data</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="signal-light light-poor"></div>
+                        <span class="text-gray-600">&lt;50% Poor</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="signal-light light-fair"></div>
+                        <span class="text-gray-600">50-79% Fair</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="signal-light light-good"></div>
+                        <span class="text-gray-600">80-89% Good</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="signal-light light-excellent"></div>
+                        <span class="text-gray-600">90%+ Excellent</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts and Trends -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <h3 class="text-lg font-bold text-gray-700 mb-4">📈 Score Trend</h3>
+                <div style="position: relative; height: 200px;">
+                    <canvas id="trend-chart"></canvas>
+                </div>
+            </div>
+            
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <h3 class="text-lg font-bold text-gray-700 mb-4">🏆 Class Leaderboard</h3>
+                <div id="leaderboard" class="space-y-2">
+                    <p class="text-sm text-gray-500 italic">Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Goals & Achievements -->
+        <div class="bg-white p-6 rounded-xl shadow-lg mb-6">
+            <h3 class="text-lg font-bold text-gray-700 mb-4">🎯 Goals & Achievements</h3>
+            <div id="goals-container" class="space-y-3">
+                <div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                    <div>
+                        <p class="text-sm font-semibold text-gray-700">Monthly Completion Target</p>
+                        <p class="text-xs text-gray-500">Goal: 90% of days with reports</p>
+                    </div>
+                    <div class="text-right">
+                        <p id="goal-completion-percent" class="text-2xl font-bold text-blue-600">-%</p>
+                    </div>
+                </div>
+                
+                <div id="achievements" class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <!-- Achievement badges will be added dynamically -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Day Details Modal -->
+    <div id="day-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-80 z-50 flex items-center justify-center p-4" onclick="closeDayModal()">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-4 border-b pb-3">
+                <h2 id="modal-date" class="text-2xl font-bold text-gray-800">Date Details</h2>
+                <button onclick="closeDayModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+            <div id="modal-content" class="space-y-4">
+                <!-- Content will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // --- FIREBASE CONFIGURATION ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously,
+            onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js";
+        import { 
+            getFirestore, 
+            collection,
+            getDocs,
+            doc,
+            getDoc
+        } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJpMJihQ",
+            authDomain: "apps-e1163.firebaseapp.com",
+            projectId: "apps-e1163",
+            storageBucket: "apps-e1163.firebasestorage.app",
+            messagingSenderId: "855206153422",
+            appId: "1:855206153422:web:2a1366b2e7825304c3d49f",
+            measurementId: "G-7YCKESJB8T"
+        };
+
+        const appId = firebaseConfig.projectId;
+        
+        let USER_ID = null;
+        let db, auth;
+        let currentMonth = new Date().getMonth();
+        let currentYear = new Date().getFullYear();
+        let allReports = {};
+        let allAccumulatedScores = {};
+        let currentFilter = 'all';
+        let trendChart = null;
+        let weeklyChart = null;
+        let punctualityChart = null;
+        let classComparisonChart = null;
+        let seasonalTrendsChart = null;
+        let reportComplianceChart = null;
+        let signatureGapChart = null;
+        let genderComparisonChart = null;
+
+        const CLASS_DEFINITIONS = [
+            { id: 'Girls-1A', name: 'Girls 1-A' },
+            { id: 'Girls-1B', name: 'Girls 1-B' },
+            { id: 'Girls-1C', name: 'Girls 1-C' },
+            { id: 'Girls-2', name: 'Girls 2' },
+            { id: 'Girls-3', name: 'Girls 3' },
+            { id: 'Girls-4', name: 'Girls 4' },
+            { id: 'Boys-1A', name: 'Boys 1-A' },
+            { id: 'Boys-1B', name: 'Boys 1-B' },
+            { id: 'Boys-1C', name: 'Boys 1-C' },
+            { id: 'Boys-2', name: 'Boys 2' },
+            { id: 'Boys-3', name: 'Boys 3' },
+            { id: 'Boys-4', name: 'Boys 4' },
+        ];
+        
+        // Helper function to get the most recent school day with data
+        const getMostRecentSchoolDay = () => {
+            const sortedDates = Object.keys(allReports).sort().reverse();
+            return sortedDates.length > 0 ? sortedDates[0] : null;
+        };
+        
+        const initializeFirebase = () => {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    USER_ID = user.uid;
+                    console.log("Authenticated as:", USER_ID);
+                    await renderCalendar();
+                } else {
+                    try {
+                        await signInAnonymously(auth);
+                    } catch (error) {
+                        console.error("Authentication failed:", error);
+                        document.getElementById('loading-status').textContent = 'Error: Authentication failed. Please try again.';
+                    }
+                }
+            });
+        };
+
+        const formatDate = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`; // Format: YYYY-MM-DD
+        };
+
+        const getMonthName = (date) => {
+            return date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+        };
+
+        const calculateDailyScore = (report) => {
+            const totalStudents = report.totalStudents || 0;
+            const presentToday = report.presentToday || 0;
+            const tardyToday = report.tardyToday || 0;
+            const progressReportBrought = report.progressReportBrought || 0;
+            const progressReportSigned = report.progressReportSigned || 0;
+
+            if (totalStudents <= 0) return 0;
+            
+            const attendanceVal = Math.min(presentToday + (tardyToday * 0.5), totalStudents);
+            const attendanceScore = 50 * (attendanceVal / totalStudents);
+            const broughtScore = 25 * (Math.min(progressReportBrought, totalStudents) / totalStudents);
+            const signedScore = 25 * (Math.min(progressReportSigned, totalStudents) / totalStudents);
+            
+            return Math.round((attendanceScore + broughtScore + signedScore) * 100) / 100;
+        };
+
+        const getScoreClass = (avgScore) => {
+            if (avgScore >= 90) return { bg: 'score-excellent', light: 'light-excellent' };
+            if (avgScore >= 80) return { bg: 'score-good', light: 'light-good' };
+            if (avgScore >= 50) return { bg: 'score-fair', light: 'light-fair' };
+            if (avgScore > 0) return { bg: 'score-poor', light: 'light-poor' };
+            return { bg: 'score-none', light: 'light-none' };
+        };
+        
+        // Fetches all daily reports from Firestore
+        const fetchDailyReports = async () => {
+            try {
+                const reportsMap = {};
+                const reportsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports');
+                const querySnapshot = await getDocs(reportsCollectionRef);
+                
+                querySnapshot.forEach((doc) => {
+                    const dateId = doc.id;
+                    const dateData = doc.data();
+                    
+                    let hasClassData = false;
+                    Object.keys(dateData).forEach(key => {
+                        if (key !== 'audit_trail' && key !== 'lastUpdated' && key.includes('-')) {
+                            hasClassData = true;
+                        }
+                    });
+                    
+                    if (hasClassData) {
+                        reportsMap[dateId] = dateData;
+                    }
+                });
+                
+                return reportsMap;
+            } catch (error) {
+                console.error("Firestore fetch error:", error);
+                throw error;
+            }
+        };
+
+        // Fetch accumulated scores
+        const fetchAccumulatedScores = async () => {
+            try {
+                const scoresMap = {};
+                const scoresCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'accumulated_class_scores');
+                const querySnapshot = await getDocs(scoresCollectionRef);
+                
+                querySnapshot.forEach((doc) => {
+                    scoresMap[doc.id] = doc.data();
+                });
+                
+                return scoresMap;
+            } catch (error) {
+                console.error("Error fetching accumulated scores:", error);
+                return {};
+            }
+        };
+        
+        // Calculate statistics
+        const calculateStats = () => {
+            const today = new Date();
+            const dates = Object.keys(allReports).sort();
+            
+            // Total reports
+            const totalReports = dates.length;
+            document.getElementById('stat-total').textContent = totalReports;
+            
+            // Calculate streak
+            let currentStreak = 0;
+            let longestStreak = 0;
+            let tempStreak = 0;
+            
+            const todayStr = formatDate(today);
+            let checkDate = new Date(today);
+            
+            // Current streak (backward from today)
+            while (true) {
+                const dateStr = formatDate(checkDate);
+                if (allReports[dateStr]) {
+                    currentStreak++;
+                } else {
+                    break;
+                }
+                checkDate.setDate(checkDate.getDate() - 1);
+            }
+            
+            // Longest streak
+            for (let i = 0; i < dates.length; i++) {
+                if (i === 0 || isConsecutive(dates[i-1], dates[i])) {
+                    tempStreak++;
+                    longestStreak = Math.max(longestStreak, tempStreak);
+                } else {
+                    tempStreak = 1;
+                }
+            }
+            
+            document.getElementById('stat-streak').textContent = currentStreak;
+            document.getElementById('stat-streak-label').textContent = `Longest: ${longestStreak} days`;
+            
+            // Completion rate for current month
+            const monthDates = dates.filter(d => {
+                const date = new Date(d);
+                return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+            });
+            const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+            const currentDay = today.getMonth() === currentMonth && today.getFullYear() === currentYear ? today.getDate() : daysInMonth;
+            const completionRate = currentDay > 0 ? Math.round((monthDates.length / currentDay) * 100) : 0;
+            document.getElementById('stat-completion').textContent = `${completionRate}%`;
+            document.getElementById('goal-completion-percent').textContent = `${completionRate}%`;
+            
+            // Average score
+            let totalScore = 0;
+            let scoreCount = 0;
+            Object.values(allReports).forEach(dayData => {
+                Object.keys(dayData).forEach(classId => {
+                    if (classId.includes('-')) {
+                        const score = calculateDailyScore(dayData[classId]);
+                        if (score > 0) {
+                            totalScore += score;
+                            scoreCount++;
+                        }
+                    }
+                });
+            });
+            const avgScore = scoreCount > 0 ? Math.round(totalScore / scoreCount) : 0;
+            document.getElementById('stat-avg-score').textContent = `${avgScore}%`;
+            
+            // Achievements
+            updateAchievements(currentStreak, longestStreak, totalReports, completionRate);
+        };
+
+        const isConsecutive = (date1Str, date2Str) => {
+            const d1 = new Date(date1Str);
+            const d2 = new Date(date2Str);
+            const diffTime = Math.abs(d2 - d1);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays === 1;
+        };
+
+        // Calculate and render latest school day's attendance metrics
+        const renderTodayAttendance = () => {
+            const latestDateStr = getMostRecentSchoolDay();
+            
+            if (!latestDateStr) {
+                document.getElementById('today-date').textContent = 'No school data available';
+                document.getElementById('today-attendance-rate').textContent = 'N/A';
+                document.getElementById('today-attendance-count').textContent = 'No data available';
+                document.getElementById('today-absent-count').textContent = '-';
+                document.getElementById('today-absent-pct').textContent = 'N/A';
+                document.getElementById('today-tardy-count').textContent = '-';
+                document.getElementById('today-tardy-pct').textContent = 'N/A';
+                document.getElementById('today-perfect-count').textContent = '0';
+                document.getElementById('today-class-breakdown').innerHTML = '<p class="text-sm text-gray-500 italic col-span-3">No attendance data recorded yet.</p>';
+                return;
+            }
+            
+            const latestDate = new Date(latestDateStr);
+            document.getElementById('today-date').textContent = latestDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+            
+            const todayData = allReports[latestDateStr];
+            
+            if (!todayData || Object.keys(todayData).filter(k => k.includes('-')).length === 0) {
+                document.getElementById('today-attendance-rate').textContent = 'N/A';
+                document.getElementById('today-attendance-count').textContent = 'No data for this day';
+                document.getElementById('today-absent-count').textContent = '-';
+                document.getElementById('today-absent-pct').textContent = 'N/A';
+                document.getElementById('today-tardy-count').textContent = '-';
+                document.getElementById('today-tardy-pct').textContent = 'N/A';
+                document.getElementById('today-perfect-count').textContent = '0';
+                document.getElementById('today-class-breakdown').innerHTML = '<p class="text-sm text-gray-500 italic col-span-3">No attendance data recorded for this day.</p>';
+                return;
+            }
+            
+            let totalStudents = 0;
+            let totalPresent = 0;
+            let totalTardy = 0;
+            let totalAbsent = 0;
+            let perfectClasses = [];
+            let classBreakdown = [];
+            
+            CLASS_DEFINITIONS.forEach(classDef => {
+                const classData = todayData[classDef.id];
+                if (classData && classData.totalStudents) {
+                    const total = classData.totalStudents;
+                    const present = classData.presentToday || 0;
+                    const tardy = classData.tardyToday || 0;
+                    const absent = total - present - tardy;
+                    const attendanceRate = total > 0 ? ((present + tardy) / total) * 100 : 0;
+                    
+                    totalStudents += total;
+                    totalPresent += present;
+                    totalTardy += tardy;
+                    totalAbsent += absent;
+                    
+                    if (attendanceRate === 100) {
+                        perfectClasses.push(classDef.name);
+                    }
+                    
+                    classBreakdown.push({
+                        name: classDef.name,
+                        total,
+                        present,
+                        tardy,
+                        absent,
+                        rate: attendanceRate
+                    });
+                }
+            });
+            
+            const overallRate = totalStudents > 0 ? ((totalPresent + totalTardy) / totalStudents) * 100 : 0;
+            const absentPct = totalStudents > 0 ? (totalAbsent / totalStudents) * 100 : 0;
+            const tardyPct = totalStudents > 0 ? (totalTardy / totalStudents) * 100 : 0;
+            
+            document.getElementById('today-attendance-rate').textContent = `${overallRate.toFixed(1)}%`;
+            document.getElementById('today-attendance-count').textContent = `${totalPresent + totalTardy} of ${totalStudents} students`;
+            document.getElementById('today-absent-count').textContent = totalAbsent;
+            document.getElementById('today-absent-pct').textContent = `${absentPct.toFixed(1)}% absent`;
+            document.getElementById('today-tardy-count').textContent = totalTardy;
+            document.getElementById('today-tardy-pct').textContent = `${tardyPct.toFixed(1)}% late`;
+            document.getElementById('today-perfect-count').textContent = perfectClasses.length;
+            
+            // Show perfect attendance classes
+            if (perfectClasses.length > 0) {
+                document.getElementById('perfect-attendance-section').classList.remove('hidden');
+                document.getElementById('perfect-attendance-list').innerHTML = perfectClasses.map(name => 
+                    `<span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold">🌟 ${name}</span>`
+                ).join('');
+            } else {
+                document.getElementById('perfect-attendance-section').classList.add('hidden');
+            }
+            
+            // Render class breakdown
+            document.getElementById('today-class-breakdown').innerHTML = classBreakdown.map(c => {
+                const rateColor = c.rate >= 95 ? 'green' : c.rate >= 85 ? 'blue' : c.rate >= 70 ? 'yellow' : 'red';
+                return `
+                    <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="font-bold text-gray-800">${c.name}</h4>
+                            <span class="text-lg font-bold text-${rateColor}-600">${c.rate.toFixed(0)}%</span>
+                        </div>
+                        <div class="text-xs text-gray-600 space-y-1">
+                            <div class="flex justify-between">
+                                <span>Present:</span>
+                                <span class="font-semibold text-green-600">${c.present}/${c.total}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Tardy:</span>
+                                <span class="font-semibold text-yellow-600">${c.tardy}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Absent:</span>
+                                <span class="font-semibold text-red-600">${c.absent}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        };
+
+        // Render attendance heatmap for last 30 days
+        const renderAttendanceHeatmap = () => {
+            const container = document.getElementById('attendance-heatmap');
+            const today = new Date();
+            const days = [];
+            
+            // Get last 30 days
+            for (let i = 29; i >= 0; i--) {
+                const date = new Date(today);
+                date.setDate(date.getDate() - i);
+                days.push(date);
+            }
+            
+            let html = '<table class="border-collapse"><thead><tr><th class="text-xs text-gray-600 p-2"></th>';
+            
+            // Date headers (show every 5th day)
+            days.forEach((date, idx) => {
+                if (idx % 5 === 0 || idx === days.length - 1) {
+                    html += `<th class="text-2xs text-gray-500 p-1">${date.getDate()}</th>`;
+                } else {
+                    html += '<th class="p-1"></th>';
+                }
+            });
+            html += '</tr></thead><tbody>';
+            
+            // Row for each class
+            CLASS_DEFINITIONS.forEach(classDef => {
+                html += `<tr><td class="text-xs font-semibold text-gray-700 pr-3 text-right">${classDef.name}</td>`;
+                
+                days.forEach(date => {
+                    const dateStr = formatDate(date);
+                    const dayData = allReports[dateStr];
+                    const classData = dayData ? dayData[classDef.id] : null;
+                    
+                    let bgColor = 'bg-gray-200';
+                    let borderColor = 'border-gray-300';
+                    let title = 'No data';
+                    
+                    if (classData && classData.totalStudents) {
+                        const total = classData.totalStudents;
+                        const present = classData.presentToday || 0;
+                        const tardy = classData.tardyToday || 0;
+                        const rate = ((present + tardy) / total) * 100;
+                        
+                        title = `${dateStr}\n${classDef.name}\nAttendance: ${rate.toFixed(1)}%\nPresent: ${present}\nTardy: ${tardy}\nAbsent: ${total - present - tardy}`;
+                        
+                        if (rate === 100) {
+                            bgColor = 'bg-green-700';
+                            borderColor = 'border-green-800';
+                        } else if (rate >= 95) {
+                            bgColor = 'bg-green-500';
+                            borderColor = 'border-green-600';
+                        } else if (rate >= 90) {
+                            bgColor = 'bg-green-300';
+                            borderColor = 'border-green-400';
+                        } else if (rate >= 70) {
+                            bgColor = 'bg-yellow-200';
+                            borderColor = 'border-yellow-300';
+                        } else {
+                            bgColor = 'bg-red-200';
+                            borderColor = 'border-red-300';
+                        }
+                    }
+                    
+                    html += `<td class="p-0.5"><div class="heatmap-cell w-5 h-5 ${bgColor} border ${borderColor} rounded" title="${title}"></div></td>`;
+                });
+                
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        };
+
+        // Analyze best and worst attendance days
+        const analyzeBestWorstDays = () => {
+            const dayStats = [];
+            
+            Object.keys(allReports).forEach(dateStr => {
+                const dayData = allReports[dateStr];
+                let totalStudents = 0;
+                let totalPresent = 0;
+                let totalTardy = 0;
+                
+                Object.keys(dayData).forEach(classId => {
+                    if (classId.includes('-')) {
+                        const classData = dayData[classId];
+                        if (classData && classData.totalStudents) {
+                            totalStudents += classData.totalStudents;
+                            totalPresent += classData.presentToday || 0;
+                            totalTardy += classData.tardyToday || 0;
+                        }
+                    }
+                });
+                
+                if (totalStudents > 0) {
+                    const rate = ((totalPresent + totalTardy) / totalStudents) * 100;
+                    const date = new Date(dateStr);
+                    dayStats.push({
+                        dateStr,
+                        date,
+                        dayName: date.toLocaleDateString('en-US', { weekday: 'long' }),
+                        rate,
+                        totalStudents,
+                        totalPresent,
+                        totalTardy
+                    });
+                }
+            });
+            
+            if (dayStats.length === 0) {
+                document.getElementById('best-day-name').textContent = 'N/A';
+                document.getElementById('best-day-rate').textContent = 'No data available';
+                document.getElementById('best-day-date').textContent = '';
+                document.getElementById('worst-day-name').textContent = 'N/A';
+                document.getElementById('worst-day-rate').textContent = 'No data available';
+                document.getElementById('worst-day-date').textContent = '';
+                return;
+            }
+            
+            dayStats.sort((a, b) => b.rate - a.rate);
+            const best = dayStats[0];
+            const worst = dayStats[dayStats.length - 1];
+            
+            document.getElementById('best-day-name').textContent = best.dayName;
+            document.getElementById('best-day-rate').textContent = `${best.rate.toFixed(1)}% attendance`;
+            document.getElementById('best-day-date').textContent = `${best.dateStr} - ${best.totalPresent + best.totalTardy}/${best.totalStudents} students`;
+            
+            document.getElementById('worst-day-name').textContent = worst.dayName;
+            document.getElementById('worst-day-rate').textContent = `${worst.rate.toFixed(1)}% attendance`;
+            document.getElementById('worst-day-date').textContent = `${worst.dateStr} - ${worst.totalPresent + worst.totalTardy}/${worst.totalStudents} students`;
+        };
+
+        // Render weekly attendance chart (Mon-Sun)
+        const renderWeeklyAttendanceChart = () => {
+            const canvas = document.getElementById('weekly-chart');
+            const ctx = canvas.getContext('2d');
+            
+            const weeklyData = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+            
+            Object.keys(allReports).forEach(dateStr => {
+                const dayData = allReports[dateStr];
+                const date = new Date(dateStr);
+                const dayOfWeek = date.getDay();
+                
+                let totalStudents = 0;
+                let totalPresent = 0;
+                let totalTardy = 0;
+                
+                Object.keys(dayData).forEach(classId => {
+                    if (classId.includes('-')) {
+                        const classData = dayData[classId];
+                        if (classData && classData.totalStudents) {
+                            totalStudents += classData.totalStudents;
+                            totalPresent += classData.presentToday || 0;
+                            totalTardy += classData.tardyToday || 0;
+                        }
+                    }
+                });
+                
+                if (totalStudents > 0) {
+                    const rate = ((totalPresent + totalTardy) / totalStudents) * 100;
+                    weeklyData[dayOfWeek].push(rate);
+                }
+            });
+            
+            const avgByDay = [0, 1, 2, 3, 4, 5, 6].map(day => {
+                const rates = weeklyData[day];
+                return rates.length > 0 ? rates.reduce((a, b) => a + b, 0) / rates.length : 0;
+            });
+            
+            if (weeklyChart) {
+                weeklyChart.destroy();
+            }
+            
+            weeklyChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+                    datasets: [{
+                        label: 'Average Attendance (%)',
+                        data: avgByDay,
+                        backgroundColor: [
+                            'rgba(239, 68, 68, 0.7)',
+                            'rgba(59, 130, 246, 0.7)',
+                            'rgba(16, 185, 129, 0.7)',
+                            'rgba(245, 158, 11, 0.7)',
+                            'rgba(139, 92, 246, 0.7)',
+                            'rgba(236, 72, 153, 0.7)',
+                            'rgba(239, 68, 68, 0.7)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Attendance Rate (%)'
+                            }
+                        }
+                    }
+                }
+            });
+        };
+
+        // Render punctuality chart (tardy rates over time)
+        const renderPunctualityChart = () => {
+            const canvas = document.getElementById('punctuality-chart');
+            const ctx = canvas.getContext('2d');
+            
+            const sortedDates = Object.keys(allReports).sort();
+            const last30Days = sortedDates.slice(-30);
+            
+            const labels = [];
+            const tardyRates = [];
+            const onTimeRates = [];
+            let totalOnTime = 0;
+            let totalTardy = 0;
+            let totalStudents = 0;
+            
+            last30Days.forEach(dateStr => {
+                const dayData = allReports[dateStr];
+                const date = new Date(dateStr);
+                labels.push(date.getDate());
+                
+                let dayTotal = 0;
+                let dayTardy = 0;
+                let dayPresent = 0;
+                
+                Object.keys(dayData).forEach(classId => {
+                    if (classId.includes('-')) {
+                        const classData = dayData[classId];
+                        if (classData && classData.totalStudents) {
+                            dayTotal += classData.totalStudents;
+                            dayTardy += classData.tardyToday || 0;
+                            dayPresent += classData.presentToday || 0;
+                        }
+                    }
+                });
+                
+                totalOnTime += dayPresent;
+                totalTardy += dayTardy;
+                totalStudents += dayTotal;
+                
+                const tardyRate = dayTotal > 0 ? (dayTardy / dayTotal) * 100 : 0;
+                const onTimeRate = dayTotal > 0 ? (dayPresent / dayTotal) * 100 : 0;
+                tardyRates.push(tardyRate);
+                onTimeRates.push(onTimeRate);
+            });
+            
+            // Update punctuality stats
+            const avgPunctuality = totalStudents > 0 ? ((totalOnTime / totalStudents) * 100).toFixed(1) : 0;
+            const avgTardy = totalStudents > 0 ? ((totalTardy / totalStudents) * 100).toFixed(1) : 0;
+            document.getElementById('punctuality-avg').textContent = `${avgPunctuality}%`;
+            document.getElementById('punctuality-tardy-total').textContent = totalTardy;
+            
+            if (punctualityChart) {
+                punctualityChart.destroy();
+            }
+            
+            punctualityChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'On-Time Rate',
+                            data: onTimeRates,
+                            borderColor: 'rgb(34, 197, 94)',
+                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        },
+                        {
+                            label: 'Tardy Rate',
+                            data: tardyRates,
+                            borderColor: 'rgb(234, 179, 8)',
+                            backgroundColor: 'rgba(234, 179, 8, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2,
+                    plugins: {
+                        legend: { 
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Rate (%)'
+                            }
+                        }
+                    }
+                }
+            });
+        };
+
+        // Render class comparison chart
+        const renderClassComparisonChart = () => {
+            const canvas = document.getElementById('class-comparison-chart');
+            const ctx = canvas.getContext('2d');
+            
+            const classStats = [];
+            
+            CLASS_DEFINITIONS.forEach(classDef => {
+                let totalRate = 0;
+                let count = 0;
+                
+                Object.keys(allReports).forEach(dateStr => {
+                    const dayData = allReports[dateStr];
+                    const classData = dayData[classDef.id];
+                    
+                    if (classData && classData.totalStudents) {
+                        const present = classData.presentToday || 0;
+                        const tardy = classData.tardyToday || 0;
+                        const rate = ((present + tardy) / classData.totalStudents) * 100;
+                        totalRate += rate;
+                        count++;
+                    }
+                });
+                
+                if (count > 0) {
+                    classStats.push({
+                        name: classDef.name,
+                        avgRate: totalRate / count
+                    });
+                }
+            });
+            
+            classStats.sort((a, b) => b.avgRate - a.avgRate);
+            
+            if (classComparisonChart) {
+                classComparisonChart.destroy();
+            }
+            
+            classComparisonChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: classStats.map(c => c.name),
+                    datasets: [{
+                        label: 'Average Attendance Rate (%)',
+                        data: classStats.map(c => c.avgRate),
+                        backgroundColor: 'rgba(99, 102, 241, 0.7)',
+                        borderColor: 'rgba(99, 102, 241, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 1.5,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Attendance Rate (%)'
+                            }
+                        }
+                    }
+                }
+            });
+        };
+
+        // Render seasonal trends chart (monthly averages)
+        const renderSeasonalTrendsChart = () => {
+            const canvas = document.getElementById('seasonal-trends-chart');
+            const ctx = canvas.getContext('2d');
+            
+            const monthlyData = {};
+            
+            Object.keys(allReports).forEach(dateStr => {
+                const dayData = allReports[dateStr];
+                const date = new Date(dateStr);
+                const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                
+                if (!monthlyData[monthKey]) {
+                    monthlyData[monthKey] = { rates: [], monthName: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) };
+                }
+                
+                let totalStudents = 0;
+                let totalPresent = 0;
+                let totalTardy = 0;
+                
+                Object.keys(dayData).forEach(classId => {
+                    if (classId.includes('-')) {
+                        const classData = dayData[classId];
+                        if (classData && classData.totalStudents) {
+                            totalStudents += classData.totalStudents;
+                            totalPresent += classData.presentToday || 0;
+                            totalTardy += classData.tardyToday || 0;
+                        }
+                    }
+                });
+                
+                if (totalStudents > 0) {
+                    const rate = ((totalPresent + totalTardy) / totalStudents) * 100;
+                    monthlyData[monthKey].rates.push(rate);
+                }
+            });
+            
+            const sortedMonths = Object.keys(monthlyData).sort();
+            const labels = sortedMonths.map(key => monthlyData[key].monthName);
+            const avgRates = sortedMonths.map(key => {
+                const rates = monthlyData[key].rates;
+                return rates.reduce((a, b) => a + b, 0) / rates.length;
+            });
+            
+            if (seasonalTrendsChart) {
+                seasonalTrendsChart.destroy();
+            }
+            
+            seasonalTrendsChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Monthly Average Attendance (%)',
+                        data: avgRates,
+                        borderColor: 'rgb(168, 85, 247)',
+                        backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        pointRadius: 5,
+                        pointHoverRadius: 7
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Attendance Rate (%)'
+                            }
+                        }
+                    }
+                }
+            });
+        };
+
+        // Render monthly attendance calendar
+        const renderMonthlyAttendanceCalendar = () => {
+            const container = document.getElementById('monthly-calendar-grid');
+            const monthName = new Date(currentYear, currentMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            
+            const firstDay = new Date(currentYear, currentMonth, 1);
+            const lastDay = new Date(currentYear, currentMonth + 1, 0);
+            const daysInMonth = lastDay.getDate();
+            const startDayOfWeek = firstDay.getDay();
+            
+            let html = '<div class="grid grid-cols-7 gap-1 mb-2">';
+            ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(day => {
+                html += `<div class="text-center text-xs font-bold text-gray-600 py-1">${day}</div>`;
+            });
+            html += '</div>';
+            
+            html += '<div class="grid grid-cols-7 gap-1">';
+            
+            // Empty cells before first day
+            for (let i = 0; i < startDayOfWeek; i++) {
+                html += '<div class="aspect-square"></div>';
+            }
+            
+            // Days of the month
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(currentYear, currentMonth, day);
+                const dateStr = formatDate(date);
+                const dayData = allReports[dateStr];
+                
+                let bgColor = 'bg-gray-100';
+                let textColor = 'text-gray-400';
+                let rate = 0;
+                
+                if (dayData) {
+                    let totalStudents = 0;
+                    let totalPresent = 0;
+                    let totalTardy = 0;
+                    
+                    Object.keys(dayData).forEach(classId => {
+                        if (classId.includes('-')) {
+                            const classData = dayData[classId];
+                            if (classData && classData.totalStudents) {
+                                totalStudents += classData.totalStudents;
+                                totalPresent += classData.presentToday || 0;
+                                totalTardy += classData.tardyToday || 0;
+                            }
+                        }
+                    });
+                    
+                    if (totalStudents > 0) {
+                        rate = ((totalPresent + totalTardy) / totalStudents) * 100;
+                        textColor = 'text-gray-800';
+                        
+                        if (rate === 100) {
+                            bgColor = 'bg-green-600';
+                            textColor = 'text-white';
+                        } else if (rate >= 95) {
+                            bgColor = 'bg-green-400';
+                        } else if (rate >= 90) {
+                            bgColor = 'bg-green-200';
+                        } else if (rate >= 70) {
+                            bgColor = 'bg-yellow-200';
+                        } else {
+                            bgColor = 'bg-red-200';
+                        }
+                    }
+                }
+                
+                html += `
+                    <div class="aspect-square ${bgColor} rounded flex flex-col items-center justify-center text-xs ${textColor} border border-gray-200">
+                        <div class="font-semibold">${day}</div>
+                        ${rate > 0 ? `<div class="text-[10px]">${rate.toFixed(0)}%</div>` : ''}
+                    </div>
+                `;
+            }
+            
+            html += '</div>';
+            container.innerHTML = html;
+        };
+
+        // ========== PROGRESS REPORT TRACKING FUNCTIONS ==========
+        
+        // Render latest school day's progress report status
+        const renderProgressReportStatus = () => {
+            const latestDateStr = getMostRecentSchoolDay();
+            
+            if (!latestDateStr) {
+                document.getElementById('reports-brought-rate').textContent = 'N/A';
+                document.getElementById('reports-brought-count').textContent = 'No data available';
+                document.getElementById('signature-completion-rate').textContent = 'N/A';
+                document.getElementById('signature-completion-count').textContent = 'No data';
+                document.getElementById('missing-signatures-count').textContent = '-';
+                document.getElementById('missing-signatures-rate').textContent = 'No data';
+                document.getElementById('parent-engagement-score').textContent = 'N/A';
+                return;
+            }
+            
+            const todayData = allReports[latestDateStr];
+            
+            if (!todayData || Object.keys(todayData).filter(k => k.includes('-')).length === 0) {
+                document.getElementById('reports-brought-rate').textContent = 'N/A';
+                document.getElementById('reports-brought-count').textContent = 'No data for this day';
+                document.getElementById('signature-completion-rate').textContent = 'N/A';
+                document.getElementById('signature-completion-count').textContent = 'No data';
+                document.getElementById('missing-signatures-count').textContent = '-';
+                document.getElementById('missing-signatures-rate').textContent = 'No data';
+                document.getElementById('parent-engagement-score').textContent = 'N/A';
+                return;
+            }
+            
+            let totalExpectedReports = 0;
+            let totalBrought = 0;
+            let totalSigned = 0;
+            
+            Object.keys(todayData).forEach(classId => {
+                if (classId.includes('-')) {
+                    const classData = todayData[classId];
+                    if (classData && classData.totalStudents) {
+                        const presentAndTardy = (classData.presentToday || 0) + (classData.tardyToday || 0);
+                        totalExpectedReports += presentAndTardy;
+                        totalBrought += classData.progressReportBrought || 0;
+                        totalSigned += classData.progressReportSigned || 0;
+                    }
+                }
+            });
+            
+            const broughtRate = totalExpectedReports > 0 ? ((totalBrought / totalExpectedReports) * 100).toFixed(1) : 0;
+            const signatureRate = totalBrought > 0 ? ((totalSigned / totalBrought) * 100).toFixed(1) : 0;
+            const missingSignatures = totalBrought - totalSigned;
+            const engagementScore = totalExpectedReports > 0 ? (((totalBrought * 0.5 + totalSigned * 0.5) / totalExpectedReports) * 100).toFixed(1) : 0;
+            
+            document.getElementById('reports-brought-rate').textContent = `${broughtRate}%`;
+            document.getElementById('reports-brought-count').textContent = `${totalBrought}/${totalExpectedReports} students`;
+            document.getElementById('signature-completion-rate').textContent = `${signatureRate}%`;
+            document.getElementById('signature-completion-count').textContent = `${totalSigned}/${totalBrought} signed`;
+            document.getElementById('missing-signatures-count').textContent = missingSignatures;
+            document.getElementById('missing-signatures-rate').textContent = `${totalBrought > 0 ? ((missingSignatures / totalBrought) * 100).toFixed(1) : 0}% unsigned`;
+            document.getElementById('parent-engagement-score').textContent = `${engagementScore}%`;
+        };
+
+        // Render class rankings by report return rates
+        const renderReportRankings = () => {
+            const container = document.getElementById('report-rankings');
+            const classStats = [];
+            
+            CLASS_DEFINITIONS.forEach(classDef => {
+                let totalExpected = 0;
+                let totalBrought = 0;
+                let totalSigned = 0;
+                let daysCount = 0;
+                
+                Object.keys(allReports).slice(-30).forEach(dateStr => {
+                    const dayData = allReports[dateStr];
+                    const classData = dayData[classDef.id];
+                    
+                    if (classData && classData.totalStudents) {
+                        const presentAndTardy = (classData.presentToday || 0) + (classData.tardyToday || 0);
+                        totalExpected += presentAndTardy;
+                        totalBrought += classData.progressReportBrought || 0;
+                        totalSigned += classData.progressReportSigned || 0;
+                        daysCount++;
+                    }
+                });
+                
+                if (totalExpected > 0) {
+                    const broughtRate = (totalBrought / totalExpected) * 100;
+                    const signedRate = totalBrought > 0 ? (totalSigned / totalBrought) * 100 : 0;
+                    classStats.push({
+                        name: classDef.name,
+                        broughtRate,
+                        signedRate,
+                        totalBrought,
+                        totalSigned,
+                        totalExpected,
+                        daysCount
+                    });
+                }
+            });
+            
+            classStats.sort((a, b) => b.broughtRate - a.broughtRate);
+            
+            if (classStats.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-500 italic">No report data available.</p>';
+                return;
+            }
+            
+            const medals = ['🥇', '🥈', '🥉'];
+            container.innerHTML = classStats.map((item, idx) => `
+                <div class="flex items-center justify-between p-3 rounded-lg ${idx < 3 ? 'bg-yellow-50 border border-yellow-200' : 'bg-gray-50'}">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">${medals[idx] || `#${idx + 1}`}</span>
+                        <div>
+                            <p class="font-semibold text-gray-800">${item.name}</p>
+                            <p class="text-xs text-gray-500">${item.daysCount} days tracked</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-lg font-bold text-purple-600">${item.broughtRate.toFixed(1)}%</p>
+                        <p class="text-xs text-gray-500">Brought: ${item.totalBrought}/${item.totalExpected}</p>
+                        <p class="text-xs text-gray-500">Signed: ${item.totalSigned}/${item.totalBrought}</p>
+                    </div>
+                </div>
+            `).join('');
+        };
+
+        // Render report compliance trend chart
+        const renderReportComplianceChart = () => {
+            const canvas = document.getElementById('report-compliance-chart');
+            const ctx = canvas.getContext('2d');
+            
+            const sortedDates = Object.keys(allReports).sort();
+            const last30Days = sortedDates.slice(-30);
+            
+            const labels = [];
+            const broughtRates = [];
+            const signedRates = [];
+            
+            last30Days.forEach(dateStr => {
+                const dayData = allReports[dateStr];
+                const date = new Date(dateStr);
+                labels.push(date.getDate());
+                
+                let totalExpected = 0;
+                let totalBrought = 0;
+                let totalSigned = 0;
+                
+                Object.keys(dayData).forEach(classId => {
+                    if (classId.includes('-')) {
+                        const classData = dayData[classId];
+                        if (classData && classData.totalStudents) {
+                            const presentAndTardy = (classData.presentToday || 0) + (classData.tardyToday || 0);
+                            totalExpected += presentAndTardy;
+                            totalBrought += classData.progressReportBrought || 0;
+                            totalSigned += classData.progressReportSigned || 0;
+                        }
+                    }
+                });
+                
+                broughtRates.push(totalExpected > 0 ? (totalBrought / totalExpected) * 100 : 0);
+                signedRates.push(totalExpected > 0 ? (totalSigned / totalExpected) * 100 : 0);
+            });
+            
+            if (reportComplianceChart) {
+                reportComplianceChart.destroy();
+            }
+            
+            reportComplianceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Reports Brought (%)',
+                            data: broughtRates,
+                            borderColor: 'rgb(59, 130, 246)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        },
+                        {
+                            label: 'Reports Signed (%)',
+                            data: signedRates,
+                            borderColor: 'rgb(34, 197, 94)',
+                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2,
+                    plugins: {
+                        legend: { 
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Compliance Rate (%)'
+                            }
+                        }
+                    }
+                }
+            });
+        };
+
+        // ========== HISTORICAL ANALYSIS FUNCTIONS ==========
+        
+        // Render signature gap analysis
+        const renderSignatureGapAnalysis = () => {
+            const sortedDates = Object.keys(allReports).sort();
+            const last30Days = sortedDates.slice(-30);
+            
+            const labels = [];
+            const broughtData = [];
+            const signedData = [];
+            const gapData = [];
+            
+            let totalBrought = 0;
+            let totalSigned = 0;
+            
+            last30Days.forEach(dateStr => {
+                const dayData = allReports[dateStr];
+                const date = new Date(dateStr);
+                labels.push(date.getDate());
+                
+                let dayExpected = 0;
+                let dayBrought = 0;
+                let daySigned = 0;
+                
+                Object.keys(dayData).forEach(classId => {
+                    if (classId.includes('-')) {
+                        const classData = dayData[classId];
+                        if (classData && classData.totalStudents) {
+                            const presentAndTardy = (classData.presentToday || 0) + (classData.tardyToday || 0);
+                            dayExpected += presentAndTardy;
+                            dayBrought += classData.progressReportBrought || 0;
+                            daySigned += classData.progressReportSigned || 0;
+                        }
+                    }
+                });
+                
+                totalBrought += dayBrought;
+                totalSigned += daySigned;
+                
+                const broughtRate = dayExpected > 0 ? (dayBrought / dayExpected) * 100 : 0;
+                const signedRate = dayExpected > 0 ? (daySigned / dayExpected) * 100 : 0;
+                broughtData.push(broughtRate);
+                signedData.push(signedRate);
+                gapData.push(broughtRate - signedRate);
+            });
+            
+            const avgGap = totalBrought > 0 ? (((totalBrought - totalSigned) / totalBrought) * 100).toFixed(1) : 0;
+            document.getElementById('signature-gap-rate').textContent = `${avgGap}%`;
+            document.getElementById('signature-gap-desc').textContent = `${totalBrought - totalSigned} reports brought but not signed in last 30 days`;
+            
+            const canvas = document.getElementById('signature-gap-chart');
+            const ctx = canvas.getContext('2d');
+            
+            if (signatureGapChart) {
+                signatureGapChart.destroy();
+            }
+            
+            signatureGapChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Gap (Brought - Signed)',
+                            data: gapData,
+                            borderColor: 'rgb(249, 115, 22)',
+                            backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Gap (%)'
+                            }
+                        }
+                    }
+                }
+            });
+        };
+
+        // Render most engaged parents
+        const renderMostEngagedParents = () => {
+            const container = document.getElementById('most-engaged-parents');
+            const classStats = [];
+            
+            CLASS_DEFINITIONS.forEach(classDef => {
+                let totalBrought = 0;
+                let totalSigned = 0;
+                
+                Object.keys(allReports).slice(-30).forEach(dateStr => {
+                    const dayData = allReports[dateStr];
+                    const classData = dayData[classDef.id];
+                    
+                    if (classData && classData.totalStudents) {
+                        totalBrought += classData.progressReportBrought || 0;
+                        totalSigned += classData.progressReportSigned || 0;
+                    }
+                });
+                
+                if (totalBrought > 0) {
+                    const signatureRate = (totalSigned / totalBrought) * 100;
+                    classStats.push({
+                        name: classDef.name,
+                        signatureRate,
+                        totalSigned,
+                        totalBrought
+                    });
+                }
+            });
+            
+            classStats.sort((a, b) => b.signatureRate - a.signatureRate);
+            
+            if (classStats.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-500 italic">No signature data available.</p>';
+                return;
+            }
+            
+            const top5 = classStats.slice(0, 5);
+            const medals = ['🥇', '🥈', '🥉', '🏅', '🏅'];
+            
+            container.innerHTML = top5.map((item, idx) => `
+                <div class="flex items-center justify-between p-3 rounded-lg ${idx === 0 ? 'bg-yellow-50 border border-yellow-300' : 'bg-green-50 border border-green-200'}">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">${medals[idx]}</span>
+                        <div>
+                            <p class="font-semibold text-gray-800">${item.name}</p>
+                            <p class="text-xs text-gray-500">Signed: ${item.totalSigned}/${item.totalBrought}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xl font-bold text-green-600">${item.signatureRate.toFixed(1)}%</p>
+                    </div>
+                </div>
+            `).join('');
+        };
+
+        // Render follow-up needed list
+        const renderFollowupNeededList = () => {
+            const container = document.getElementById('followup-needed-list');
+            const classStats = [];
+            
+            CLASS_DEFINITIONS.forEach(classDef => {
+                let totalExpected = 0;
+                let totalBrought = 0;
+                let daysCount = 0;
+                
+                Object.keys(allReports).slice(-30).forEach(dateStr => {
+                    const dayData = allReports[dateStr];
+                    const classData = dayData[classDef.id];
+                    
+                    if (classData && classData.totalStudents) {
+                        const presentAndTardy = (classData.presentToday || 0) + (classData.tardyToday || 0);
+                        totalExpected += presentAndTardy;
+                        totalBrought += classData.progressReportBrought || 0;
+                        daysCount++;
+                    }
+                });
+                
+                if (totalExpected > 0) {
+                    const broughtRate = (totalBrought / totalExpected) * 100;
+                    if (broughtRate < 70) {
+                        classStats.push({
+                            name: classDef.name,
+                            broughtRate,
+                            missing: totalExpected - totalBrought,
+                            totalExpected,
+                            daysCount,
+                            severity: broughtRate < 50 ? 'critical' : 'warning'
+                        });
+                    }
+                }
+            });
+            
+            classStats.sort((a, b) => a.broughtRate - b.broughtRate);
+            
+            if (classStats.length === 0) {
+                container.innerHTML = '<p class="text-sm text-green-600 font-semibold">✅ All classes meeting report return expectations!</p>';
+                return;
+            }
+            
+            container.innerHTML = classStats.map(item => `
+                <div class="flex items-center justify-between p-3 rounded-lg ${item.severity === 'critical' ? 'bg-red-50 border-2 border-red-400' : 'bg-yellow-50 border border-yellow-300'}">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">${item.severity === 'critical' ? '🚨' : '⚠️'}</span>
+                        <div>
+                            <p class="font-semibold text-gray-800">${item.name}</p>
+                            <p class="text-xs text-gray-600">${item.missing} reports missing over ${item.daysCount} days</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xl font-bold ${item.severity === 'critical' ? 'text-red-600' : 'text-yellow-600'}">${item.broughtRate.toFixed(1)}%</p>
+                        <p class="text-xs text-gray-500">Return rate</p>
+                    </div>
+                </div>
+            `).join('');
+        };
+
+        // ========== GIRLS VS BOYS COMPARISON FUNCTIONS ==========
+        
+        // Render gender comparison
+        const renderGenderComparison = () => {
+            const girlsClasses = CLASS_DEFINITIONS.filter(c => c.id.startsWith('Girls-'));
+            const boysClasses = CLASS_DEFINITIONS.filter(c => c.id.startsWith('Boys-'));
+            
+            const calcSectionStats = (classes) => {
+                let totalStudents = 0;
+                let totalPresent = 0;
+                let totalTardy = 0;
+                let totalBrought = 0;
+                let totalSigned = 0;
+                let daysCount = 0;
+                
+                Object.keys(allReports).slice(-30).forEach(dateStr => {
+                    const dayData = allReports[dateStr];
+                    
+                    classes.forEach(classDef => {
+                        const classData = dayData[classDef.id];
+                        if (classData && classData.totalStudents) {
+                            totalStudents += classData.totalStudents;
+                            totalPresent += classData.presentToday || 0;
+                            totalTardy += classData.tardyToday || 0;
+                            totalBrought += classData.progressReportBrought || 0;
+                            totalSigned += classData.progressReportSigned || 0;
+                        }
+                    });
+                    daysCount++;
+                });
+                
+                return {
+                    attendance: totalStudents > 0 ? ((totalPresent + totalTardy) / totalStudents) * 100 : 0,
+                    punctuality: totalStudents > 0 ? (totalPresent / totalStudents) * 100 : 0,
+                    reports: totalBrought > 0 ? (totalSigned / totalBrought) * 100 : 0,
+                    score: totalStudents > 0 ? (((totalPresent + totalTardy) * 0.6 + totalPresent * 0.2 + totalSigned * 0.2) / totalStudents) * 100 : 0
+                };
+            };
+            
+            const girlsStats = calcSectionStats(girlsClasses);
+            const boysStats = calcSectionStats(boysClasses);
+            
+            // Update Girls section
+            document.getElementById('girls-attendance').textContent = `${girlsStats.attendance.toFixed(1)}%`;
+            document.getElementById('girls-punctuality').textContent = `${girlsStats.punctuality.toFixed(1)}%`;
+            document.getElementById('girls-reports').textContent = `${girlsStats.reports.toFixed(1)}%`;
+            const girlsScoreBar = document.getElementById('girls-score-bar');
+            girlsScoreBar.style.width = `${girlsStats.score}%`;
+            girlsScoreBar.textContent = `${girlsStats.score.toFixed(1)}%`;
+            
+            // Update Boys section
+            document.getElementById('boys-attendance').textContent = `${boysStats.attendance.toFixed(1)}%`;
+            document.getElementById('boys-punctuality').textContent = `${boysStats.punctuality.toFixed(1)}%`;
+            document.getElementById('boys-reports').textContent = `${boysStats.reports.toFixed(1)}%`;
+            const boysScoreBar = document.getElementById('boys-score-bar');
+            boysScoreBar.style.width = `${boysStats.score}%`;
+            boysScoreBar.textContent = `${boysStats.score.toFixed(1)}%`;
+            
+            // Gender Gap Analysis
+            const attGap = Math.abs(girlsStats.attendance - boysStats.attendance).toFixed(1);
+            const attLeader = girlsStats.attendance > boysStats.attendance ? '👧 Girls leading' : '👦 Boys leading';
+            document.getElementById('gap-attendance').textContent = `${attGap}%`;
+            document.getElementById('gap-attendance-leader').textContent = attLeader;
+            
+            const puncGap = Math.abs(girlsStats.punctuality - boysStats.punctuality).toFixed(1);
+            const puncLeader = girlsStats.punctuality > boysStats.punctuality ? '👧 Girls leading' : '👦 Boys leading';
+            document.getElementById('gap-punctuality').textContent = `${puncGap}%`;
+            document.getElementById('gap-punctuality-leader').textContent = puncLeader;
+            
+            const repGap = Math.abs(girlsStats.reports - boysStats.reports).toFixed(1);
+            const repLeader = girlsStats.reports > boysStats.reports ? '👧 Girls leading' : '👦 Boys leading';
+            document.getElementById('gap-reports').textContent = `${repGap}%`;
+            document.getElementById('gap-reports-leader').textContent = repLeader;
+            
+            // Current Leader
+            const leader = girlsStats.score > boysStats.score ? '👧 Girls' : '👦 Boys';
+            const margin = Math.abs(girlsStats.score - boysStats.score).toFixed(1);
+            document.getElementById('current-leader').textContent = leader;
+            document.getElementById('lead-margin').textContent = `${margin}%`;
+            
+            // Render comparison chart
+            const canvas = document.getElementById('gender-comparison-chart');
+            const ctx = canvas.getContext('2d');
+            
+            if (genderComparisonChart) {
+                genderComparisonChart.destroy();
+            }
+            
+            genderComparisonChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Attendance', 'Punctuality', 'Reports Signed', 'Overall Score'],
+                    datasets: [
+                        {
+                            label: '👧 Girls',
+                            data: [girlsStats.attendance, girlsStats.punctuality, girlsStats.reports, girlsStats.score],
+                            backgroundColor: 'rgba(236, 72, 153, 0.7)',
+                            borderColor: 'rgba(236, 72, 153, 1)',
+                            borderWidth: 2
+                        },
+                        {
+                            label: '👦 Boys',
+                            data: [boysStats.attendance, boysStats.punctuality, boysStats.reports, boysStats.score],
+                            backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            borderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2,
+                    plugins: {
+                        legend: { 
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Percentage (%)'
+                            }
+                        }
+                    }
+                }
+            });
+        };
+
+        // ========== PREDICTIVE INSIGHTS FUNCTIONS ==========
+        
+        // Generate absence forecast
+        const renderAbsenceForecast = () => {
+            const weekdayStats = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+            
+            Object.keys(allReports).forEach(dateStr => {
+                const dayData = allReports[dateStr];
+                const date = new Date(dateStr);
+                const dayOfWeek = date.getDay();
+                
+                let totalStudents = 0;
+                let totalPresent = 0;
+                let totalTardy = 0;
+                
+                Object.keys(dayData).forEach(classId => {
+                    if (classId.includes('-')) {
+                        const classData = dayData[classId];
+                        if (classData && classData.totalStudents) {
+                            totalStudents += classData.totalStudents;
+                            totalPresent += classData.presentToday || 0;
+                            totalTardy += classData.tardyToday || 0;
+                        }
+                    }
+                });
+                
+                if (totalStudents > 0) {
+                    const rate = ((totalPresent + totalTardy) / totalStudents) * 100;
+                    weekdayStats[dayOfWeek].push(rate);
+                }
+            });
+            
+            // Monday analysis
+            const mondayRates = weekdayStats[1];
+            const mondayAvg = mondayRates.length > 0 ? (mondayRates.reduce((a, b) => a + b, 0) / mondayRates.length).toFixed(1) : 0;
+            document.getElementById('forecast-monday-avg').textContent = `${mondayAvg}%`;
+            document.getElementById('forecast-monday-trend').textContent = mondayAvg < 90 ? '⚠️ Typically lower attendance' : '✅ Generally good';
+            
+            // Friday analysis
+            const fridayRates = weekdayStats[5];
+            const fridayAvg = fridayRates.length > 0 ? (fridayRates.reduce((a, b) => a + b, 0) / fridayRates.length).toFixed(1) : 0;
+            document.getElementById('forecast-friday-avg').textContent = `${fridayAvg}%`;
+            document.getElementById('forecast-friday-trend').textContent = fridayAvg < 90 ? '⚠️ Typically lower attendance' : '✅ Generally good';
+            
+            // Seasonal pattern (last 30 days vs previous 30 days)
+            const sortedDates = Object.keys(allReports).sort();
+            const recent30 = sortedDates.slice(-30);
+            const previous30 = sortedDates.slice(-60, -30);
+            
+            const calcAvg = (dates) => {
+                let total = 0;
+                let count = 0;
+                dates.forEach(dateStr => {
+                    const dayData = allReports[dateStr];
+                    let dayTotal = 0;
+                    let dayPresent = 0;
+                    let dayTardy = 0;
+                    
+                    Object.keys(dayData).forEach(classId => {
+                        if (classId.includes('-')) {
+                            const classData = dayData[classId];
+                            if (classData && classData.totalStudents) {
+                                dayTotal += classData.totalStudents;
+                                dayPresent += classData.presentToday || 0;
+                                dayTardy += classData.tardyToday || 0;
+                            }
+                        }
+                    });
+                    
+                    if (dayTotal > 0) {
+                        total += ((dayPresent + dayTardy) / dayTotal) * 100;
+                        count++;
+                    }
+                });
+                return count > 0 ? total / count : 0;
+            };
+            
+            const recentAvg = calcAvg(recent30);
+            const previousAvg = previous30.length > 0 ? calcAvg(previous30) : recentAvg;
+            const trend = recentAvg > previousAvg ? '📈 Improving' : recentAvg < previousAvg ? '📉 Declining' : '➡️ Stable';
+            
+            document.getElementById('forecast-seasonal-trend').textContent = trend;
+            document.getElementById('forecast-seasonal-desc').textContent = `Recent: ${recentAvg.toFixed(1)}% vs Previous: ${previousAvg.toFixed(1)}%`;
+        };
+
+        // Render risk indicators
+        const renderRiskIndicators = () => {
+            const container = document.getElementById('risk-indicators');
+            const classRisks = [];
+            
+            CLASS_DEFINITIONS.forEach(classDef => {
+                const recent7 = [];
+                const previous7 = [];
+                const sortedDates = Object.keys(allReports).sort();
+                
+                // Get last 14 days
+                sortedDates.slice(-14).forEach((dateStr, idx) => {
+                    const dayData = allReports[dateStr];
+                    const classData = dayData[classDef.id];
+                    
+                    if (classData && classData.totalStudents) {
+                        const present = classData.presentToday || 0;
+                        const tardy = classData.tardyToday || 0;
+                        const rate = ((present + tardy) / classData.totalStudents) * 100;
+                        
+                        if (idx < 7) {
+                            previous7.push(rate);
+                        } else {
+                            recent7.push(rate);
+                        }
+                    }
+                });
+                
+                if (recent7.length >= 3 && previous7.length >= 3) {
+                    const recentAvg = recent7.reduce((a, b) => a + b, 0) / recent7.length;
+                    const previousAvg = previous7.reduce((a, b) => a + b, 0) / previous7.length;
+                    const decline = previousAvg - recentAvg;
+                    
+                    if (decline > 3 || recentAvg < 85) {
+                        classRisks.push({
+                            name: classDef.name,
+                            recentAvg,
+                            decline,
+                            severity: decline > 5 ? 'high' : 'medium'
+                        });
+                    }
+                }
+            });
+            
+            classRisks.sort((a, b) => b.decline - a.decline);
+            
+            if (classRisks.length === 0) {
+                container.innerHTML = '<p class="text-sm text-green-600 font-semibold">✅ No classes at risk - all performing well!</p>';
+                return;
+            }
+            
+            container.innerHTML = classRisks.map(risk => `
+                <div class="flex items-center justify-between p-3 rounded-lg ${risk.severity === 'high' ? 'bg-red-50 border border-red-300' : 'bg-yellow-50 border border-yellow-300'}">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">${risk.severity === 'high' ? '🚨' : '⚠️'}</span>
+                        <div>
+                            <p class="font-semibold text-gray-800">${risk.name}</p>
+                            <p class="text-xs text-gray-600">Recent 7 days: ${risk.recentAvg.toFixed(1)}%</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-lg font-bold ${risk.severity === 'high' ? 'text-red-600' : 'text-yellow-600'}">-${risk.decline.toFixed(1)}%</p>
+                        <p class="text-xs text-gray-500">vs previous week</p>
+                    </div>
+                </div>
+            `).join('');
+        };
+
+        // Render improvement tracking
+        const renderImprovementTracking = () => {
+            const container = document.getElementById('improvement-tracking');
+            const improvements = [];
+            
+            CLASS_DEFINITIONS.forEach(classDef => {
+                const recent7 = [];
+                const previous7 = [];
+                const sortedDates = Object.keys(allReports).sort();
+                
+                // Get last 14 days
+                sortedDates.slice(-14).forEach((dateStr, idx) => {
+                    const dayData = allReports[dateStr];
+                    const classData = dayData[classDef.id];
+                    
+                    if (classData && classData.totalStudents) {
+                        const present = classData.presentToday || 0;
+                        const tardy = classData.tardyToday || 0;
+                        const rate = ((present + tardy) / classData.totalStudents) * 100;
+                        
+                        if (idx < 7) {
+                            previous7.push(rate);
+                        } else {
+                            recent7.push(rate);
+                        }
+                    }
+                });
+                
+                if (recent7.length >= 3 && previous7.length >= 3) {
+                    const recentAvg = recent7.reduce((a, b) => a + b, 0) / recent7.length;
+                    const previousAvg = previous7.reduce((a, b) => a + b, 0) / previous7.length;
+                    const improvement = recentAvg - previousAvg;
+                    
+                    if (improvement > 2) {
+                        improvements.push({
+                            name: classDef.name,
+                            recentAvg,
+                            improvement,
+                            magnitude: improvement > 5 ? 'significant' : 'moderate'
+                        });
+                    }
+                }
+            });
+            
+            improvements.sort((a, b) => b.improvement - a.improvement);
+            
+            if (improvements.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-500 italic">No significant improvements detected in the last week.</p>';
+                return;
+            }
+            
+            container.innerHTML = improvements.map(imp => `
+                <div class="flex items-center justify-between p-3 rounded-lg ${imp.magnitude === 'significant' ? 'bg-green-100 border border-green-300' : 'bg-blue-50 border border-blue-200'}">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">${imp.magnitude === 'significant' ? '🌟' : '📈'}</span>
+                        <div>
+                            <p class="font-semibold text-gray-800">${imp.name}</p>
+                            <p class="text-xs text-gray-600">Recent 7 days: ${imp.recentAvg.toFixed(1)}%</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-lg font-bold ${imp.magnitude === 'significant' ? 'text-green-600' : 'text-blue-600'}">+${imp.improvement.toFixed(1)}%</p>
+                        <p class="text-xs text-gray-500">vs previous week</p>
+                    </div>
+                </div>
+            `).join('');
+        };
+
+        const updateAchievements = (streak, longestStreak, totalReports, completionRate) => {
+            const container = document.getElementById('achievements');
+            const achievements = [];
+            
+            if (streak >= 7) achievements.push({ icon: '🔥', title: 'Week Streak!', desc: '7+ days' });
+            if (streak >= 30) achievements.push({ icon: '🏆', title: 'Month Streak!', desc: '30+ days' });
+            if (totalReports >= 50) achievements.push({ icon: '📚', title: 'Dedicated', desc: '50+ reports' });
+            if (totalReports >= 100) achievements.push({ icon: '💎', title: 'Elite', desc: '100+ reports' });
+            if (completionRate >= 90) achievements.push({ icon: '⭐', title: 'Excellent', desc: '90%+ this month' });
+            if (completionRate === 100) achievements.push({ icon: '👑', title: 'Perfect Month!', desc: '100%' });
+            
+            container.innerHTML = achievements.length > 0
+                ? achievements.map(a => `
+                    <div class="p-3 bg-yellow-50 border-2 border-yellow-300 rounded-lg text-center">
+                        <div class="text-3xl mb-1">${a.icon}</div>
+                        <p class="text-xs font-bold text-gray-700">${a.title}</p>
+                        <p class="text-2xs text-gray-500">${a.desc}</p>
+                    </div>
+                `).join('')
+                : '<p class="col-span-4 text-sm text-gray-500 italic text-center">Keep going to unlock achievements! 🎯</p>';
+        };
+
+        // Render leaderboard
+        const renderLeaderboard = () => {
+            const container = document.getElementById('leaderboard');
+            const rankings = [];
+            
+            CLASS_DEFINITIONS.forEach(classDef => {
+                const score = allAccumulatedScores[classDef.id];
+                if (score && score.daysCount > 0) {
+                    const avg = score.totalScore / score.daysCount;
+                    rankings.push({ ...classDef, avg, daysCount: score.daysCount });
+                }
+            });
+            
+            rankings.sort((a, b) => b.avg - a.avg);
+            
+            if (rankings.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-500 italic">No data available yet.</p>';
+                return;
+            }
+            
+            const medals = ['🥇', '🥈', '🥉'];
+            container.innerHTML = rankings.slice(0, 10).map((item, idx) => `
+                <div class="flex items-center justify-between p-3 rounded-lg ${idx < 3 ? 'bg-yellow-50 border border-yellow-200' : 'bg-gray-50'}">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">${medals[idx] || `#${idx + 1}`}</span>
+                        <div>
+                            <p class="font-semibold text-gray-800">${item.name}</p>
+                            <p class="text-xs text-gray-500">${item.daysCount} days tracked</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-lg font-bold text-indigo-600">${item.avg.toFixed(1)}%</p>
+                    </div>
+                </div>
+            `).join('');
+        };
+
+        // Render trend chart
+        const renderTrendChart = () => {
+            const canvas = document.getElementById('trend-chart');
+            const ctx = canvas.getContext('2d');
+            
+            // Get last 30 days of data
+            const labels = [];
+            const data = [];
+            const today = new Date();
+            
+            for (let i = 29; i >= 0; i--) {
+                const date = new Date(today);
+                date.setDate(date.getDate() - i);
+                const dateStr = formatDate(date);
+                labels.push(date.getDate());
+                
+                let dayScore = 0;
+                let count = 0;
+                
+                if (allReports[dateStr]) {
+                    Object.keys(allReports[dateStr]).forEach(classId => {
+                        if (classId.includes('-')) {
+                            const score = calculateDailyScore(allReports[dateStr][classId]);
+                            if (score > 0) {
+                                dayScore += score;
+                                count++;
+                            }
+                        }
+                    });
+                }
+                
+                data.push(count > 0 ? dayScore / count : null);
+            }
+            
+            if (trendChart) {
+                trendChart.destroy();
+            }
+            
+            trendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Average Daily Score (%)',
+                        data: data,
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+        };
+
+        // Renders the calendar for the current month
+        const renderCalendar = async () => {
+            const calendarGrid = document.getElementById('calendar-grid');
+            const monthDisplay = document.getElementById('month-display');
+            const loadingStatus = document.getElementById('loading-status');
+            
+            calendarGrid.innerHTML = '';
+            loadingStatus.textContent = 'Loading daily report history...';
+            
+            try {
+                allReports = await fetchDailyReports();
+                allAccumulatedScores = await fetchAccumulatedScores();
+                loadingStatus.classList.add('hidden');
+            } catch (error) {
+                loadingStatus.textContent = 'Error loading data. Check console for details.';
+                return;
+            }
+
+            const displayDate = new Date(currentYear, currentMonth, 1);
+            const today = new Date();
+            const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
+            const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+            const startingDayOfWeek = firstDayOfMonth.getDay();
+            
+            monthDisplay.textContent = getMonthName(displayDate);
+
+            // Fill empty days
+            for (let i = 0; i < startingDayOfWeek; i++) {
+                calendarGrid.insertAdjacentHTML('beforeend', '<div class="calendar-day bg-gray-50 border border-gray-100"></div>');
+            }
+            
+            // Render each day
+            for (let day = 1; day <= daysInMonth; day++) {
+                const currentDate = new Date(currentYear, currentMonth, day);
+                const dateKey = formatDate(currentDate);
+                
+                let dayData = allReports[dateKey];
+                let hasReport = false;
+                let avgScore = 0;
+                let classCount = 0;
+                
+                if (dayData) {
+                    Object.keys(dayData).forEach(classId => {
+                        if (classId.includes('-')) {
+                            // Apply filter
+                            if (currentFilter === 'all' || currentFilter === classId) {
+                                hasReport = true;
+                                const score = calculateDailyScore(dayData[classId]);
+                                avgScore += score;
+                                classCount++;
+                            }
+                        }
+                    });
+                }
+                
+                avgScore = classCount > 0 ? avgScore / classCount : 0;
+                const scoreStyle = getScoreClass(avgScore);
+                
+                const isToday = day === today.getDate() && currentMonth === today.getMonth() && currentYear === today.getFullYear();
+                const dayText = isToday ? 'font-extrabold text-indigo-700' : 'text-gray-900';
+                const todayBorder = isToday ? 'border-2 border-indigo-500' : 'border border-gray-200';
+                
+                const tooltipText = hasReport 
+                    ? `${dateKey}\nAvg Score: ${avgScore.toFixed(1)}%\nClick for details`
+                    : `No report on ${dateKey}`;
+
+                const dayHtml = `
+                    <div class="calendar-day ${scoreStyle.bg} ${todayBorder}" title="${tooltipText}" onclick="showDayDetails('${dateKey}')">
+                        <span class="text-sm ${dayText}">${day}</span>
+                        <div class="signal-light ${scoreStyle.light}"></div>
+                    </div>
+                `;
+                calendarGrid.insertAdjacentHTML('beforeend', dayHtml);
+            }
+            
+            calculateStats();
+            renderTodayAttendance();
+            renderAttendanceHeatmap();
+            analyzeBestWorstDays();
+            renderWeeklyAttendanceChart();
+            renderPunctualityChart();
+            renderClassComparisonChart();
+            renderSeasonalTrendsChart();
+            renderMonthlyAttendanceCalendar();
+            renderProgressReportStatus();
+            renderReportRankings();
+            renderReportComplianceChart();
+            renderSignatureGapAnalysis();
+            renderMostEngagedParents();
+            renderFollowupNeededList();
+            renderGenderComparison();
+            renderAbsenceForecast();
+            renderRiskIndicators();
+            renderImprovementTracking();
+            renderLeaderboard();
+            renderTrendChart();
+        };
+
+        // Show day details modal
+        window.showDayDetails = (dateKey) => {
+            const dayData = allReports[dateKey];
+            if (!dayData) {
+                return;
+            }
+            
+            const modal = document.getElementById('day-modal');
+            const modalDate = document.getElementById('modal-date');
+            const modalContent = document.getElementById('modal-content');
+            
+            modalDate.textContent = `Report Details - ${dateKey}`;
+            
+            let html = '<div class="space-y-4">';
+            
+            CLASS_DEFINITIONS.forEach(classDef => {
+                const classData = dayData[classDef.id];
+                if (classData && classData.totalStudents) {
+                    const score = calculateDailyScore(classData);
+                    const scoreStyle = getScoreClass(score);
+                    
+                    html += `
+                        <div class="p-4 ${scoreStyle.bg} rounded-lg border border-gray-200">
+                            <div class="flex justify-between items-center mb-2">
+                                <h3 class="font-bold text-gray-800">${classDef.name}</h3>
+                                <div class="flex items-center gap-2">
+                                    <div class="signal-light ${scoreStyle.light}"></div>
+                                    <span class="font-bold text-lg">${score.toFixed(1)}%</span>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 text-sm">
+                                <div><span class="text-gray-600">Total:</span> <span class="font-semibold">${classData.totalStudents}</span></div>
+                                <div><span class="text-gray-600">Present:</span> <span class="font-semibold text-green-600">${classData.presentToday}</span></div>
+                                <div><span class="text-gray-600">Tardy:</span> <span class="font-semibold text-yellow-600">${classData.tardyToday || 0}</span></div>
+                                <div><span class="text-gray-600">Absent:</span> <span class="font-semibold text-red-600">${classData.totalStudents - classData.presentToday - (classData.tardyToday || 0)}</span></div>
+                                <div><span class="text-gray-600">Reports Brought:</span> <span class="font-semibold">${classData.progressReportBrought || 0}</span></div>
+                                <div><span class="text-gray-600">Reports Signed:</span> <span class="font-semibold">${classData.progressReportSigned || 0}</span></div>
+                            </div>
+                            ${classData.userName ? `<p class="text-xs text-gray-500 mt-2">Entered by: ${classData.userName}</p>` : ''}
+                        </div>
+                    `;
+                }
+            });
+            
+            html += '</div>';
+            modalContent.innerHTML = html;
+            modal.classList.remove('hidden');
+        };
+
+        window.closeDayModal = () => {
+            document.getElementById('day-modal').classList.add('hidden');
+        };
+
+        // Month navigation
+        document.getElementById('prev-month').addEventListener('click', () => {
+            currentMonth--;
+            if (currentMonth < 0) {
+                currentMonth = 11;
+                currentYear--;
+            }
+            renderCalendar();
+        });
+
+        document.getElementById('next-month').addEventListener('click', () => {
+            currentMonth++;
+            if (currentMonth > 11) {
+                currentMonth = 0;
+                currentYear++;
+            }
+            renderCalendar();
+        });
+
+        // Class filter
+        document.getElementById('class-filter').addEventListener('change', (e) => {
+            currentFilter = e.target.value;
+            renderCalendar();
+        });
+
+        // Export CSV
+        document.getElementById('export-btn').addEventListener('click', () => {
+            let csv = 'Date,Class,Total Students,Present,Tardy,Absent,Reports Brought,Reports Signed,Score\n';
+            
+            Object.keys(allReports).sort().forEach(dateKey => {
+                const dayData = allReports[dateKey];
+                CLASS_DEFINITIONS.forEach(classDef => {
+                    const classData = dayData[classDef.id];
+                    if (classData && classData.totalStudents) {
+                        const score = calculateDailyScore(classData);
+                        const absent = classData.totalStudents - classData.presentToday - (classData.tardyToday || 0);
+                        csv += `${dateKey},${classDef.name},${classData.totalStudents},${classData.presentToday},${classData.tardyToday || 0},${absent},${classData.progressReportBrought || 0},${classData.progressReportSigned || 0},${score.toFixed(2)}\n`;
+                    }
+                });
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `class-tracker-export-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        });
+
+        // Print
+        document.getElementById('print-btn').addEventListener('click', () => {
+            window.print();
+        });
+
+        // Dark mode toggle
+        document.getElementById('dark-mode-toggle').addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            document.getElementById('dark-mode-toggle').textContent = isDark ? '☀️' : '🌙';
+            localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled');
+        });
+
+        // --- INITIALIZATION ---
+        window.onload = () => {
+            // Restore dark mode preference
+            if (localStorage.getItem('darkMode') === 'enabled') {
+                document.body.classList.add('dark-mode');
+                document.getElementById('dark-mode-toggle').textContent = '☀️';
+            }
+            
+            initializeFirebase();
+        };
+
+    </script>
+</body>
+</html>
