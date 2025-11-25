@@ -83,9 +83,9 @@
                 </select>
             </div>
             
-            <button onclick="openManageClassesModal()" 
-                    class="px-3 py-2 text-sm text-center bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold shadow-md">
-                ⚙️ Manage Classes
+            <button id="admin-portal-btn" onclick="openAdminPortal()" 
+                    class="hidden px-3 py-2 text-sm text-center bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold shadow-md">
+                🔒 Admin Portal
             </button>
             
             <a href="quran-tracker.html" class="px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
@@ -234,6 +234,60 @@
                 </div>
             </div>
         </div>
+        
+        <!-- Admin Portal Modal -->
+        <div id="admin-portal-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-80 z-40 flex items-center justify-center p-4">
+            <div class="bg-white p-6 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-2xl font-bold text-red-700">🔒 Admin Portal</h3>
+                    <button onclick="closeAdminPortal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                </div>
+                
+                <!-- Admin Status -->
+                <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <p class="text-sm text-red-800"><strong>Admin User:</strong> <span id="admin-user-id" class="font-mono"></span></p>
+                </div>
+                
+                <!-- Manage Admins Section -->
+                <div class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <h4 class="text-lg font-bold text-gray-700 mb-3">Manage Admins</h4>
+                    
+                    <!-- Current Admins List -->
+                    <div class="mb-4">
+                        <h5 class="text-sm font-semibold text-gray-600 mb-2">Current Admins</h5>
+                        <div id="admin-list" class="space-y-2 max-h-40 overflow-y-auto"></div>
+                    </div>
+                    
+                    <!-- Add New Admin -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <div class="md:col-span-3">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">User ID</label>
+                            <input type="text" id="new-admin-id" placeholder="Enter user ID to make admin" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500">
+                        </div>
+                        <div class="flex items-end">
+                            <button onclick="addNewAdmin()" class="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition">
+                                ➕ Add Admin
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Manage Classes & Departments Section -->
+                <div class="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+                    <h4 class="text-lg font-bold text-gray-700 mb-3">Manage Classes & Departments</h4>
+                    <button onclick="openManageClassesModal()" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 transition">
+                        ⚙️ Open Class Management
+                    </button>
+                </div>
+                
+                <div class="mt-4 pt-4 border-t flex justify-end">
+                    <button onclick="closeAdminPortal()" class="px-6 py-2 bg-gray-500 text-white rounded-lg font-semibold hover:bg-gray-600 transition">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
     </main>
 
     <!-- Firebase SDK Imports -->
@@ -308,6 +362,10 @@
         let selectedDepartment = localStorage.getItem('selectedDepartment') || 'Weekend'; 
         let isSaving = false;
         let currentUserName = null; // New global variable to hold the user's name
+        
+        // Admin management
+        let ADMIN_LIST = ['MpcB7f35m0bITsSK1D7ACWFmch32']; // Default admin
+        let isAdmin = false;
         
         const getTodayDateId = () => {
             const now = new Date();
@@ -475,6 +533,153 @@
             }
             // Otherwise, assume it's Weekend data (legacy format)
             return `Weekend-${classId}`;
+        };
+        
+        // --- ADMIN MANAGEMENT FUNCTIONS ---
+        
+        // Load admin list from Firebase
+        const loadAdminList = async () => {
+            try {
+                const adminDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'admins', 'list');
+                const docSnap = await getDoc(adminDocRef);
+                
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    ADMIN_LIST = data.admins || ['MpcB7f35m0bITsSK1D7ACWFmch32'];
+                    console.log('Admin list loaded from Firebase:', ADMIN_LIST);
+                } else {
+                    console.log('No admin list in Firebase, using default');
+                    ADMIN_LIST = ['MpcB7f35m0bITsSK1D7ACWFmch32'];
+                    await saveAdminList(); // Save default to Firebase
+                }
+                
+                checkAdminStatus();
+            } catch (error) {
+                console.error('Error loading admin list:', error);
+                ADMIN_LIST = ['MpcB7f35m0bITsSK1D7ACWFmch32'];
+                checkAdminStatus();
+            }
+        };
+        
+        // Save admin list to Firebase
+        const saveAdminList = async () => {
+            try {
+                const adminDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'admins', 'list');
+                await setDoc(adminDocRef, { admins: ADMIN_LIST });
+                console.log('✅ Admin list saved to Firebase');
+            } catch (error) {
+                console.error('❌ Error saving admin list:', error);
+                showMessage('Error', 'Failed to save admin list.');
+            }
+        };
+        
+        // Check if current user is admin
+        const checkAdminStatus = () => {
+            isAdmin = ADMIN_LIST.includes(userId);
+            console.log('Admin status for', userId, ':', isAdmin);
+            
+            // Show/hide admin portal button
+            const adminBtn = document.getElementById('admin-portal-btn');
+            if (isAdmin) {
+                adminBtn.classList.remove('hidden');
+            } else {
+                adminBtn.classList.add('hidden');
+            }
+        };
+        
+        // Open admin portal
+        window.openAdminPortal = () => {
+            if (!isAdmin) {
+                showMessage('Access Denied', 'You do not have admin privileges.');
+                return;
+            }
+            
+            document.getElementById('admin-user-id').textContent = userId;
+            renderAdminList();
+            document.getElementById('admin-portal-modal').classList.remove('hidden');
+            document.getElementById('mobile-nav-menu').classList.add('hidden');
+        };
+        
+        // Close admin portal
+        window.closeAdminPortal = () => {
+            document.getElementById('admin-portal-modal').classList.add('hidden');
+        };
+        
+        // Render admin list
+        const renderAdminList = () => {
+            const container = document.getElementById('admin-list');
+            container.innerHTML = '';
+            
+            ADMIN_LIST.forEach(adminId => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center p-2 bg-white border border-gray-200 rounded-lg';
+                
+                const idSpan = document.createElement('span');
+                idSpan.className = 'font-mono text-xs text-gray-700';
+                idSpan.textContent = adminId;
+                
+                // Only allow removing other admins, not yourself
+                if (adminId !== userId) {
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'text-red-500 hover:text-red-700 text-sm';
+                    removeBtn.textContent = '✖ Remove';
+                    removeBtn.onclick = () => removeAdmin(adminId);
+                    
+                    div.appendChild(idSpan);
+                    div.appendChild(removeBtn);
+                } else {
+                    const youBadge = document.createElement('span');
+                    youBadge.className = 'text-xs bg-green-100 text-green-700 px-2 py-1 rounded';
+                    youBadge.textContent = 'You';
+                    
+                    div.appendChild(idSpan);
+                    div.appendChild(youBadge);
+                }
+                
+                container.appendChild(div);
+            });
+        };
+        
+        // Add new admin
+        window.addNewAdmin = async () => {
+            const newAdminId = document.getElementById('new-admin-id').value.trim();
+            
+            if (!newAdminId) {
+                showMessage('Error', 'Please enter a user ID.');
+                return;
+            }
+            
+            if (ADMIN_LIST.includes(newAdminId)) {
+                showMessage('Error', 'This user is already an admin.');
+                return;
+            }
+            
+            ADMIN_LIST.push(newAdminId);
+            await saveAdminList();
+            
+            document.getElementById('new-admin-id').value = '';
+            renderAdminList();
+            
+            showMessage('Success', `User ${newAdminId} added as admin!`);
+        };
+        
+        // Remove admin
+        const removeAdmin = async (adminId) => {
+            if (adminId === userId) {
+                showMessage('Error', 'You cannot remove yourself as admin.');
+                return;
+            }
+            
+            if (ADMIN_LIST.length <= 1) {
+                showMessage('Error', 'Cannot remove the last admin.');
+                return;
+            }
+            
+            ADMIN_LIST = ADMIN_LIST.filter(id => id !== adminId);
+            await saveAdminList();
+            
+            renderAdminList();
+            showMessage('Success', `Admin ${adminId} removed.`);
         };
         
         // --- UTILITY FUNCTIONS ---
@@ -1187,6 +1392,9 @@ const handleAppReady = async () => {
     
     // Load class definitions from Firebase
     await loadClassDefinitions();
+    
+    // Load admin list and check if current user is admin
+    await loadAdminList();
     
     // Set up real-time listener for class definitions
     setupClassDefinitionsListener();
