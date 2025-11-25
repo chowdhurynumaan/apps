@@ -72,6 +72,16 @@
     
 <div id="mobile-nav-menu" class="hidden bg-white border-t border-gray-200 py-2 absolute w-full left-0 top-full shadow-xl z-10">
         <div class="flex flex-col space-y-2 px-4">
+            <div class="flex flex-col space-y-1">
+                <label class="text-xs font-semibold text-gray-600">Department</label>
+                <select id="header-dept-selector" onchange="handleDepartmentChange(this.value)"
+                       class="px-3 py-2 border border-indigo-300 rounded-lg text-sm font-semibold text-gray-700 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition duration-150">
+                    <option value="Weekend">Weekend (WKN)</option>
+                    <option value="Evening">Evening (EVN)</option>
+                    <option value="FullTime">Full Time (FLT)</option>
+                </select>
+            </div>
+            
             <a href="index.html" class="px-3 py-2 text-sm text-center bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold shadow-md">
                 📚 Attendance Tracker
             </a>
@@ -281,7 +291,7 @@
     <!-- Firebase & Chart.js Scripts -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js';
-        import { getFirestore, collection, getDocs, query, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js';
+        import { getFirestore, collection, getDocs, query, orderBy, limit, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js';
         import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js';
 
         // Firebase Configuration
@@ -300,11 +310,112 @@
         const auth = getAuth(app);
         const appId = 'apps-e1163';
 
+        // Default class definitions for known departments
+        const DEFAULT_CLASS_DEFINITIONS = {
+            'Weekend': [],
+            'Evening': [],
+            'FullTime': []
+        };
+        
+        let CLASS_DEFINITIONS = DEFAULT_CLASS_DEFINITIONS;
         let allData = [];
         let chartInstances = {};
         let selectedDate = null;
+        let selectedDepartment = localStorage.getItem('selectedDepartment') || 'Weekend';
         
         console.log('Dashboard initialized with appId:', appId);
+
+        // Helper: Normalize old class IDs to new format (for backward compatibility)
+        function normalizeClassId(classId) {
+            if (classId.startsWith('Weekend-') || classId.startsWith('Evening-') || classId.startsWith('FullTime-')) {
+                return classId;
+            }
+            return `Weekend-${classId}`;
+        }
+        
+        // Load class definitions from Firebase to get all departments
+        async function loadClassDefinitions() {
+            try {
+                const classDefsDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_definitions', 'current');
+                const docSnap = await getDoc(classDefsDocRef);
+                
+                if (docSnap.exists()) {
+                    const firebaseData = docSnap.data();
+                    CLASS_DEFINITIONS = { ...DEFAULT_CLASS_DEFINITIONS, ...firebaseData };
+                    console.log('Class definitions loaded from Firebase');
+                } else {
+                    console.log('No class definitions in Firebase, using defaults');
+                    CLASS_DEFINITIONS = DEFAULT_CLASS_DEFINITIONS;
+                }
+                
+                updateDepartmentDropdown();
+            } catch (error) {
+                console.error('Error loading class definitions:', error);
+                CLASS_DEFINITIONS = DEFAULT_CLASS_DEFINITIONS;
+                updateDepartmentDropdown();
+            }
+        }
+        
+        // Update department dropdown with all available departments
+        function updateDepartmentDropdown() {
+            const dropdown = document.getElementById('header-dept-selector');
+            const currentValue = dropdown.value;
+            
+            // Clear existing options
+            dropdown.innerHTML = '';
+            
+            // Add all departments from CLASS_DEFINITIONS
+            Object.keys(CLASS_DEFINITIONS).forEach(deptName => {
+                const option = document.createElement('option');
+                option.value = deptName;
+                
+                // Use known abbreviations or create one from first 3 letters
+                let abbr = deptName.substring(0, 3).toUpperCase();
+                if (deptName === 'Weekend') abbr = 'WKN';
+                if (deptName === 'Evening') abbr = 'EVN';
+                if (deptName === 'FullTime') abbr = 'FLT';
+                
+                option.textContent = `${deptName} (${abbr})`;
+                dropdown.appendChild(option);
+            });
+            
+            // Restore previous selection if it still exists
+            if (CLASS_DEFINITIONS[currentValue]) {
+                dropdown.value = currentValue;
+            } else if (CLASS_DEFINITIONS[selectedDepartment]) {
+                dropdown.value = selectedDepartment;
+            }
+        }
+
+        // Helper: Filter classes by department
+        function filterClassesByDepartment(classes) {
+            if (!classes) return {};
+            const filtered = {};
+            Object.keys(classes).forEach(classId => {
+                const normalizedId = normalizeClassId(classId);
+                if (normalizedId.startsWith(`${selectedDepartment}-`)) {
+                    filtered[normalizedId] = classes[classId];
+                }
+            });
+            return filtered;
+        }
+
+        // Handle department change
+        window.handleDepartmentChange = function(newDepartment) {
+            if (newDepartment === selectedDepartment) return;
+            selectedDepartment = newDepartment;
+            localStorage.setItem('selectedDepartment', newDepartment);
+            
+            // Update dropdown
+            document.getElementById('header-dept-selector').value = newDepartment;
+            
+            // Close hamburger menu
+            document.getElementById('mobile-nav-menu').classList.add('hidden');
+            
+            if (allData.length > 0) {
+                renderDashboard();
+            }
+        };
 
         // Helper: Get most recent school day
         function getMostRecentSchoolDay(data) {
@@ -315,6 +426,9 @@
         // Populate date picker
         function populateDatePicker() {
             const dateInput = document.getElementById('date-selector');
+            
+            // Set header dropdown to saved value
+            document.getElementById('header-dept-selector').value = selectedDepartment;
             
             // Set to most recent date by default
             if (allData.length > 0) {
@@ -376,6 +490,9 @@
                 console.log('Authenticating...');
                 const userCred = await signInAnonymously(auth);
                 console.log('Authentication successful, UID:', userCred.user.uid);
+                
+                // Load class definitions to get all departments
+                await loadClassDefinitions();
                 
                 const collectionPath = `artifacts/${appId}/public/data/daily_attendance_reports`;
                 console.log('Querying collection:', collectionPath);
@@ -451,15 +568,18 @@
             const latest = getSelectedDayData();
             if (!latest) return;
 
-            // Update title with date
+            // Filter classes by department
+            const classes = filterClassesByDepartment(latest.classes);
+
+            // Update title with date and department
             const dateObj = new Date(latest.date);
             document.getElementById('latestDayTitle').textContent = 
-                `Latest School Day - ${dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}`;
+                `${selectedDepartment} - ${dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}`;
 
             // Calculate totals
             let totalStudents = 0, totalPresent = 0, totalTardy = 0, totalAbsent = 0;
             
-            Object.values(latest.classes).forEach(cls => {
+            Object.values(classes).forEach(cls => {
                 totalStudents += cls.totalStudents || 0;
                 totalPresent += cls.presentToday || 0;
                 totalTardy += cls.tardyToday || 0;
@@ -492,7 +612,7 @@
 
             // Render 30-day trends
             render30DayTrends();
-            renderClassComparison(latest);
+            renderClassComparison(classes);
         }
 
         function render30DayTrends() {
@@ -505,8 +625,9 @@
             const totalStudentsData = [];
 
             last30.forEach(day => {
+                const classes = filterClassesByDepartment(day.classes);
                 let present = 0, tardy = 0, total = 0;
-                Object.values(day.classes).forEach(cls => {
+                Object.values(classes).forEach(cls => {
                     total += cls.totalStudents || 0;
                     present += cls.presentToday || 0;
                     tardy += cls.tardyToday || 0;
@@ -610,16 +731,18 @@
             });
         }
 
-        function renderClassComparison(latest) {
+        function renderClassComparison(classes) {
             const classNames = [];
             const attendanceRates = [];
 
-            Object.entries(latest.classes).forEach(([className, data]) => {
+            Object.entries(classes).forEach(([className, data]) => {
                 const total = data.totalStudents || 0;
                 const present = (data.presentToday || 0) + (data.tardyToday || 0);
                 const rate = parseFloat(calculateAttendanceRate(present, total));
                 
-                classNames.push(className);
+                // Extract just the class name from full ID (e.g., "Weekend-Girls-1A" -> "Girls-1A")
+                const displayName = className.split('-').slice(1).join('-');
+                classNames.push(displayName);
                 attendanceRates.push(rate);
             });
 
@@ -656,10 +779,11 @@
             const latest = getSelectedDayData();
             if (!latest) return;
 
+            const classes = filterClassesByDepartment(latest.classes);
             let totalDistributed = 0, totalBrought = 0, totalSigned = 0;
             const missingSignatures = [];
 
-            Object.entries(latest.classes).forEach(([className, data]) => {
+            Object.entries(classes).forEach(([className, data]) => {
                 const distributed = data.totalStudents || 0;
                 const brought = data.progressReportBrought || 0;
                 const signed = data.progressReportSigned || 0;
@@ -703,11 +827,12 @@
             const latest = getSelectedDayData();
             if (!latest) return;
 
+            const classes = filterClassesByDepartment(latest.classes);
             const classPerformance = [];
             
-            console.log('Performance Metrics - Latest classes:', latest.classes);
+            console.log('Performance Metrics - Latest classes:', classes);
             
-            Object.entries(latest.classes).forEach(([className, data]) => {
+            Object.entries(classes).forEach(([className, data]) => {
                 const total = data.totalStudents || 0;
                 const onTime = data.presentToday || 0;
                 const tardy = data.tardyToday || 0;
@@ -715,9 +840,12 @@
                 const present = onTime + tardy;
                 const rate = parseFloat(calculateAttendanceRate(present, total));
                 
+                // Extract display name
+                const displayName = className.split('-').slice(1).join('-');
+                
                 console.log(`Class ${className}:`, { total, onTime, tardy, absent, present, rate });
                 
-                classPerformance.push({ className, rate, total, onTime, tardy, absent, present });
+                classPerformance.push({ className: displayName, rate, total, onTime, tardy, absent, present });
             });
 
             classPerformance.sort((a, b) => b.rate - a.rate);
@@ -747,7 +875,7 @@
             `).join('');
 
             // Perfect attendance (classes with 100% on-time attendance)
-            const perfectClasses = Object.entries(latest.classes)
+            const perfectClasses = Object.entries(classes)
                 .filter(([_, data]) => {
                     const total = data.totalStudents || 0;
                     const onTime = data.presentToday || 0;
@@ -758,12 +886,14 @@
                 document.getElementById('perfectAttendance').innerHTML = 
                     '<p class="text-gray-500 text-center py-4 text-sm">No classes with 100% on-time attendance</p>';
             } else {
-                document.getElementById('perfectAttendance').innerHTML = perfectClasses.map(([className, data]) => `
+                document.getElementById('perfectAttendance').innerHTML = perfectClasses.map(([className, data]) => {
+                    const displayName = className.split('-').slice(1).join('-');
+                    return `
                     <div class="bg-blue-50 rounded-lg p-3 mb-2 border border-blue-200">
-                        <p class="font-semibold text-blue-700 truncate">${className}</p>
+                        <p class="font-semibold text-blue-700 truncate">${displayName}</p>
                         <p class="text-xs sm:text-sm text-gray-600">${data.totalStudents} students - all on time! 🎉</p>
                     </div>
-                `).join('');
+                `}).join('');
             }
 
             // Students needing intervention (chronic tardiness/absence)
@@ -776,7 +906,8 @@
 
             // Calculate average attendance for each class
             last30.forEach(day => {
-                Object.entries(day.classes).forEach(([className, data]) => {
+                const classes = filterClassesByDepartment(day.classes);
+                Object.entries(classes).forEach(([className, data]) => {
                     if (!classAttendance[className]) {
                         classAttendance[className] = { total: 0, present: 0, days: 0 };
                     }
@@ -793,7 +924,8 @@
                 const rate = parseFloat(calculateAttendanceRate(avgPresent, avgTotal));
                 
                 if (rate < 75) {
-                    interventionNeeded.push({ className, rate });
+                    const displayName = className.split('-').slice(1).join('-');
+                    interventionNeeded.push({ className: displayName, rate });
                 }
             });
 
@@ -824,8 +956,9 @@
             let recentAvg = 0, previousAvg = 0;
             
             recent7.forEach(day => {
+                const classes = filterClassesByDepartment(day.classes);
                 let total = 0, present = 0;
-                Object.values(day.classes).forEach(cls => {
+                Object.values(classes).forEach(cls => {
                     total += cls.totalStudents || 0;
                     present += (cls.presentToday || 0) + (cls.tardyToday || 0);
                 });
@@ -834,8 +967,9 @@
             recentAvg /= recent7.length;
 
             previous7.forEach(day => {
+                const classes = filterClassesByDepartment(day.classes);
                 let total = 0, present = 0;
-                Object.values(day.classes).forEach(cls => {
+                Object.values(classes).forEach(cls => {
                     total += cls.totalStudents || 0;
                     present += (cls.presentToday || 0) + (cls.tardyToday || 0);
                 });
@@ -854,8 +988,9 @@
 
             // Expected attendance
             const latest = getSelectedDayData();
+            const classes = filterClassesByDepartment(latest.classes);
             let totalStudents = 0;
-            Object.values(latest.classes).forEach(cls => {
+            Object.values(classes).forEach(cls => {
                 totalStudents += cls.totalStudents || 0;
             });
             
@@ -865,7 +1000,7 @@
 
             // Parent engagement score
             let totalBrought = 0, totalSigned = 0;
-            Object.values(latest.classes).forEach(cls => {
+            Object.values(classes).forEach(cls => {
                 totalBrought += cls.progressReportBrought || 0;
                 totalSigned += cls.progressReportSigned || 0;
             });
@@ -879,10 +1014,11 @@
             const latest = getSelectedDayData();
             if (!latest) return;
 
+            const classes = filterClassesByDepartment(latest.classes);
             let girlsTotal = 0, girlsPresent = 0, girlsTardy = 0;
             let boysTotal = 0, boysPresent = 0, boysTardy = 0;
 
-            Object.entries(latest.classes).forEach(([className, data]) => {
+            Object.entries(classes).forEach(([className, data]) => {
                 const isGirls = className.toLowerCase().includes('girl');
                 const total = data.totalStudents || 0;
                 const present = data.presentToday || 0;
@@ -987,9 +1123,26 @@
         loadData();
         
         // Mobile menu toggle
-        document.getElementById('menu-toggle').addEventListener('click', function() {
-            const menu = document.getElementById('mobile-nav-menu');
-            menu.classList.toggle('hidden');
+        const menuToggle = document.getElementById('menu-toggle');
+        const mobileNavMenu = document.getElementById('mobile-nav-menu');
+        
+        menuToggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            mobileNavMenu.classList.toggle('hidden');
+        });
+        
+        // Close menu when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!mobileNavMenu.classList.contains('hidden') && 
+                !mobileNavMenu.contains(e.target) && 
+                e.target !== menuToggle) {
+                mobileNavMenu.classList.add('hidden');
+            }
+        });
+        
+        // Prevent menu from closing when clicking inside it
+        mobileNavMenu.addEventListener('click', function(e) {
+            e.stopPropagation();
         });
     </script>
 </body>

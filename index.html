@@ -53,7 +53,7 @@
         </button>
         
         <h1 class="text-xl font-extrabold text-indigo-700 flex-grow text-center sm:text-left">
-            <span class="mr-1">📚</span> Tracker
+            Tracker
         </h1>
 
         <nav class="hidden sm:hidden items-center space-x-3 mx-4">
@@ -63,7 +63,6 @@
 </nav>
         
         <div class="flex items-center space-x-2 flex-shrink-0">
-            
             <input type="date" id="date-selector" onchange="handleDateChange(this.value)"
                    class="px-2 py-1 border border-indigo-300 rounded-lg text-xs font-semibold text-gray-700 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition duration-150 w-28">
         </div>
@@ -74,7 +73,22 @@
     
 <div id="mobile-nav-menu" class="hidden bg-white border-t border-gray-200 py-2 absolute w-full left-0 top-full shadow-xl z-10">
         <div class="flex flex-col space-y-2 px-4">
-            <a href="quran-tracker.html" class="px-3 py-2 text-sm text-center bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold shadow-md">
+            <div class="flex flex-col space-y-1">
+                <label class="text-xs font-semibold text-gray-600">Department</label>
+                <select id="header-dept-selector" onchange="handleDepartmentChange(this.value)"
+                       class="px-3 py-2 border border-indigo-300 rounded-lg text-sm font-semibold text-gray-700 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition duration-150">
+                    <option value="Weekend">Weekend (WKN)</option>
+                    <option value="Evening">Evening (EVN)</option>
+                    <option value="FullTime">Full Time (FLT)</option>
+                </select>
+            </div>
+            
+            <button onclick="openManageClassesModal()" 
+                    class="px-3 py-2 text-sm text-center bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold shadow-md">
+                ⚙️ Manage Classes
+            </button>
+            
+            <a href="quran-tracker.html" class="px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
                 Quran Tracker
             </a>
             <a href="dashboard.html" class="px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
@@ -148,6 +162,78 @@
                 </button>
             </div>
         </div>
+
+        <!-- Manage Classes Modal -->
+        <div id="manage-classes-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-80 z-40 flex items-center justify-center p-4">
+            <div class="bg-white p-6 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-2xl font-bold text-indigo-700">Manage Classes & Departments</h3>
+                    <button onclick="closeManageClassesModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                </div>
+                
+                <!-- Add New Department -->
+                <div class="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                    <h4 class="text-lg font-bold text-gray-700 mb-3">Add New Department</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Department Name</label>
+                            <input type="text" id="new-dept-name" placeholder="e.g., Summer" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Abbreviation</label>
+                            <input type="text" id="new-dept-abbr" placeholder="e.g., SMR" maxlength="3"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500">
+                        </div>
+                        <div class="flex items-end">
+                            <button onclick="addNewDepartment()" class="w-full bg-purple-600 text-white py-2 rounded-lg font-semibold hover:bg-purple-700 transition">
+                                ➕ Add Department
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p class="text-sm text-blue-800"><strong>Current Department:</strong> <span id="current-dept-display" class="font-semibold"></span></p>
+                </div>
+
+                <!-- Current Classes List -->
+                <div class="mb-6">
+                    <h4 class="text-lg font-bold text-gray-700 mb-3">Current Classes</h4>
+                    <div id="current-classes-list" class="space-y-2"></div>
+                </div>
+
+                <!-- Add New Class -->
+                <div class="border-t pt-4">
+                    <h4 class="text-lg font-bold text-gray-700 mb-3">Add New Class</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                            <select id="new-class-gender" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                                <option value="Girls">Girls</option>
+                                <option value="Boys">Boys</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Class Name</label>
+                            <input type="text" id="new-class-name" placeholder="e.g., 5" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div class="flex items-end">
+                            <button onclick="addNewClass()" class="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition">
+                                ➕ Add Class
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-4 border-t flex justify-end">
+                    <button onclick="closeManageClassesModal()" class="px-6 py-2 bg-gray-500 text-white rounded-lg font-semibold hover:bg-gray-600 transition">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
     </main>
 
     <!-- Firebase SDK Imports -->
@@ -217,6 +303,9 @@
         let currentReports = {}; // Daily report entries for the SELECTED DAY
         let currentAccumulatedScores = {}; // Accumulated scores (all classes)
         let selectedClassId = null; 
+        
+        // Department selection - restore from localStorage or default to Weekend
+        let selectedDepartment = localStorage.getItem('selectedDepartment') || 'Weekend'; 
         let isSaving = false;
         let currentUserName = null; // New global variable to hold the user's name
         
@@ -230,21 +319,163 @@
         const todayDateId = getTodayDateId();
         let selectedDateId = todayDateId;
 
-        // Class definitions (used for fixed order and ID mapping)
-        const CLASS_DEFINITIONS = [
-            { id: 'Girls-1A', name: '1-A' },
-            { id: 'Girls-1B', name: '1-B' },
-            { id: 'Girls-1C', name: '1-C' },
-            { id: 'Girls-2', name: '2' },
-            { id: 'Girls-3', name: '3' },
-            { id: 'Girls-4', name: '4' },
-            { id: 'Boys-1A', name: '1-A' },
-            { id: 'Boys-1B', name: '1-B' },
-            { id: 'Boys-1C', name: '1-C' },
-            { id: 'Boys-2', name: '2' },
-            { id: 'Boys-3', name: '3' },
-            { id: 'Boys-4', name: '4' },
-        ];
+        // Load class definitions from localStorage or use defaults
+        const DEFAULT_CLASS_DEFINITIONS = {
+            'Weekend': [
+                { id: 'Weekend-Girls-1A', name: '1-A', gender: 'Girls' },
+                { id: 'Weekend-Girls-1B', name: '1-B', gender: 'Girls' },
+                { id: 'Weekend-Girls-1C', name: '1-C', gender: 'Girls' },
+                { id: 'Weekend-Girls-2', name: '2', gender: 'Girls' },
+                { id: 'Weekend-Girls-3', name: '3', gender: 'Girls' },
+                { id: 'Weekend-Girls-4', name: '4', gender: 'Girls' },
+                { id: 'Weekend-Boys-1A', name: '1-A', gender: 'Boys' },
+                { id: 'Weekend-Boys-1B', name: '1-B', gender: 'Boys' },
+                { id: 'Weekend-Boys-1C', name: '1-C', gender: 'Boys' },
+                { id: 'Weekend-Boys-2', name: '2', gender: 'Boys' },
+                { id: 'Weekend-Boys-3', name: '3', gender: 'Boys' },
+                { id: 'Weekend-Boys-4', name: '4', gender: 'Boys' },
+            ],
+            'Evening': [
+                { id: 'Evening-Girls-1A', name: '1-A', gender: 'Girls' },
+                { id: 'Evening-Girls-1B', name: '1-B', gender: 'Girls' },
+                { id: 'Evening-Girls-2', name: '2', gender: 'Girls' },
+                { id: 'Evening-Girls-3', name: '3', gender: 'Girls' },
+                { id: 'Evening-Boys-1A', name: '1-A', gender: 'Boys' },
+                { id: 'Evening-Boys-1B', name: '1-B', gender: 'Boys' },
+                { id: 'Evening-Boys-2', name: '2', gender: 'Boys' },
+                { id: 'Evening-Boys-3', name: '3', gender: 'Boys' },
+            ],
+            'FullTime': [
+                { id: 'FullTime-Girls-1', name: '1', gender: 'Girls' },
+                { id: 'FullTime-Girls-2', name: '2', gender: 'Girls' },
+                { id: 'FullTime-Girls-3', name: '3', gender: 'Girls' },
+                { id: 'FullTime-Boys-1', name: '1', gender: 'Boys' },
+                { id: 'FullTime-Boys-2', name: '2', gender: 'Boys' },
+                { id: 'FullTime-Boys-3', name: '3', gender: 'Boys' },
+            ]
+        };
+
+        // Load from localStorage or use defaults (will be replaced by Firebase data after auth)
+        let CLASS_DEFINITIONS = DEFAULT_CLASS_DEFINITIONS;
+        
+        // Save class definitions to Firebase
+        const saveClassDefinitions = async () => {
+            try {
+                console.log('Saving class definitions to Firebase...', CLASS_DEFINITIONS);
+                const classDefsDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_definitions', 'current');
+                await setDoc(classDefsDocRef, CLASS_DEFINITIONS, { merge: true });
+                console.log('✅ Class definitions saved to Firebase successfully');
+            } catch (error) {
+                console.error('❌ Error saving class definitions:', error);
+                showMessage('Error', 'Failed to save class definitions. Check console.');
+            }
+        };
+        
+        // Load class definitions from Firebase
+        const loadClassDefinitions = async () => {
+            try {
+                const classDefsDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_definitions', 'current');
+                const docSnap = await getDoc(classDefsDocRef);
+                
+                if (docSnap.exists()) {
+                    const firebaseData = docSnap.data();
+                    // Use Firebase data and merge with defaults
+                    CLASS_DEFINITIONS = { ...DEFAULT_CLASS_DEFINITIONS, ...firebaseData };
+                    console.log('Class definitions loaded from Firebase');
+                    updateDepartmentDropdown();
+                } else {
+                    console.log('No class definitions in Firebase, using defaults');
+                    CLASS_DEFINITIONS = DEFAULT_CLASS_DEFINITIONS;
+                    updateDepartmentDropdown();
+                }
+            } catch (error) {
+                console.error('Error loading class definitions:', error);
+                CLASS_DEFINITIONS = DEFAULT_CLASS_DEFINITIONS;
+                updateDepartmentDropdown();
+            }
+        };
+        
+        // Set up real-time listener for class definitions
+        const setupClassDefinitionsListener = () => {
+            try {
+                console.log('🔊 Setting up real-time listener for class definitions...');
+                const classDefsDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_definitions', 'current');
+                
+                onSnapshot(classDefsDocRef, (docSnap) => {
+                    console.log('📡 Class definitions snapshot received');
+                    if (docSnap.exists()) {
+                        const firebaseData = docSnap.data();
+                        console.log('📦 Firebase data:', firebaseData);
+                        // Use Firebase data and merge with defaults
+                        CLASS_DEFINITIONS = { ...DEFAULT_CLASS_DEFINITIONS, ...firebaseData };
+                        console.log('✅ Class definitions updated from Firebase real-time listener');
+                        
+                        // Update department dropdown
+                        updateDepartmentDropdown();
+                        
+                        // Re-render the class list in the attendance section
+                        renderClassList();
+                        
+                        // If the manage classes modal is open, update it too
+                        const manageClassesModal = document.getElementById('manage-classes-modal');
+                        if (manageClassesModal && !manageClassesModal.classList.contains('hidden')) {
+                            renderCurrentClassesList();
+                        }
+                    } else {
+                        console.log('⚠️ No class definitions document exists yet');
+                    }
+                }, (error) => {
+                    console.error('❌ Error in class definitions listener:', error);
+                });
+                console.log('✅ Real-time listener setup complete');
+            } catch (error) {
+                console.error('❌ Error setting up class definitions listener:', error);
+            }
+        };
+        
+        // Helper to update department dropdown with all available departments
+        const updateDepartmentDropdown = () => {
+            const dropdown = document.getElementById('header-dept-selector');
+            const currentValue = dropdown.value;
+            
+            // Clear existing options
+            dropdown.innerHTML = '';
+            
+            // Add all departments from CLASS_DEFINITIONS
+            Object.keys(CLASS_DEFINITIONS).forEach(deptName => {
+                const option = document.createElement('option');
+                option.value = deptName;
+                
+                // Use known abbreviations or create one from first 3 letters
+                let abbr = deptName.substring(0, 3).toUpperCase();
+                if (deptName === 'Weekend') abbr = 'WKN';
+                if (deptName === 'Evening') abbr = 'EVN';
+                if (deptName === 'FullTime') abbr = 'FLT';
+                
+                option.textContent = `${deptName} (${abbr})`;
+                dropdown.appendChild(option);
+            });
+            
+            // Restore previous selection if it still exists
+            if (CLASS_DEFINITIONS[currentValue]) {
+                dropdown.value = currentValue;
+            } else if (CLASS_DEFINITIONS[selectedDepartment]) {
+                dropdown.value = selectedDepartment;
+            }
+        };
+        
+        // Helper to get current class definitions
+        const getCurrentClassDefinitions = () => CLASS_DEFINITIONS[selectedDepartment];
+        
+        // Helper to normalize old class IDs to new format (for backward compatibility)
+        const normalizeClassId = (classId) => {
+            // If already has department prefix, return as-is
+            if (classId.startsWith('Weekend-') || classId.startsWith('Evening-') || classId.startsWith('FullTime-')) {
+                return classId;
+            }
+            // Otherwise, assume it's Weekend data (legacy format)
+            return `Weekend-${classId}`;
+        };
         
         // --- UTILITY FUNCTIONS ---
         
@@ -457,6 +688,161 @@ const fetchAndRenderLogHistory = (classId) => {
         };
 
         /**
+         * Handles department change from the department picker
+         */
+        window.handleDepartmentChange = (newDepartment) => {
+            if (newDepartment === selectedDepartment) return;
+            selectedDepartment = newDepartment;
+            
+            // Update dropdown
+            document.getElementById('header-dept-selector').value = newDepartment;
+            
+            // Close hamburger menu
+            document.getElementById('mobile-nav-menu').classList.add('hidden');
+            
+            // Save to localStorage
+            localStorage.setItem('selectedDepartment', newDepartment);
+            
+            // Clear current data
+            currentReports = {};
+            currentAccumulatedScores = {};
+            
+            // Show loading message
+            const initialMessage = document.getElementById('initial-message');
+            initialMessage.classList.remove('hidden');
+            document.getElementById('loading-spinner').classList.remove('hidden');
+            document.getElementById('initial-message-text').textContent = `Loading ${newDepartment} classes...`;
+            
+            // Re-setup listeners with new department
+            setupFirestoreListeners();
+        };
+
+        /**
+         * Opens the manage classes modal
+         */
+        window.openManageClassesModal = () => {
+            document.getElementById('current-dept-display').textContent = selectedDepartment;
+            renderCurrentClassesList();
+            document.getElementById('manage-classes-modal').classList.remove('hidden');
+        };
+
+        /**
+         * Closes the manage classes modal
+         */
+        window.closeManageClassesModal = () => {
+            document.getElementById('manage-classes-modal').classList.add('hidden');
+        };
+
+        /**
+         * Renders the list of current classes in the modal
+         */
+        const renderCurrentClassesList = () => {
+            const container = document.getElementById('current-classes-list');
+            const classes = getCurrentClassDefinitions();
+            
+            if (classes.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 italic">No classes in this department yet.</p>';
+                return;
+            }
+
+            container.innerHTML = classes.map((cls, index) => `
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <div>
+                        <span class="font-semibold text-gray-700">${cls.name}</span>
+                        <span class="text-sm text-gray-500 ml-2">(${cls.gender})</span>
+                    </div>
+                </div>
+            `).join('');
+        };
+
+        /**
+         * Adds a new class to the current department
+         */
+        window.addNewDepartment = async () => {
+            const name = document.getElementById('new-dept-name').value.trim();
+            const abbr = document.getElementById('new-dept-abbr').value.trim().toUpperCase();
+
+            console.log('➕ Adding new department:', { name, abbr });
+
+            if (!name || !abbr) {
+                showMessage('Error', 'Please enter both department name and abbreviation.');
+                return;
+            }
+
+            // Check if department already exists
+            if (CLASS_DEFINITIONS[name]) {
+                showMessage('Error', 'A department with this name already exists.');
+                return;
+            }
+
+            // Add the new department with empty class array
+            CLASS_DEFINITIONS[name] = [];
+            console.log('📝 Added new department to CLASS_DEFINITIONS:', name);
+
+            // Save to Firebase
+            console.log('💾 Calling saveClassDefinitions...');
+            await saveClassDefinitions();
+            console.log('✅ Save complete');
+
+            // Add to dropdown
+            const dropdown = document.getElementById('header-dept-selector');
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = `${name} (${abbr})`;
+            dropdown.appendChild(option);
+
+            // Clear inputs
+            document.getElementById('new-dept-name').value = '';
+            document.getElementById('new-dept-abbr').value = '';
+
+            showMessage('Success', `Department "${name}" (${abbr}) added successfully!`);
+        };
+
+        window.addNewClass = async () => {
+            const gender = document.getElementById('new-class-gender').value;
+            const name = document.getElementById('new-class-name').value.trim();
+
+            console.log('➕ Adding new class:', { gender, name, department: selectedDepartment });
+
+            if (!name) {
+                showMessage('Error', 'Please enter a class name.');
+                return;
+            }
+
+            // Generate class ID
+            const classId = `${selectedDepartment}-${gender}-${name}`;
+            console.log('🆔 Generated class ID:', classId);
+
+            // Check if class already exists
+            if (getCurrentClassDefinitions().some(c => c.id === classId)) {
+                showMessage('Error', 'A class with this name and gender already exists.');
+                return;
+            }
+
+            // Add the new class
+            CLASS_DEFINITIONS[selectedDepartment].push({
+                id: classId,
+                name: name,
+                gender: gender
+            });
+            console.log('📝 Added to local CLASS_DEFINITIONS:', CLASS_DEFINITIONS[selectedDepartment]);
+
+            // Save to Firebase
+            console.log('💾 Calling saveClassDefinitions...');
+            await saveClassDefinitions();
+            console.log('✅ Save complete');
+
+            // Clear input
+            document.getElementById('new-class-name').value = '';
+
+            // Refresh the list
+            renderCurrentClassesList();
+            renderClassList();
+
+            showMessage('Success', `Class "${name}" (${gender}) added successfully!`);
+        };
+
+        /**
          * Calculates the Daily Class Score (DCS) out of 100 based on number of students.
          */
         /**
@@ -632,7 +1018,7 @@ const fetchAndRenderLogHistory = (classId) => {
                 return null;
             }
             
-            const classDef = CLASS_DEFINITIONS.find(c => c.id === classId);
+            const classDef = getCurrentClassDefinitions().find(c => c.id === classId);
 
             return {
                 classId: classId,
@@ -654,7 +1040,7 @@ const fetchAndRenderLogHistory = (classId) => {
          */
         window.selectClass = (classId) => {
             // Find the class definition
-            const classDef = CLASS_DEFINITIONS.find(c => c.id === classId);
+            const classDef = getCurrentClassDefinitions().find(c => c.id === classId);
             if (!classDef) {
                 showMessage('Error', `Class ID ${classId} not found.`);
                 return;
@@ -795,8 +1181,16 @@ const fetchAndRenderLogHistory = (classId) => {
 
         // --- FIREBASE AND AUTHENTICATION ---
 
-const handleAppReady = () => {
+const handleAppReady = async () => {
     document.getElementById('date-selector').value = todayDateId;
+    document.getElementById('header-dept-selector').value = selectedDepartment;
+    
+    // Load class definitions from Firebase
+    await loadClassDefinitions();
+    
+    // Set up real-time listener for class definitions
+    setupClassDefinitionsListener();
+    
     // We ensure the spinner is visible and rely on setupFirestoreListeners to hide the loading message when data is received.
     document.getElementById('loading-spinner').classList.remove('hidden'); // Ensure spinner is visible
     document.getElementById('initial-message-text').textContent = "Authentication Complete! Fetching data...";
@@ -889,7 +1283,13 @@ if (window.dailyReportUnsubscribe) {
             // Filter out non-class fields (like 'audit_trail' and 'lastUpdated')
             // This assumes all class IDs contain a hyphen, e.g., 'Boys-1A'.
             if (key !== 'audit_trail' && key !== 'lastUpdated' && key.includes('-')) {
-                newReports[key] = data[key];
+                // Normalize old class IDs to new format (adds department prefix if missing)
+                const normalizedKey = normalizeClassId(key);
+                
+                // Only include if it belongs to the currently selected department
+                if (normalizedKey.startsWith(`${selectedDepartment}-`)) {
+                    newReports[normalizedKey] = data[key];
+                }
             }
         });
     } else {
@@ -922,24 +1322,33 @@ if (window.dailyReportUnsubscribe) {
 });
 
     // 2. Listener for Accumulated Scores (Always uses the latest data for overall ranking)
-    if (!window.accumulatedScoresUnsubscribe) {
-        const scoresCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'accumulated_class_scores');
-        
-        window.accumulatedScoresUnsubscribe = onSnapshot(scoresCollectionRef, (querySnapshot) => {
-            const newScores = {};
-            querySnapshot.forEach(doc => {
-                newScores[doc.id] = doc.data();
-            });
-            currentAccumulatedScores = newScores;
-            console.log('Accumulated Scores updated:', currentAccumulatedScores);
-            // Re-render only if the main class list is visible
-            if (document.getElementById('initial-message').classList.contains('hidden')) {
-                renderClassList(); // Use renderClassList for consistency
-            }
-        }, (error) => {
-            console.error("Error fetching accumulated scores:", error);
-        });
+    // Unsubscribe from old listener if it exists
+    if (window.accumulatedScoresUnsubscribe) {
+        window.accumulatedScoresUnsubscribe();
     }
+    
+    const scoresCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'accumulated_class_scores');
+    
+    window.accumulatedScoresUnsubscribe = onSnapshot(scoresCollectionRef, (querySnapshot) => {
+        const newScores = {};
+        querySnapshot.forEach(doc => {
+            // Normalize old class IDs to new format
+            const normalizedId = normalizeClassId(doc.id);
+            
+            // Only include if it belongs to the currently selected department
+            if (normalizedId.startsWith(`${selectedDepartment}-`)) {
+                newScores[normalizedId] = doc.data();
+            }
+        });
+        currentAccumulatedScores = newScores;
+        console.log('Accumulated Scores updated:', currentAccumulatedScores);
+        // Re-render only if the main class list is visible
+        if (document.getElementById('initial-message').classList.contains('hidden')) {
+            renderClassList(); // Use renderClassList for consistency
+        }
+    }, (error) => {
+        console.error("Error fetching accumulated scores:", error);
+    });
 };
 
         // --- RENDERING FUNCTIONS (UI/UX) ---
@@ -1025,7 +1434,7 @@ const renderClassList = () => {
     container.innerHTML = '';
     
     // Step 1: Map all class data
-    const allClassesInitial = CLASS_DEFINITIONS.map(classDef => {
+    const allClassesInitial = getCurrentClassDefinitions().map(classDef => {
         const report = currentReports[classDef.id] || {}; 
         const rawAccumulated = currentAccumulatedScores[classDef.id] || {};
         
@@ -1078,14 +1487,15 @@ const renderClassList = () => {
     // Step 2: Determine Ranks
     const rankMap = calculateRanks(allClassesInitial);
     
-    // Step 3: Re-map
+    // Step 3: Re-map by gender
     let girlsClasses = [];
     let boysClasses = [];
     
     allClassesInitial.forEach(c => {
         const classWithRank = { ...c, rank: rankMap.get(c.id) || 0 };
-        if (c.id.startsWith('Girls')) girlsClasses.push(classWithRank);
-        else boysClasses.push(classWithRank);
+        // Check gender property instead of ID prefix
+        if (c.gender === 'Girls') girlsClasses.push(classWithRank);
+        else if (c.gender === 'Boys') boysClasses.push(classWithRank);
     });
 
     // --- Helper function to render a section ---
@@ -1209,7 +1619,7 @@ const renderClassList = () => {
          * Renders the detail entry panel structure for the selected class into the modal content area.
          */
         const renderModalContent = (classId) => {
-            const classDef = CLASS_DEFINITIONS.find(c => c.id === classId);
+            const classDef = getCurrentClassDefinitions().find(c => c.id === classId);
             if (!classDef) return;
 
             const isEditable = selectedDateId === todayDateId;
@@ -1616,13 +2026,30 @@ window.saveClassReport = async () => {
         // ... all your other existing functions (initializeFirebase, handleDateChange, showMessage, etc.) ...
         
         // --- MOBILE MENU LOGIC ---
-        document.getElementById('menu-toggle').addEventListener('click', () => {
-            const menu = document.getElementById('mobile-nav-menu');
-            menu.classList.toggle('hidden');
+        const menuToggle = document.getElementById('menu-toggle');
+        const mobileNavMenu = document.getElementById('mobile-nav-menu');
+        
+        menuToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            mobileNavMenu.classList.toggle('hidden');
             
             // Sync user ID display in the mobile menu when opened
             const userIdDisplay = document.getElementById('user-id-display').textContent;
             document.getElementById('user-id-display-mobile').textContent = userIdDisplay;
+        });
+        
+        // Close menu when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!mobileNavMenu.classList.contains('hidden') && 
+                !mobileNavMenu.contains(e.target) && 
+                e.target !== menuToggle) {
+                mobileNavMenu.classList.add('hidden');
+            }
+        });
+        
+        // Prevent menu from closing when clicking inside it
+        mobileNavMenu.addEventListener('click', (e) => {
+            e.stopPropagation();
         });
 
         // Update the mobile user ID on initial load
