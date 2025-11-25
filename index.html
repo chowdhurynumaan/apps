@@ -88,12 +88,23 @@
                 🔒 Admin Portal
             </button>
             
-            <a href="quran-tracker.html" class="px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
-                Quran Tracker
-            </a>
-            <a href="dashboard.html" class="px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
-                Dashboard
-            </a>
+            <div id="menu-item-quran" class="flex items-center gap-2">
+                <a href="quran-tracker.html" class="flex-1 px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
+                    Quran Tracker
+                </a>
+                <button id="toggle-quran-btn" onclick="toggleMenuItemVisibility('quran-tracker')" class="hidden px-2 py-2 text-gray-600 hover:text-indigo-600" title="Toggle visibility">
+                    <span id="eye-quran-tracker">👁️</span>
+                </button>
+            </div>
+            
+            <div id="menu-item-dashboard" class="flex items-center gap-2">
+                <a href="dashboard.html" class="flex-1 px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
+                    Dashboard
+                </a>
+                <button id="toggle-dashboard-btn" onclick="toggleMenuItemVisibility('dashboard')" class="hidden px-2 py-2 text-gray-600 hover:text-indigo-600" title="Toggle visibility">
+                    <span id="eye-dashboard">👁️</span>
+                </button>
+            </div>
             <div id="user-id-display-mobile" class="text-xs text-gray-500 bg-gray-50 px-3 py-1 rounded-lg text-center mt-2 cursor-pointer border border-gray-200" 
      title="User ID. Click to Copy">
      ID: ...
@@ -369,6 +380,10 @@
         // Admin management
         let ADMIN_LIST = ['MpcB7f35m0bITsSK1D7ACWFmch32']; // Default admin
         let isAdmin = false;
+        let MENU_VISIBILITY = {
+            'quran-tracker': true,
+            'dashboard': true
+        };
         
         const getTodayDateId = () => {
             const now = new Date();
@@ -683,6 +698,105 @@
             
             renderAdminList();
             showMessage('Success', `Admin ${adminId} removed.`);
+        };
+        
+        // --- MENU VISIBILITY MANAGEMENT ---
+        
+        // Load menu visibility settings from Firebase
+        const loadMenuVisibility = async () => {
+            try {
+                const menuDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'menu_visibility');
+                const docSnap = await getDoc(menuDocRef);
+                
+                if (docSnap.exists()) {
+                    MENU_VISIBILITY = docSnap.data();
+                    console.log('Menu visibility loaded from Firebase:', MENU_VISIBILITY);
+                } else {
+                    console.log('No menu visibility settings in Firebase, using defaults');
+                    MENU_VISIBILITY = {
+                        'quran-tracker': true,
+                        'dashboard': true
+                    };
+                    await saveMenuVisibility();
+                }
+                
+                updateMenuDisplay();
+            } catch (error) {
+                console.error('Error loading menu visibility:', error);
+                MENU_VISIBILITY = {
+                    'quran-tracker': true,
+                    'dashboard': true
+                };
+                updateMenuDisplay();
+            }
+        };
+        
+        // Save menu visibility settings to Firebase
+        const saveMenuVisibility = async () => {
+            try {
+                const menuDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'menu_visibility');
+                await setDoc(menuDocRef, MENU_VISIBILITY);
+                console.log('✅ Menu visibility saved to Firebase');
+            } catch (error) {
+                console.error('❌ Error saving menu visibility:', error);
+            }
+        };
+        
+        // Update menu display based on visibility settings and admin status
+        const updateMenuDisplay = () => {
+            // Show/hide menu items based on visibility (for non-admins)
+            if (!isAdmin) {
+                // Regular users only see visible items
+                const quranItem = document.getElementById('menu-item-quran');
+                const dashboardItem = document.getElementById('menu-item-dashboard');
+                
+                if (quranItem) {
+                    quranItem.style.display = MENU_VISIBILITY['quran-tracker'] ? 'flex' : 'none';
+                }
+                if (dashboardItem) {
+                    dashboardItem.style.display = MENU_VISIBILITY['dashboard'] ? 'flex' : 'none';
+                }
+            } else {
+                // Admins see all items with toggle buttons
+                const quranItem = document.getElementById('menu-item-quran');
+                const dashboardItem = document.getElementById('menu-item-dashboard');
+                
+                if (quranItem) quranItem.style.display = 'flex';
+                if (dashboardItem) dashboardItem.style.display = 'flex';
+                
+                // Show toggle buttons for admins
+                document.getElementById('toggle-quran-btn').classList.remove('hidden');
+                document.getElementById('toggle-dashboard-btn').classList.remove('hidden');
+                
+                // Update eye icons
+                updateEyeIcon('quran-tracker');
+                updateEyeIcon('dashboard');
+            }
+        };
+        
+        // Update eye icon based on visibility
+        const updateEyeIcon = (itemKey) => {
+            const eyeSpan = document.getElementById(`eye-${itemKey}`);
+            if (eyeSpan) {
+                eyeSpan.textContent = MENU_VISIBILITY[itemKey] ? '👁️' : '🙈';
+                eyeSpan.title = MENU_VISIBILITY[itemKey] ? 'Visible to users' : 'Hidden from users';
+            }
+        };
+        
+        // Toggle menu item visibility
+        window.toggleMenuItemVisibility = async (itemKey) => {
+            if (!isAdmin) {
+                showMessage('Access Denied', 'Only admins can change menu visibility.');
+                return;
+            }
+            
+            MENU_VISIBILITY[itemKey] = !MENU_VISIBILITY[itemKey];
+            await saveMenuVisibility();
+            updateEyeIcon(itemKey);
+            updateMenuDisplay();
+            
+            const status = MENU_VISIBILITY[itemKey] ? 'visible' : 'hidden';
+            showMessage('Success', `Menu item is now ${status} to users.`);
         };
         
         // --- UTILITY FUNCTIONS ---
@@ -1415,6 +1529,9 @@ const handleAppReady = async () => {
     // Load admin list and check if current user is admin
     await loadAdminList();
     
+    // Load menu visibility settings
+    await loadMenuVisibility();
+    
     // Set up real-time listener for class definitions
     setupClassDefinitionsListener();
     
@@ -1883,39 +2000,38 @@ const renderClassList = () => {
                     <p class="text-sm font-medium text-center ${isEditable ? 'text-green-600' : 'text-red-600'} bg-${isEditable ? 'green-50' : 'red-50'} py-1 rounded-lg border border-${isEditable ? 'green-200' : 'red-200'}">
                         ${isEditable ? 'EDIT MODE: Data entry for today.' : `VIEW MODE: Showing data for ${getDisplayDate(selectedDateId)}`}
                     </p>
+                    
+                    <!-- Auto-calculated values summary -->
+                    <div class="bg-gray-50 p-3 rounded-lg border border-gray-200 space-y-1">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-blue-700 font-medium">Present Total:</span>
+                            <span class="text-blue-700 font-bold font-mono">${presentTotal}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-red-700 font-medium">Absent Total:</span>
+                            <span class="text-red-700 font-bold font-mono">${absentToday}</span>
+                        </div>
+                    </div>
 
                     <div class="space-y-4">
-                        <div class="grid grid-cols-2 gap-4">
+                        <div class="grid grid-cols-1">
                             <div>
                                 <label for="totalStudents" class="block text-xs font-medium text-gray-700 mb-1">Total Students</label>
                                 <input type="number" id="totalStudents" value="${totalStudents}" oninput="updateReportEntry('${classId}', 'totalStudents', this.value)"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-lg ${disabledAttr ? 'bg-gray-100' : ''}" placeholder="0" min="0" ${disabledAttr}>
                             </div>
-                            <div>
-                                <label for="presentTotal" class="block text-xs font-medium text-blue-700 mb-1">Present Total (Auto)</label>
-                                <input type="number" id="presentTotal" value="${presentTotal}" readonly disabled
-                                    class="w-full px-3 py-2 border border-blue-200 bg-blue-50 text-blue-700 font-bold rounded-lg shadow-sm font-mono text-lg" placeholder="0">
-                            </div>
                         </div>
                         
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label for="presentOnTime" class="block text-xs font-medium text-gray-700 mb-1">Present On-Time</label>
+                                <label for="presentOnTime" class="block text-xs font-medium text-gray-700 mb-1">Present On-Time (P)</label>
                                 <input type="number" id="presentOnTime" value="${presentOnTime}" oninput="updateReportEntry('${classId}', 'presentToday', this.value)"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-lg ${disabledAttr ? 'bg-gray-100' : ''}" placeholder="0" min="0" ${disabledAttr}>
                             </div>
                             <div>
-                                <label for="presentTardy" class="block text-xs font-medium text-gray-700 mb-1">Present Tardy</label>
+                                <label for="presentTardy" class="block text-xs font-medium text-gray-700 mb-1">Present Tardy (T)</label>
                                 <input type="number" id="presentTardy" value="${tardyToday}" oninput="updateReportEntry('${classId}', 'tardyToday', this.value)"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-lg ${disabledAttr ? 'bg-gray-100' : ''}" placeholder="0" min="0" ${disabledAttr}>
-                            </div>
-                        </div>
-                        
-                        <div class="grid grid-cols-1">
-                            <div>
-                                <label for="absentTotal" class="block text-xs font-medium text-red-700 mb-1">Absent Total (Auto)</label>
-                                <input type="number" id="absentTotal" value="${absentToday}" readonly disabled
-                                    class="w-full px-3 py-2 border border-red-200 bg-red-50 text-red-700 font-bold rounded-lg shadow-sm font-mono text-lg" placeholder="0">
                             </div>
                         </div>
 

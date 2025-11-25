@@ -82,12 +82,23 @@
                 </select>
             </div>
             
-            <a href="index.html" class="px-3 py-2 text-sm text-center bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold shadow-md">
-                📚 Attendance Tracker
-            </a>
-            <a href="quran-tracker.html" class="px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
-                📖 Quran Tracker
-            </a>
+            <div id="menu-item-index" class="flex items-center gap-2">
+                <a href="index.html" class="flex-1 px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
+                    📚 Attendance Tracker
+                </a>
+                <button id="toggle-index-btn" onclick="toggleMenuItemVisibility('index')" class="hidden px-2 py-2 text-gray-600 hover:text-indigo-600" title="Toggle visibility">
+                    <span id="eye-index">👁️</span>
+                </button>
+            </div>
+            
+            <div id="menu-item-quran" class="flex items-center gap-2">
+                <a href="quran-tracker.html" class="flex-1 px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
+                    📖 Quran Tracker
+                </a>
+                <button id="toggle-quran-btn" onclick="toggleMenuItemVisibility('quran-tracker')" class="hidden px-2 py-2 text-gray-600 hover:text-indigo-600" title="Toggle visibility">
+                    <span id="eye-quran-tracker">👁️</span>
+                </button>
+            </div>
         </div>
     </div>
 </header>
@@ -291,7 +302,7 @@
     <!-- Firebase & Chart.js Scripts -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js';
-        import { getFirestore, collection, getDocs, query, orderBy, limit, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js';
+        import { getFirestore, collection, getDocs, query, orderBy, limit, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js';
         import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js';
 
         // Firebase Configuration
@@ -322,6 +333,12 @@
         let chartInstances = {};
         let selectedDate = null;
         let selectedDepartment = localStorage.getItem('selectedDepartment') || 'Weekend';
+        let MENU_VISIBILITY = {
+            'quran-tracker': true,
+            'index': true
+        };
+        let isAdmin = false;
+        let userId = null;
         
         console.log('Dashboard initialized with appId:', appId);
 
@@ -399,6 +416,95 @@
             });
             return filtered;
         }
+        
+        // --- MENU VISIBILITY MANAGEMENT ---
+        
+        // Load menu visibility and check admin status
+        async function loadMenuVisibility() {
+            try {
+                // Check if user is admin
+                const adminDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'admins', 'list');
+                const adminSnap = await getDoc(adminDocRef);
+                const adminList = adminSnap.exists() ? (adminSnap.data().admins || []) : [];
+                isAdmin = adminList.includes(userId);
+                
+                // Load menu visibility
+                const menuDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'menu_visibility');
+                const menuSnap = await getDoc(menuDocRef);
+                
+                if (menuSnap.exists()) {
+                    MENU_VISIBILITY = menuSnap.data();
+                } else {
+                    MENU_VISIBILITY = {
+                        'quran-tracker': true,
+                        'index': true
+                    };
+                }
+                
+                updateMenuDisplay();
+            } catch (error) {
+                console.error('Error loading menu visibility:', error);
+                updateMenuDisplay();
+            }
+        }
+        
+        // Update menu display based on visibility
+        function updateMenuDisplay() {
+            if (!isAdmin) {
+                // Regular users only see visible items
+                const indexItem = document.getElementById('menu-item-index');
+                const quranItem = document.getElementById('menu-item-quran');
+                
+                if (indexItem) {
+                    indexItem.style.display = MENU_VISIBILITY['index'] ? 'flex' : 'none';
+                }
+                if (quranItem) {
+                    quranItem.style.display = MENU_VISIBILITY['quran-tracker'] ? 'flex' : 'none';
+                }
+            } else {
+                // Admins see all items with toggle buttons
+                const indexItem = document.getElementById('menu-item-index');
+                const quranItem = document.getElementById('menu-item-quran');
+                
+                if (indexItem) indexItem.style.display = 'flex';
+                if (quranItem) quranItem.style.display = 'flex';
+                
+                // Show toggle buttons
+                const toggleIndex = document.getElementById('toggle-index-btn');
+                const toggleQuran = document.getElementById('toggle-quran-btn');
+                if (toggleIndex) toggleIndex.classList.remove('hidden');
+                if (toggleQuran) toggleQuran.classList.remove('hidden');
+                
+                // Update eye icons
+                updateEyeIcon('index');
+                updateEyeIcon('quran-tracker');
+            }
+        }
+        
+        // Update eye icon
+        function updateEyeIcon(itemKey) {
+            const eyeSpan = document.getElementById(`eye-${itemKey}`);
+            if (eyeSpan) {
+                eyeSpan.textContent = MENU_VISIBILITY[itemKey] ? '👁️' : '🙈';
+                eyeSpan.title = MENU_VISIBILITY[itemKey] ? 'Visible to users' : 'Hidden from users';
+            }
+        }
+        
+        // Toggle menu item visibility
+        window.toggleMenuItemVisibility = async function(itemKey) {
+            if (!isAdmin) return;
+            
+            MENU_VISIBILITY[itemKey] = !MENU_VISIBILITY[itemKey];
+            
+            try {
+                const menuDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'menu_visibility');
+                await setDoc(menuDocRef, MENU_VISIBILITY);
+                updateEyeIcon(itemKey);
+                updateMenuDisplay();
+            } catch (error) {
+                console.error('Error saving menu visibility:', error);
+            }
+        };
 
         // Handle department change
         window.handleDepartmentChange = function(newDepartment) {
@@ -490,9 +596,13 @@
                 console.log('Authenticating...');
                 const userCred = await signInAnonymously(auth);
                 console.log('Authentication successful, UID:', userCred.user.uid);
+                userId = userCred.user.uid; // Store userId for admin check
                 
                 // Load class definitions to get all departments
                 await loadClassDefinitions();
+                
+                // Load menu visibility and check admin status
+                await loadMenuVisibility();
                 
                 const collectionPath = `artifacts/${appId}/public/data/daily_attendance_reports`;
                 console.log('Querying collection:', collectionPath);
