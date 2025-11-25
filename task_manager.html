@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kanban Task Manager (Shared)</title>
+    <title>Kanban Task Manager</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -21,9 +21,16 @@
             max-width: 95vw;
         }
         .kanban-column-body {
-            height: calc(100vh - 280px); /* Adjust height based on headers/inputs */
+            /* Responsive height: account for fixed header */
+            height: calc(100vh - 480px);
             overflow-y: auto;
-            min-height: 300px;
+            min-height: 200px;
+        }
+        @media (min-width: 768px) {
+            .kanban-column-body {
+                height: calc(100vh - 380px);
+                min-height: 300px;
+            }
         }
         /* Custom scrollbar for better aesthetics */
         .kanban-column-body::-webkit-scrollbar {
@@ -49,22 +56,123 @@
             text-decoration: line-through;
             color: #9ca3af;
         }
+        /* Hamburger Menu Styles */
+        .menu-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 40;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .menu-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .side-menu {
+            position: fixed;
+            top: 0;
+            right: -320px;
+            width: 320px;
+            max-width: 85vw;
+            height: 100%;
+            background-color: white;
+            z-index: 50;
+            transition: right 0.3s ease;
+            box-shadow: -4px 0 6px rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
+        }
+        .side-menu.active {
+            right: 0;
+        }
     </style>
 </head>
 <body class="antialiased">
 
+    <!-- Hamburger Menu Overlay -->
+    <div id="menuOverlay" class="menu-overlay" onclick="window.toggleMenu()"></div>
+
+    <!-- Side Menu -->
+    <div id="sideMenu" class="side-menu">
+        <div class="p-6 space-y-6">
+            <!-- Close Button -->
+            <div class="flex items-center justify-between border-b pb-4">
+                <h2 class="text-xl font-bold text-gray-900">Settings</h2>
+                <button onclick="window.toggleMenu()" class="p-2 rounded-lg hover:bg-gray-100 transition duration-150">
+                    <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <!-- User ID Display -->
+            <div class="space-y-2">
+                <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Session Information</h3>
+                <div class="text-xs text-gray-500 bg-indigo-50 p-3 rounded-lg break-all border border-indigo-200">
+                    <span class="font-semibold text-indigo-600">Your Session ID:</span><br>
+                    <span id="userIdDisplay" class="font-mono">Loading...</span>
+                </div>
+            </div>
+
+            <!-- Board Mode Toggle -->
+            <div class="space-y-3">
+                <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Board Mode</h3>
+                <div class="flex items-center space-x-2 text-sm mb-3">
+                    <svg class="w-5 h-5 text-gray-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                    <span class="text-gray-700">Current Mode:</span>
+                    <span id="boardModeText" class="text-indigo-600 font-bold">Personal</span>
+                </div>
+                <div class="space-y-2">
+                    <button 
+                        id="personalModeBtn"
+                        onclick="window.switchBoardMode('personal')"
+                        class="w-full px-4 py-3 rounded-lg font-medium transition duration-150 bg-indigo-600 text-white active:scale-95 flex items-center justify-between"
+                    >
+                        <div class="flex items-center space-x-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                            <span>Personal Board</span>
+                        </div>
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+                    </button>
+                    <button 
+                        id="sharedModeBtn"
+                        onclick="window.switchBoardMode('shared')"
+                        class="w-full px-4 py-3 rounded-lg font-medium transition duration-150 bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95 flex items-center justify-between"
+                    >
+                        <div class="flex items-center space-x-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                            <span>Shared Board</span>
+                        </div>
+                        <span class="opacity-0">✓</span>
+                    </button>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">• Personal: Only you can see your tasks<br>• Shared: Tasks are visible to all users</p>
+            </div>
+        </div>
+    </div>
+
     <div class="kanban-column-container w-full xl:max-w-7xl lg:max-w-5xl space-y-6">
 
-        <h1 class="text-3xl font-extrabold text-gray-900 border-b pb-3 mb-4 flex items-center justify-between">
-            <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m-4 5h8m-11 0a2 2 0 114 0h-4a2 2 0 014 0h-4zm15 0a2 2 0 114 0h-4a2 2 0 014 0h-4zM9 5h7a2 2 0 012 2v10a2 2 0 01-2 2H9a2 2 0 01-2-2V7a2 2 0 012-2z"></path></svg>
-            Kanban Task Board (Shared)
-        </h1>
-        
-        <!-- User ID Display -->
-        <div class="text-xs text-gray-500 bg-indigo-50 p-2 rounded-lg break-all border border-indigo-200">
-            <span class="font-semibold text-indigo-600">Your Current Session ID (Shared Board):</span> 
-            <span id="userIdDisplay">Loading...</span>
-        </div>
+        <!-- Consistent App Header -->
+        <header class="bg-white shadow-md rounded-xl p-4 sticky top-0 z-30">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <svg class="w-8 h-8 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m-4 5h8m-11 0a2 2 0 114 0h-4a2 2 0 014 0h-4zm15 0a2 2 0 114 0h-4a2 2 0 014 0h-4zM9 5h7a2 2 0 012 2v10a2 2 0 01-2 2H9a2 2 0 01-2-2V7a2 2 0 012-2z"></path></svg>
+                    <div>
+                        <h1 class="text-xl sm:text-2xl font-extrabold text-gray-900">Kanban Task Manager</h1>
+                        <p id="boardSubtitle" class="text-xs sm:text-sm text-gray-500">Personal Board</p>
+                    </div>
+                </div>
+                <!-- Hamburger Menu Button -->
+                <button onclick="window.toggleMenu()" class="p-2 rounded-lg hover:bg-gray-100 transition duration-150 active:scale-95">
+                    <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+            </div>
+        </header>
 
         <!-- New Task Input Form -->
         <div class="space-y-3 mb-6 p-4 bg-white rounded-xl shadow-lg">
@@ -168,6 +276,7 @@
             onSnapshot, 
             collection,
             query,
+            where,
             setLogLevel 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -187,6 +296,7 @@
 
         let app, db, auth, userId = null;
         let isAuthReady = false;
+        let boardMode = 'personal'; // 'personal' or 'shared'
         
         // Mapping for priority sorting (High=3, Medium=2, Low=1)
         const PRIORITY_MAP = { 'High': 3, 'Medium': 2, 'Low': 1 };
@@ -284,19 +394,76 @@
         }
 
         /**
-         * Generates the path for the PUBLIC task collection.
-         * ALL USERS will read and write to this collection.
+         * Generates the path for the task collection based on board mode.
+         * Personal mode: each user has their own private tasks collection.
+         * Shared mode: all users share a public tasks collection.
          */
         function getTasksCollectionRef() {
             if (!db) {
                 console.error("Database is not initialized.");
                 return null;
             }
-            // Public data path: /artifacts/{appId}/public/data/tasks
-            const collectionPath = `artifacts/${appId}/public/data/tasks`;
+            let collectionPath;
+            if (boardMode === 'personal') {
+                // User-specific data path: /artifacts/{appId}/users/{userId}/tasks
+                collectionPath = `artifacts/${appId}/users/${userId}/tasks`;
+            } else {
+                // Shared data path: /artifacts/{appId}/public/data/tasks
+                collectionPath = `artifacts/${appId}/public/data/tasks`;
+            }
             return collection(db, collectionPath);
         }
 
+
+        // --------------------------------------------------------
+        // MENU TOGGLE
+        // --------------------------------------------------------
+
+        window.toggleMenu = function() {
+            const sideMenu = document.getElementById('sideMenu');
+            const menuOverlay = document.getElementById('menuOverlay');
+            sideMenu.classList.toggle('active');
+            menuOverlay.classList.toggle('active');
+        }
+
+        // --------------------------------------------------------
+        // BOARD MODE SWITCHING
+        // --------------------------------------------------------
+
+        window.switchBoardMode = function(mode) {
+            if (!isAuthReady) {
+                showMessage("Please wait for authentication to complete.", 'info');
+                return;
+            }
+            
+            boardMode = mode;
+            
+            // Update UI
+            const personalBtn = document.getElementById('personalModeBtn');
+            const sharedBtn = document.getElementById('sharedModeBtn');
+            const boardSubtitle = document.getElementById('boardSubtitle');
+            const boardModeText = document.getElementById('boardModeText');
+            
+            if (mode === 'personal') {
+                personalBtn.className = 'w-full px-4 py-3 rounded-lg font-medium transition duration-150 bg-indigo-600 text-white active:scale-95 flex items-center justify-between';
+                personalBtn.innerHTML = '<div class="flex items-center space-x-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg><span>Personal Board</span></div><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>';
+                sharedBtn.className = 'w-full px-4 py-3 rounded-lg font-medium transition duration-150 bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95 flex items-center justify-between';
+                sharedBtn.innerHTML = '<div class="flex items-center space-x-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg><span>Shared Board</span></div><span class="opacity-0">✓</span>';
+                boardSubtitle.textContent = 'Personal Board';
+                boardModeText.textContent = 'Personal';
+            } else {
+                personalBtn.className = 'w-full px-4 py-3 rounded-lg font-medium transition duration-150 bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95 flex items-center justify-between';
+                personalBtn.innerHTML = '<div class="flex items-center space-x-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg><span>Personal Board</span></div><span class="opacity-0">✓</span>';
+                sharedBtn.className = 'w-full px-4 py-3 rounded-lg font-medium transition duration-150 bg-indigo-600 text-white active:scale-95 flex items-center justify-between';
+                sharedBtn.innerHTML = '<div class="flex items-center space-x-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg><span>Shared Board</span></div><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>';
+                boardSubtitle.textContent = 'Shared Board';
+                boardModeText.textContent = 'Shared';
+            }
+            
+            // Reload tasks for the new mode
+            listenForTasks();
+            showMessage(`Switched to ${mode} board mode`, 'success');
+        }
 
         // --------------------------------------------------------
         // CRUD OPERATIONS
@@ -338,7 +505,7 @@
                 prioritySelect.value = 'Medium'; // Reset priority
                 // Re-set the default date after adding a task
                 setInitialDueDate(); 
-                showMessage("Task added successfully! It's visible to everyone.", 'success');
+                showMessage("Task added successfully!", 'success');
             } catch (e) {
                 console.error("Error adding document: ", e);
                 showMessage("Error adding task. See console.", 'error');
@@ -410,7 +577,7 @@
             const tasksColRef = getTasksCollectionRef();
             if (!tasksColRef) return;
 
-            // No need for a where clause since all tasks in the public collection should be shown
+            // Query only tasks for the current user (redundant since collection is already user-specific, but safe)
             const tasksQuery = query(tasksColRef);
 
             // Set up real-time listener
@@ -556,10 +723,10 @@
                 metadata.appendChild(dateDisplay);
             }
             
-            // Creator ID (Added for clarity in a public board)
-            if (task.createdBy) {
+            // Creator ID (Only shown in shared board mode)
+            if (boardMode === 'shared' && task.createdBy) {
                 const creatorId = document.createElement('span');
-                creatorId.textContent = `Creator: ${task.createdBy.substring(0, 4)}`; // Shorten ID for display
+                creatorId.textContent = `Creator: ${task.createdBy.substring(0, 4)}`;
                 creatorId.title = `Created by: ${task.createdBy}`;
                 creatorId.className = 'text-gray-400 ml-auto';
                 metadata.appendChild(creatorId);
