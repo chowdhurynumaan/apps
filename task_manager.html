@@ -13,22 +13,34 @@
             background-color: #f3f4f6;
             min-height: 100vh;
             display: flex;
-            justify-content: center;
-            padding: 1rem;
+            flex-direction: column;
+            justify-content: flex-start;
+            padding: 0;
+            margin: 0;
         }
         .kanban-column-container {
             /* Ensures the container respects max-width while staying fluid on mobile */
             max-width: 95vw;
+            margin: 0 auto;
+            padding: 1rem;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        #kanbanBoard {
+            flex: 1;
+            overflow-y: hidden;
         }
         .kanban-column-body {
-            /* Responsive height: account for fixed header */
-            height: calc(100vh - 480px);
+            /* Dynamic height to fill available space */
+            height: calc(100vh - 280px);
             overflow-y: auto;
             min-height: 200px;
         }
         @media (min-width: 768px) {
             .kanban-column-body {
-                height: calc(100vh - 380px);
+                height: calc(100vh - 240px);
                 min-height: 300px;
             }
         }
