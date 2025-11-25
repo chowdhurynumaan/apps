@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kanban Task Manager</title>
+    <title>Kanban Task Manager (Shared)</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -57,12 +57,12 @@
 
         <h1 class="text-3xl font-extrabold text-gray-900 border-b pb-3 mb-4 flex items-center justify-between">
             <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m-4 5h8m-11 0a2 2 0 114 0h-4a2 2 0 014 0h-4zm15 0a2 2 0 114 0h-4a2 2 0 014 0h-4zM9 5h7a2 2 0 012 2v10a2 2 0 01-2 2H9a2 2 0 01-2-2V7a2 2 0 012-2z"></path></svg>
-            Kanban Task Board
+            Kanban Task Board (Shared)
         </h1>
         
         <!-- User ID Display -->
-        <div class="text-xs text-gray-500 bg-gray-100 p-2 rounded-lg break-all">
-            <span class="font-semibold text-indigo-600">User ID:</span> 
+        <div class="text-xs text-gray-500 bg-indigo-50 p-2 rounded-lg break-all border border-indigo-200">
+            <span class="font-semibold text-indigo-600">Your Current Session ID (Shared Board):</span> 
             <span id="userIdDisplay">Loading...</span>
         </div>
 
@@ -275,15 +275,16 @@
         }
 
         /**
-         * Generates the path for the user's private task collection.
+         * Generates the path for the PUBLIC task collection.
+         * ALL USERS will read and write to this collection.
          */
         function getTasksCollectionRef() {
-            if (!db || !userId) {
-                console.error("Database or User ID is not initialized.");
+            if (!db) {
+                console.error("Database is not initialized.");
                 return null;
             }
-            // Private data path: /artifacts/{appId}/users/{userId}/tasks
-            const collectionPath = `artifacts/${appId}/users/${userId}/tasks`;
+            // Public data path: /artifacts/{appId}/public/data/tasks
+            const collectionPath = `artifacts/${appId}/public/data/tasks`;
             return collection(db, collectionPath);
         }
 
@@ -320,14 +321,15 @@
                     priority: priority,
                     dueDate: dueDate,
                     createdAt: Date.now(), 
-                    userId: userId 
+                    // Keeping userId for tracking who created the task, even on a public board
+                    createdBy: userId 
                 });
 
                 input.value = ''; // Clear description
                 prioritySelect.value = 'Medium'; // Reset priority
                 // Re-set the default date after adding a task
                 setInitialDueDate(); 
-                showMessage("Task added successfully! It's in the 'To Do' column.", 'success');
+                showMessage("Task added successfully! It's visible to everyone.", 'success');
             } catch (e) {
                 console.error("Error adding document: ", e);
                 showMessage("Error adding task. See console.", 'error');
@@ -337,7 +339,10 @@
         window.updateTaskStatus = async function(taskId, newStatus) {
             if (!isAuthReady) return;
             try {
-                const taskDocRef = doc(getTasksCollectionRef(), taskId);
+                const tasksColRef = getTasksCollectionRef();
+                if (!tasksColRef) return;
+
+                const taskDocRef = doc(tasksColRef, taskId);
                 await updateDoc(taskDocRef, {
                     status: newStatus
                 });
@@ -350,7 +355,10 @@
         window.deleteTask = async function(taskId) {
             if (!isAuthReady) return;
             try {
-                const taskDocRef = doc(getTasksCollectionRef(), taskId);
+                const tasksColRef = getTasksCollectionRef();
+                if (!tasksColRef) return;
+                
+                const taskDocRef = doc(tasksColRef, taskId);
                 await deleteDoc(taskDocRef);
             } catch (e) {
                 console.error("Error deleting document: ", e);
@@ -393,6 +401,7 @@
             const tasksColRef = getTasksCollectionRef();
             if (!tasksColRef) return;
 
+            // No need for a where clause since all tasks in the public collection should be shown
             const tasksQuery = query(tasksColRef);
 
             // Set up real-time listener
@@ -537,6 +546,16 @@
                 dateDisplay.className = `flex items-center space-x-1 ${isOverdue ? 'text-red-600 font-medium' : ''}`;
                 metadata.appendChild(dateDisplay);
             }
+            
+            // Creator ID (Added for clarity in a public board)
+            if (task.createdBy) {
+                const creatorId = document.createElement('span');
+                creatorId.textContent = `Creator: ${task.createdBy.substring(0, 4)}`; // Shorten ID for display
+                creatorId.title = `Created by: ${task.createdBy}`;
+                creatorId.className = 'text-gray-400 ml-auto';
+                metadata.appendChild(creatorId);
+            }
+
 
             mainContent.appendChild(metadata);
 
