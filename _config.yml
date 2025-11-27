@@ -1,1 +1,5 @@
+# Tells GitHub to look in the specified folder
 include: [bangladeshi-american-forum]
+
+# Sets a simple theme, which forces GitHub to process the files as a site
+theme: jekyll-theme-minimal
