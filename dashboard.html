@@ -265,6 +265,18 @@
             </div>
         </section>
 
+        <!-- ==================== MEDAL HISTORY ==================== -->
+        <section class="mb-8">
+            <h2 class="text-xl sm:text-2xl font-bold text-gray-800 mb-4">🏆 Medal History</h2>
+            
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-4">Class Medal Leaderboard</h3>
+                <div id="medalHistoryTable" class="overflow-x-auto">
+                    <!-- Will be populated by JS -->
+                </div>
+            </div>
+        </section>
+
         <!-- ==================== GENDER ANALYSIS ==================== -->
         <section class="mb-8">
             <h2 class="text-xl sm:text-2xl font-bold text-gray-800 mb-4">👥 Gender Analysis</h2>
@@ -551,8 +563,10 @@
                     renderDashboard();
                 } else {
                     // Show message if no data for selected date
+                    const [year, month, day] = selectedDate.split('-');
+                    const dateObj = new Date(year, month - 1, day);
                     document.getElementById('latestDayTitle').textContent = 
-                        `No data for ${new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}`;
+                        `No data for ${dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}`;
                     document.getElementById('latestDaySummary').innerHTML = 
                         '<p class="text-gray-500 col-span-4 text-center py-8">No attendance data recorded for this date</p>';
                 }
@@ -668,6 +682,7 @@
             renderProgressReports();
             renderPerformanceMetrics();
             renderPredictiveInsights();
+            renderMedalHistory();
             renderGenderAnalysis();
             
             // Update last updated time (no longer needed - removed from header)
@@ -682,7 +697,8 @@
             const classes = filterClassesByDepartment(latest.classes);
 
             // Update title with date and department
-            const dateObj = new Date(latest.date);
+            const [year, month, day] = latest.date.split('-');
+            const dateObj = new Date(year, month - 1, day);
             document.getElementById('latestDayTitle').textContent = 
                 `${selectedDepartment} - ${dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}`;
 
@@ -728,7 +744,11 @@
         function render30DayTrends() {
             const last30 = getLast30Days(allData);
             
-            const labels = last30.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+            const labels = last30.map(d => {
+                const [year, month, day] = d.date.split('-');
+                const date = new Date(year, month - 1, day);
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            });
             const presentData = [];
             const tardyData = [];
             const absentData = [];
@@ -1117,6 +1137,94 @@
             
             const engagementRate = totalBrought > 0 ? ((totalSigned / totalBrought) * 100).toFixed(1) : 0;
             document.getElementById('engagementScore').textContent = `${engagementRate}%`;
+        }
+
+        // ==================== MEDAL HISTORY ====================
+        function renderMedalHistory() {
+            // Calculate medal counts for each class across all days
+            const medalCounts = {};
+
+            allData.forEach(day => {
+                const classes = filterClassesByDepartment(day.classes);
+                const classScores = [];
+
+                // Calculate scores for each class on this day
+                Object.entries(classes).forEach(([className, data]) => {
+                    const total = data.totalStudents || 0;
+                    const present = (data.presentToday || 0) + (data.tardyToday || 0);
+                    const rate = total > 0 ? parseFloat(((present / total) * 100).toFixed(1)) : 0;
+                    
+                    if (total > 0) { // Only consider classes with students
+                        classScores.push({ className, rate });
+                    }
+                });
+
+                // Sort by rate descending
+                classScores.sort((a, b) => b.rate - a.rate);
+
+                // Award medals (top 3)
+                classScores.forEach((cls, index) => {
+                    const displayName = cls.className.split('-').slice(1).join('-');
+                    
+                    if (!medalCounts[displayName]) {
+                        medalCounts[displayName] = { gold: 0, silver: 0, bronze: 0, total: 0 };
+                    }
+
+                    if (index === 0) {
+                        medalCounts[displayName].gold++;
+                        medalCounts[displayName].total++;
+                    } else if (index === 1) {
+                        medalCounts[displayName].silver++;
+                        medalCounts[displayName].total++;
+                    } else if (index === 2) {
+                        medalCounts[displayName].bronze++;
+                        medalCounts[displayName].total++;
+                    }
+                });
+            });
+
+            // Convert to array and sort by total medals
+            const medalArray = Object.entries(medalCounts)
+                .map(([className, medals]) => ({ className, ...medals }))
+                .sort((a, b) => b.total - a.total);
+
+            // Render the table
+            const container = document.getElementById('medalHistoryTable');
+            
+            if (medalArray.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-center py-4">No medal history available yet.</p>';
+                return;
+            }
+
+            container.innerHTML = `
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">🥇 Gold</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">🥈 Silver</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">🥉 Bronze</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        ${medalArray.map((item, index) => {
+                            const rankBadge = index === 0 ? '🏆' : index === 1 ? '⭐' : index === 2 ? '✨' : `#${index + 1}`;
+                            return `
+                                <tr class="${index < 3 ? 'bg-yellow-50' : ''}">
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm font-semibold">${rankBadge}</td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900">${item.className}</td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-center text-sm text-gray-700">${item.gold}</td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-center text-sm text-gray-700">${item.silver}</td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-center text-sm text-gray-700">${item.bronze}</td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-center text-sm font-bold text-indigo-600">${item.total}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
         }
 
         // ==================== GENDER ANALYSIS ====================
