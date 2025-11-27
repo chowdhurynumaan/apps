@@ -11,7 +11,10 @@
         
         html, body { 
             font-family: 'Inter', sans-serif; 
-            background-color: #f4f7f9; 
+            background-color: #f4f7f9;
+            overflow-x: hidden;
+            width: 100%;
+            max-width: 100vw;
         }
 
         .stat-card {
@@ -103,7 +106,7 @@
     </div>
 </header>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         
         <!-- Loading State -->
         <div id="loadingState" class="text-center py-12">
@@ -134,16 +137,16 @@
             </div>
 
             <!-- 30-Day Attendance Trends -->
-            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-                <h3 class="text-xl font-semibold text-gray-700 mb-4">📈 30-Day Attendance Trends</h3>
+            <div class="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-4 sm:mb-6">
+                <h3 class="text-lg sm:text-xl font-semibold text-gray-700 mb-3 sm:mb-4">📈 30-Day Attendance Trends</h3>
                 <div class="chart-container">
                     <canvas id="attendanceTrendsChart"></canvas>
                 </div>
             </div>
 
             <!-- Class-by-Class Comparison -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h3 class="text-xl font-semibold text-gray-700 mb-4">📊 Class-by-Class Comparison</h3>
+            <div class="bg-white rounded-lg shadow-md p-4 sm:p-6">
+                <h3 class="text-lg sm:text-xl font-semibold text-gray-700 mb-3 sm:mb-4">📊 Class-by-Class Comparison</h3>
                 <div class="chart-container">
                     <canvas id="classComparisonChart"></canvas>
                 </div>
@@ -187,8 +190,8 @@
             </div>
 
             <!-- Missing Signatures Follow-up List -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h3 class="text-xl font-semibold text-gray-700 mb-4">⚠️ Missing Signatures - Follow-up Required</h3>
+            <div class="bg-white rounded-lg shadow-md p-4 sm:p-6">
+                <h3 class="text-lg sm:text-xl font-semibold text-gray-700 mb-3 sm:mb-4">⚠️ Missing Signatures - Follow-up Required</h3>
                 <div id="missingSignaturesList">
                     <!-- Will be populated by JS -->
                 </div>
@@ -239,7 +242,7 @@
             <h2 class="text-xl sm:text-2xl font-bold text-gray-800 mb-4">🔮 Predictive Insights</h2>
             
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                <div class="bg-white rounded-lg shadow-md p-6 metric-card">
+                <div class="bg-white rounded-lg shadow-md p-4 sm:p-6 metric-card">
                     <div class="text-center">
                         <p class="text-gray-600 text-sm mb-2">Attendance Trend</p>
                         <div id="trendDirection" class="text-4xl mb-2">-</div>
@@ -269,9 +272,9 @@
         <section class="mb-8">
             <h2 class="text-xl sm:text-2xl font-bold text-gray-800 mb-4">🏆 Medal History</h2>
             
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h3 class="text-xl font-semibold text-gray-700 mb-4">Class Medal Leaderboard</h3>
-                <div id="medalHistoryTable" class="overflow-x-auto">
+            <div class="bg-white rounded-lg shadow-md p-4 sm:p-6">
+                <h3 class="text-lg sm:text-xl font-semibold text-gray-700 mb-3 sm:mb-4">Class Medal Leaderboard</h3>
+                <div id="medalHistoryTable">
                     <!-- Will be populated by JS -->
                 </div>
             </div>
@@ -283,15 +286,15 @@
             
             <!-- Girls vs Boys Performance Cards -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
-                <div class="bg-pink-50 rounded-lg shadow-md p-6 border-2 border-pink-200">
-                    <h3 class="text-xl font-semibold text-pink-700 mb-4">👧 Girls Performance</h3>
+                <div class="bg-pink-50 rounded-lg shadow-md p-4 sm:p-6 border-2 border-pink-200">
+                    <h3 class="text-lg sm:text-xl font-semibold text-pink-700 mb-3 sm:mb-4">👧 Girls Performance</h3>
                     <div id="girlsStats" class="space-y-3">
                         <!-- Will be populated by JS -->
                     </div>
                 </div>
                 
-                <div class="bg-blue-50 rounded-lg shadow-md p-6 border-2 border-blue-200">
-                    <h3 class="text-xl font-semibold text-blue-700 mb-4">👦 Boys Performance</h3>
+                <div class="bg-blue-50 rounded-lg shadow-md p-4 sm:p-6 border-2 border-blue-200">
+                    <h3 class="text-lg sm:text-xl font-semibold text-blue-700 mb-3 sm:mb-4">👦 Boys Performance</h3>
                     <div id="boysStats" class="space-y-3">
                         <!-- Will be populated by JS -->
                     </div>
@@ -299,8 +302,8 @@
             </div>
 
             <!-- Gender Gap Analysis -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h3 class="text-xl font-semibold text-gray-700 mb-4">📊 Gender Gap Analysis</h3>
+            <div class="bg-white rounded-lg shadow-md p-4 sm:p-6">
+                <h3 class="text-lg sm:text-xl font-semibold text-gray-700 mb-3 sm:mb-4">📊 Gender Gap Analysis</h3>
                 <div class="chart-container">
                     <canvas id="genderComparisonChart"></canvas>
                 </div>
@@ -1197,33 +1200,37 @@
             }
 
             container.innerHTML = `
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">🥇 Gold</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">🥈 Silver</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">🥉 Bronze</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        ${medalArray.map((item, index) => {
-                            const rankBadge = index === 0 ? '🏆' : index === 1 ? '⭐' : index === 2 ? '✨' : `#${index + 1}`;
-                            return `
-                                <tr class="${index < 3 ? 'bg-yellow-50' : ''}">
-                                    <td class="px-4 py-3 whitespace-nowrap text-sm font-semibold">${rankBadge}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900">${item.className}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-center text-sm text-gray-700">${item.gold}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-center text-sm text-gray-700">${item.silver}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-center text-sm text-gray-700">${item.bronze}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-center text-sm font-bold text-indigo-600">${item.total}</td>
+                <div class="overflow-x-auto">
+                    <div class="inline-block min-w-full align-middle">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
+                                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
+                                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">🥇</th>
+                                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">🥈</th>
+                                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">🥉</th>
+                                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
                                 </tr>
-                            `;
-                        }).join('')}
-                    </tbody>
-                </table>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                ${medalArray.map((item, index) => {
+                                    const rankBadge = index === 0 ? '🏆' : index === 1 ? '⭐' : index === 2 ? '✨' : `#${index + 1}`;
+                                    return `
+                                        <tr class="${index < 3 ? 'bg-yellow-50' : ''}">
+                                            <td class="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm font-semibold">${rankBadge}</td>
+                                            <td class="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm font-semibold text-gray-900">${item.className}</td>
+                                            <td class="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-center text-xs sm:text-sm text-gray-700">${item.gold}</td>
+                                            <td class="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-center text-xs sm:text-sm text-gray-700">${item.silver}</td>
+                                            <td class="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-center text-xs sm:text-sm text-gray-700">${item.bronze}</td>
+                                            <td class="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-center text-xs sm:text-sm font-bold text-indigo-600">${item.total}</td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             `;
         }
 
