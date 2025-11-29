@@ -8,12 +8,20 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load Inter font -->
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        
+        html, body { 
+            height: 100%;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f7f9fc;
-            scroll-behavior: smooth; /* Enables smooth animated scroll for navigational jumps */
-            will-change: transform; /* Performance hint for main layout */
+            background-color: #f4f7f9;
+            transition: background-color 0.3s;
+            display: flex;
+            flex-direction: column;
         }
         /* Custom scrollbar for log list */
         .custom-scroll {
@@ -34,6 +42,11 @@
             border-color: #2563eb; /* Tailwind blue-700 */
             box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         }
+        
+        /* Rotate animation for chevron */
+        .rotate-180 {
+            transform: rotate(180deg);
+        }
     </style>
     <!-- Load Firebase SDKs -->
     <script type="module">
@@ -49,58 +62,119 @@
         };
     </script>
 </head>
-<body class="p-4 md:p-8 min-h-screen">
-    <header class="fixed top-0 left-0 w-full bg-blue-600 text-white p-3 shadow-lg z-40 flex items-center justify-between h-16">
-        <div class="flex items-center space-x-4">
-            <button onclick="app.toggleMenu()" class="text-white hover:text-blue-200 transition duration-150 p-2 rounded-full">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-            </button>
-            <h1 class="text-xl font-bold">Student Progress Tracker</h1>
+<body class="flex flex-col h-full">
+    <!-- Header Section -->
+<header class="flex-shrink-0 bg-white shadow-lg p-3 border-b border-gray-200 sticky top-0 z-20">
+    <div class="max-w-7xl mx-auto flex justify-between items-center h-8">
+        
+        <button id="menu-toggle" aria-label="Toggle navigation menu" 
+        class="p-2 -ml-2 text-indigo-700 hover:text-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded flex-shrink-0">
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+            </svg>
+        </button>
+        
+        <h1 class="text-xs font-extrabold text-indigo-700 flex-grow text-center sm:text-left">
+            📖 Quran Tracker
+        </h1>
+        
+        <div class="flex items-center space-x-2 flex-shrink-0">
+            <span id="student-name-display" class="text-xs font-semibold text-gray-700 hidden"></span>
         </div>
-        <span id="student-name-display" class="text-xl font-semibold hidden"></span>
-    </header>
-
-<div id="app-container" class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-4 md:p-6 flex flex-col h-full overflow-hidden" style="margin-top: 64px; max-height: calc(100vh - 96px);">        <!-- Sidebar Menu -->
-        <div>
-            <div>
-</body>
-
-        <div id="sidebar-menu" class="fixed top-0 left-0 h-full w-64 bg-white shadow-2xl z-50 transition-transform transform -translate-x-full" style="padding-top: 60px;">
-            <div class="p-4 space-y-4">
-                <div>
-                    <button onclick="app.clearFilter()" class="w-full bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold py-2 px-4 rounded-lg transition duration-150">
+    </div>
+    
+<div id="mobile-nav-menu" class="hidden bg-white border-t border-gray-200 py-2 absolute w-full left-0 top-full shadow-xl z-10">
+        <div class="flex flex-col space-y-2 px-4">
+            <div class="flex flex-col space-y-1">
+                <label class="text-xs font-semibold text-gray-600">Department</label>
+                <select id="header-dept-selector" onchange="handleDepartmentChange(this.value)"
+                       class="px-3 py-2 border border-indigo-300 rounded-lg text-sm font-semibold text-gray-700 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition duration-150">
+                    <option value="Weekend">Weekend (WKN)</option>
+                    <option value="Evening">Evening (EVN)</option>
+                    <option value="FullTime">Full Time (FLT)</option>
+                </select>
+            </div>
+            
+            <button id="admin-portal-btn" onclick="openAdminPortal()" 
+                    class="px-3 py-2 text-sm text-center bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold shadow-md">
+                🔒 Admin Portal
+            </button>
+            
+            <div id="menu-item-index" class="flex items-center gap-2">
+                <a href="index.html" class="flex-1 px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
+                    &#x1F4DA; Attendance Tracker
+                </a>
+                <button id="toggle-index-btn" onclick="toggleMenuItemVisibility('index')" class="hidden px-2 py-2 text-gray-600 hover:text-indigo-600" title="Toggle visibility">
+                    <span id="eye-index">👁️</span>
+                </button>
+            </div>
+            
+            <div id="menu-item-dashboard" class="flex items-center gap-2">
+                <a href="dashboard.html" class="flex-1 px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
+                    &#x1F4CA; Dashboard
+                </a>
+                <button id="toggle-dashboard-btn" onclick="toggleMenuItemVisibility('dashboard')" class="hidden px-2 py-2 text-gray-600 hover:text-indigo-600" title="Toggle visibility">
+                    <span id="eye-dashboard">👁️</span>
+                </button>
+            </div>
+            
+            <div id="menu-item-quran" class="flex items-center gap-2">
+                <a href="quran-tracker.html" class="flex-1 px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
+                    &#x1F4D6; Quran Tracker
+                </a>
+                <button id="toggle-quran-btn" onclick="toggleMenuItemVisibility('quran-tracker')" class="hidden px-2 py-2 text-gray-600 hover:text-indigo-600" title="Toggle visibility">
+                    <span id="eye-quran-tracker">👁️</span>
+                </button>
+            </div>
+            
+            <!-- Student Filters Submenu -->
+            <div class="border-t border-gray-200 pt-2 mt-2">
+                <button onclick="toggleStudentFilters()" class="w-full flex items-center justify-between px-3 py-2 text-sm font-semibold bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition duration-150">
+                    <span>👥 Student Filters</span>
+                    <svg id="filter-chevron" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </button>
+                
+                <div id="student-filters-submenu" class="hidden mt-2 ml-2 space-y-2">
+                    <button onclick="app.clearFilter()" class="w-full px-3 py-2 text-xs text-left bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition duration-150">
                         Show All Students
                     </button>
+                    
+                    <div class="border-l-2 border-pink-300 pl-2">
+                        <p class="text-xs font-bold text-pink-600 mb-1">Female</p>
+                        <div class="space-y-1">
+                            <button onclick="app.setFilter('Female', 'Qaida')" class="w-full px-2 py-1 text-xs text-left text-gray-700 hover:bg-gray-100 rounded transition duration-150">Qaida</button>
+                            <button onclick="app.setFilter('Female', 'Quran Reading')" class="w-full px-2 py-1 text-xs text-left text-gray-700 hover:bg-gray-100 rounded transition duration-150">Quran Reading</button>
+                            <button onclick="app.setFilter('Female', 'Sifarah')" class="w-full px-2 py-1 text-xs text-left text-gray-700 hover:bg-gray-100 rounded transition duration-150">Sifarah</button>
+                            <button onclick="app.setFilter('Female', 'Hifz')" class="w-full px-2 py-1 text-xs text-left text-gray-700 hover:bg-gray-100 rounded transition duration-150">Hifz</button>
+                        </div>
+                    </div>
+                    
+                    <div class="border-l-2 border-blue-300 pl-2">
+                        <p class="text-xs font-bold text-blue-600 mb-1">Male</p>
+                        <div class="space-y-1">
+                            <button onclick="app.setFilter('Male', 'Qaida')" class="w-full px-2 py-1 text-xs text-left text-gray-700 hover:bg-gray-100 rounded transition duration-150">Qaida</button>
+                            <button onclick="app.setFilter('Male', 'Quran Reading')" class="w-full px-2 py-1 text-xs text-left text-gray-700 hover:bg-gray-100 rounded transition duration-150">Quran Reading</button>
+                            <button onclick="app.setFilter('Male', 'Sifarah')" class="w-full px-2 py-1 text-xs text-left text-gray-700 hover:bg-gray-100 rounded transition duration-150">Sifarah</button>
+                            <button onclick="app.setFilter('Male', 'Hifz')" class="w-full px-2 py-1 text-xs text-left text-gray-700 hover:bg-gray-100 rounded transition duration-150">Hifz</button>
+                        </div>
+                    </div>
                 </div>
-                <h3 class="text-xl font-bold text-gray-800 border-b pb-2 mb-2">Filters</h3>
-
-                <div class="border-b border-gray-200 pb-2">
-                    <p class="font-bold text-lg text-pink-600 mb-2">Female</p>
-                    <ul class="space-y-1 ml-2">
-                        <li><a href="#" onclick="app.setFilter('Female', 'Qaida'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Female" data-stage="Qaida">Qaida</a></li>
-                        <li><a href="#" onclick="app.setFilter('Female', 'Quran Reading'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Female" data-stage="Quran Reading">Quran</a></li>
-                        <li><a href="#" onclick="app.setFilter('Female', 'Sifarah'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Female" data-stage="Sifarah">Sifara</a></li>
-                        <li><a href="#" onclick="app.setFilter('Female', 'Hifz'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Female" data-stage="Hifz">Hifz</a></li>
-                    </ul>
-                </div>
-
-                <div class="border-b border-gray-200 pb-2">
-                    <p class="font-bold text-lg text-blue-600 mb-2">Male</p>
-                    <ul class="space-y-1 ml-2">
-                        <li><a href="#" onclick="app.setFilter('Male', 'Qaida'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Male" data-stage="Qaida">Qaida</a></li>
-                        <li><a href="#" onclick="app.setFilter('Male', 'Quran Reading'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Male" data-stage="Quran Reading">Quran</a></li>
-                        <li><a href="#" onclick="app.setFilter('Male', 'Sifarah'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Male" data-stage="Sifarah">Sifara</a></li>
-                        <li><a href="#" onclick="app.setFilter('Male', 'Hifz'); return false;" class="menu-item block p-2 text-gray-700 hover:bg-gray-100 rounded transition duration-150" data-gender="Male" data-stage="Hifz">Hifz</a></li>
-                    </ul>
-                </div>
-                
             </div>
+            
+            <div id="user-id-display-mobile" class="text-xs text-gray-500 bg-gray-50 px-3 py-1 rounded-lg text-center mt-2 cursor-pointer border border-gray-200" 
+     title="User ID. Click to Copy">
+     ID: ...
+</div>
         </div>
-                
-            </div>
-        </div>
+    </div>
+</header>
 
-        <div id="menu-backdrop" onclick="app.toggleMenu()" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden"></div>
+    <!-- Main Content Area -->
+    <main id="main-content-area" class="flex-grow overflow-hidden relative max-w-7xl mx-auto w-full min-h-0 p-2 flex flex-col">
+        
+<div id="app-container" class="bg-white shadow-xl rounded-xl p-4 md:p-6 flex flex-col h-full overflow-hidden">
 
         <!-- Main Student List View -->
 <div id="student-list-view" class="flex flex-col flex-grow overflow-hidden">            <div id="fixed-header-container" class="pb-4 border-b border-gray-200">
@@ -219,6 +293,12 @@
                                 <option value="Male">Male</option>
                             </select>
                         </div>
+                        <div class="mb-4">
+                            <label for="student-department-input" class="block text-sm font-medium text-gray-700">Department</label>
+                            <select id="student-department-input" required class="mt-1 block w-full pl-3 pr-10 py-3 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md shadow-sm">
+                                <!-- Will be populated dynamically -->
+                            </select>
+                        </div>
                         <div class="mb-6">
                             <label for="student-stage-input" class="block text-sm font-medium text-gray-700">Initial Stage</label>
                             <select id="student-stage-input" required class="mt-1 block w-full pl-3 pr-10 py-3 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md shadow-sm">
@@ -284,6 +364,148 @@
 
     </div>
 
+    </main>
+
+    <!-- Admin Portal Modal -->
+    <div id="admin-portal-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-80 z-50 flex items-center justify-center p-4">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-bold text-red-700">🔒 Admin Portal</h3>
+                <button onclick="closeAdminPortal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+            
+            <!-- Admin Status -->
+            <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p class="text-sm text-red-800"><strong>Admin User:</strong> <span id="admin-user-id" class="font-mono"></span></p>
+            </div>
+            
+            <!-- Manage Admins Section -->
+            <div class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <h4 class="text-lg font-bold text-gray-700 mb-3">Manage Admins</h4>
+                
+                <!-- Current Admins List -->
+                <div class="mb-4">
+                    <h5 class="text-sm font-semibold text-gray-600 mb-2">Current Admins</h5>
+                    <div id="admin-list" class="space-y-2 max-h-40 overflow-y-auto"></div>
+                </div>
+                
+                <!-- Add New Admin -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div class="md:col-span-3">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">User ID</label>
+                        <input type="text" id="new-admin-id" placeholder="Enter user ID to make admin" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500">
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="addNewAdmin()" class="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition">
+                            ➕ Add Admin
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Manage Classes & Departments Section -->
+            <div class="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+                <h4 class="text-lg font-bold text-gray-700 mb-3">Manage Classes & Departments</h4>
+                <button onclick="openManageClassesModal()" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 transition">
+                    ⚙️ Open Class Management
+                </button>
+            </div>
+            
+            <div class="mt-4 pt-4 border-t flex justify-end">
+                <button onclick="closeAdminPortal()" class="px-6 py-2 bg-gray-500 text-white rounded-lg font-semibold hover:bg-gray-600 transition">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Classes Modal -->
+    <div id="manage-classes-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-80 z-50 flex items-center justify-center p-4">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-bold text-indigo-700">Manage Classes & Departments</h3>
+                <button onclick="closeManageClassesModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+            
+            <!-- Add New Department -->
+            <div class="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                <h4 class="text-lg font-bold text-gray-700 mb-3">Add New Department</h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Department Name</label>
+                        <input type="text" id="new-dept-name" placeholder="e.g., Summer" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Abbreviation</label>
+                        <input type="text" id="new-dept-abbr" placeholder="e.g., SMR" maxlength="3"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500">
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="addNewDepartment()" class="w-full bg-purple-600 text-white py-2 rounded-lg font-semibold hover:bg-purple-700 transition">
+                            ➕ Add Department
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p class="text-sm text-blue-800"><strong>Current Department:</strong> <span id="current-dept-display" class="font-semibold"></span></p>
+            </div>
+
+            <!-- Current Classes List -->
+            <div class="mb-6">
+                <h4 class="text-lg font-bold text-gray-700 mb-3">Current Classes</h4>
+                <div id="current-classes-list" class="space-y-2"></div>
+            </div>
+
+            <!-- Add New Class -->
+            <div class="border-t pt-4">
+                <h4 class="text-lg font-bold text-gray-700 mb-3">Add New Class</h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                        <select id="new-class-gender" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                            <option value="Girls">Girls</option>
+                            <option value="Boys">Boys</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Class Name</label>
+                        <input type="text" id="new-class-name" placeholder="e.g., 5" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="addNewClass()" class="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition">
+                            ➕ Add Class
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-4 border-t flex justify-between">
+                <button onclick="saveAndCloseManageClassesModal()" class="px-6 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition">
+                    💾 Save & Close
+                </button>
+                <button onclick="closeManageClassesModal()" class="px-6 py-2 bg-gray-500 text-white rounded-lg font-semibold hover:bg-gray-600 transition">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Message Box for Alerts -->
+    <div id="message-box" class="hidden fixed inset-0 bg-gray-900 bg-opacity-70 z-50 flex items-center justify-center p-4" onclick="this.classList.add('hidden')">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full" onclick="event.stopPropagation()">
+            <h3 id="message-title" class="text-xl font-bold mb-3 text-indigo-700"></h3>
+            <p id="message-text" class="text-gray-700 mb-4"></p>
+            <button onclick="document.getElementById('message-box').classList.add('hidden')" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 transition">
+                Got It
+            </button>
+        </div>
+    </div>
+
     <!-- Main JavaScript Application Logic -->
     <script type="module">
         // Ensure firebase object is available from the loaded script
@@ -317,6 +539,16 @@
         // --- FIREBASE SETUP AND AUTH ---
         let db, auth;
         let userId = 'anonymous'; // Default for unauthenticated users
+        
+        // Department and Class Management
+        let selectedDepartment = localStorage.getItem('selectedDepartment') || 'Weekend';
+        const DEFAULT_CLASS_DEFINITIONS = {
+            'Weekend': [],
+            'Evening': [],
+            'FullTime': []
+        };
+        let CLASS_DEFINITIONS = DEFAULT_CLASS_DEFINITIONS;
+        
         // Use your actual Firebase configuration and App ID here
             const APP_ID = 'apps-e1163'; // Replace 'apps-e1163' with your project ID
             const FIREBASE_CONFIG = {
@@ -332,7 +564,8 @@
         const app = {
             state: {
                 isAuthReady: false,
-                students: [], // Array of student documents
+                students: [], // Array of student documents (filtered by department)
+                allStudents: [], // All students across all departments
                 currentStudent: null, // The student object being viewed
                 logs: [], // Logs for the current student
                 filterText: '',
@@ -375,6 +608,24 @@
                 // Sign in anonymously to ensure a user ID is available for Firestore rules
                 await signInAnonymously(auth);
                 userId = auth.currentUser?.uid || 'anonymous';
+                
+                // Update user ID display
+                const userIdMobile = document.getElementById('user-id-display-mobile');
+                if (userIdMobile) {
+                    userIdMobile.textContent = `ID: ${userId}`;
+                }
+                
+                // Load admin list and check admin status
+                await loadAdminList();
+                
+                // Load menu visibility settings
+                await loadMenuVisibility();
+                
+                // Load class definitions (shared across ecosystem)
+                await loadClassDefinitions();
+                
+                // Update department selector
+                updateDepartmentDropdown();
             },
 
             // --- LISTENERS AND DATA FETCHING ---
@@ -384,7 +635,11 @@
                 // 1. Student Listener (Public Data)
                 const studentsRef = collection(db, `artifacts/${APP_ID}/public/data/students`);
                 onSnapshot(studentsRef, (snapshot) => {
-                    this.state.students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    this.state.allStudents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    // Filter by selected department
+                    this.state.students = this.state.allStudents.filter(s => 
+                        (s.department || 'Weekend') === selectedDepartment
+                    );
                     this.renderStudentList();
 
                     // If a student is currently selected, refresh their data
@@ -424,12 +679,8 @@
 
             // --- MENU AND FILTER LOGIC ---
             toggleMenu: function() {
-                const menu = document.getElementById('sidebar-menu');
-                const backdrop = document.getElementById('menu-backdrop');
-                menu.classList.toggle('-translate-x-full');
-                backdrop.classList.toggle('hidden');
-                // Set the correct menu item as active
-                this.updateMenuActiveState();
+                const mobileMenu = document.getElementById('mobile-nav-menu');
+                mobileMenu.classList.toggle('hidden');
             },
 
             setFilter: function(gender, stage) {
@@ -437,11 +688,12 @@
                 this.state.currentStageFilter = stage;
                 this.renderStudentList();
                 this.toggleMenu(); // Close menu after selection
-                // Update header title to reflect filter
-                const stageName = stage.replace(' Reading', '');
-                document.querySelector('h2.text-2xl').textContent = `${gender}'s ${stageName} Students`;
-                document.getElementById('search-student').value = ''; // Clear search when filter is applied
-                this.state.filterText = '';
+                // Close submenu
+                const submenu = document.getElementById('student-filters-submenu');
+                if (submenu) submenu.classList.add('hidden');
+                // Update filter chevron
+                const chevron = document.getElementById('filter-chevron');
+                if (chevron) chevron.classList.remove('rotate-180');
             },
 
             clearFilter: function() {
@@ -450,18 +702,7 @@
                 this.state.filterText = '';
                 document.getElementById('search-student').value = '';
                 this.renderStudentList();
-                this.toggleMenu(); // Close menu after selection
-                document.querySelector('h2.text-2xl').textContent = 'Students';
-            },
-
-            updateMenuActiveState: function() {
-                document.querySelectorAll('.menu-item').forEach(item => {
-                    item.classList.remove('bg-blue-100', 'font-semibold', 'text-blue-700');
-                    if (item.getAttribute('data-gender') === this.state.currentGenderFilter &&
-                        item.getAttribute('data-stage') === this.state.currentStageFilter) {
-                        item.classList.add('bg-blue-100', 'font-semibold', 'text-blue-700');
-                    }
-                });
+                this.toggleMenu(); // Close menu after clearing
             },
 
             // --- UI RENDERING ---
@@ -501,7 +742,6 @@
                         list.appendChild(item);
                     });
                 }
-                this.updateMenuActiveState(); // Ensure the menu state reflects the current filter
             },
 
             renderStudentDetails: function(student) {
@@ -938,6 +1178,18 @@
                 document.getElementById('student-stage-input').value = 'Qaida';
                 document.getElementById('student-modal-error').textContent = '';
                 document.getElementById('target-date-input').value = '';
+                
+                // Populate department dropdown
+                const deptSelect = document.getElementById('student-department-input');
+                deptSelect.innerHTML = '';
+                Object.keys(CLASS_DEFINITIONS).forEach(dept => {
+                    const option = document.createElement('option');
+                    option.value = dept;
+                    option.textContent = dept;
+                    deptSelect.appendChild(option);
+                });
+                deptSelect.value = selectedDepartment;
+                
                 document.getElementById('student-modal').classList.remove('hidden');
             },
 
@@ -947,10 +1199,22 @@
                 document.getElementById('student-modal-title').textContent = 'Edit Student';
                 document.getElementById('student-modal-btn').textContent = 'Save Changes';
                 document.getElementById('student-name-input').value = student.name;
-                document.getElementById('student-gender-input').value = student.gender || 'Female'; // NEW: Populate gender
+                document.getElementById('student-gender-input').value = student.gender || 'Female';
                 document.getElementById('student-stage-input').value = student.stage;
                 document.getElementById('target-date-input').value = student.targetCompletionDate || '';
                 document.getElementById('student-modal-error').textContent = '';
+                
+                // Populate department dropdown
+                const deptSelect = document.getElementById('student-department-input');
+                deptSelect.innerHTML = '';
+                Object.keys(CLASS_DEFINITIONS).forEach(dept => {
+                    const option = document.createElement('option');
+                    option.value = dept;
+                    option.textContent = dept;
+                    deptSelect.appendChild(option);
+                });
+                deptSelect.value = student.department || 'Weekend';
+                
                 document.getElementById('student-modal').classList.remove('hidden');
             },
 
@@ -965,6 +1229,7 @@
 
                 const name = document.getElementById('student-name-input').value.trim();
                 const gender = document.getElementById('student-gender-input').value; // NEW
+                const department = document.getElementById('student-department-input').value;
                 const stage = document.getElementById('student-stage-input').value;
                 const targetCompletionDate = document.getElementById('target-date-input').value || null;
 
@@ -991,26 +1256,28 @@
     try {
         const data = {
                         name: this.sanitize(name),
-                        gender: gender, // NEW FIELD
+                        gender: gender,
+                        department: department,
                         stage: stage,
                         sifarah_completed_ayahs: 0,
                         qaida_review_count: {},
                         qaida_first_review_date: {},
                         qaida_finished: {},
-                        hifz_coverage: {}, // New: Hifz-specific map
-                        reading_coverage: {}, // New: Reading/Sifarah-specific map
+                        hifz_coverage: {},
+                        reading_coverage: {},
                         hifz_inventory: [],
-                        targetCompletionDate: targetCompletionDate, // NEW
+                        targetCompletionDate: targetCompletionDate,
                     };
 
                     if (this.state.isEditMode) {
-                        // Update existing student (only name, stage, gender, and target date are user-editable here)
+                        // Update existing student (only name, stage, gender, department, and target date are user-editable here)
                         const studentDocRef = doc(db, `artifacts/${APP_ID}/public/data/students`, this.state.studentToEditId);
                         await updateDoc(studentDocRef, {
                             name: this.sanitize(name),
-                            gender: gender, // UPDATE GENDER
+                            gender: gender,
+                            department: department,
                             stage: stage,
-                            targetCompletionDate: targetCompletionDate, // NEW
+                            targetCompletionDate: targetCompletionDate,
                         });
                     } else {
                         // Create new student
@@ -1653,9 +1920,528 @@ showHifzBulkImportModal: function() {
             }
         };
 
+        // --- DEPARTMENT AND CLASS MANAGEMENT FUNCTIONS ---
+        
+        // Load class definitions from Firebase
+        async function loadClassDefinitions() {
+            try {
+                const classDefsDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'class_definitions', 'current');
+                const docSnap = await getDoc(classDefsDocRef);
+                
+                if (docSnap.exists()) {
+                    const firebaseData = docSnap.data();
+                    CLASS_DEFINITIONS = { ...DEFAULT_CLASS_DEFINITIONS, ...firebaseData };
+                    console.log('Class definitions loaded from Firebase');
+                } else {
+                    console.log('No class definitions in Firebase, using defaults');
+                    CLASS_DEFINITIONS = DEFAULT_CLASS_DEFINITIONS;
+                }
+                
+                updateDepartmentDropdown();
+            } catch (error) {
+                console.error('Error loading class definitions:', error);
+                CLASS_DEFINITIONS = DEFAULT_CLASS_DEFINITIONS;
+                updateDepartmentDropdown();
+            }
+        }
+        
+        // Save class definitions to Firebase
+        async function saveClassDefinitions() {
+            try {
+                const classDefsDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'class_definitions', 'current');
+                await setDoc(classDefsDocRef, CLASS_DEFINITIONS);
+                console.log('✅ Class definitions saved to Firebase');
+            } catch (error) {
+                console.error('❌ Error saving class definitions:', error);
+            }
+        }
+        
+        // Update department dropdown
+        function updateDepartmentDropdown() {
+            const dropdown = document.getElementById('header-dept-selector');
+            if (!dropdown) return;
+            
+            const currentValue = dropdown.value;
+            dropdown.innerHTML = '';
+            
+            Object.keys(CLASS_DEFINITIONS).forEach(deptName => {
+                const option = document.createElement('option');
+                option.value = deptName;
+                option.textContent = deptName;
+                dropdown.appendChild(option);
+            });
+            
+            if (CLASS_DEFINITIONS[currentValue]) {
+                dropdown.value = currentValue;
+            } else if (CLASS_DEFINITIONS[selectedDepartment]) {
+                dropdown.value = selectedDepartment;
+            }
+        }
+        
+        // Handle department change
+        window.handleDepartmentChange = function(newDepartment) {
+            selectedDepartment = newDepartment;
+            localStorage.setItem('selectedDepartment', newDepartment);
+            
+            // Filter students by department
+            app.state.students = app.state.allStudents.filter(s => 
+                (s.department || 'Weekend') === selectedDepartment
+            );
+            app.renderStudentList();
+            
+            console.log('Department changed to:', newDepartment);
+        };
+        
+        // Open manage classes modal
+        window.openManageClassesModal = function() {
+            document.getElementById('current-dept-display').textContent = selectedDepartment;
+            renderCurrentClasses();
+            document.getElementById('manage-classes-modal').classList.remove('hidden');
+        };
+        
+        // Close manage classes modal
+        window.closeManageClassesModal = function() {
+            document.getElementById('manage-classes-modal').classList.add('hidden');
+        };
+        
+        // Save and close manage classes modal
+        window.saveAndCloseManageClassesModal = async function() {
+            await saveClassDefinitions();
+            closeManageClassesModal();
+            showMessage('Success', 'Classes and departments saved successfully!');
+        };
+        
+        // Render current classes
+        function renderCurrentClasses() {
+            const container = document.getElementById('current-classes-list');
+            container.innerHTML = '';
+            
+            const currentClasses = CLASS_DEFINITIONS[selectedDepartment] || [];
+            
+            if (currentClasses.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-500 italic">No classes defined for this department.</p>';
+                return;
+            }
+            
+            currentClasses.forEach((cls, index) => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center p-3 bg-gray-50 border border-gray-200 rounded-lg';
+                
+                const info = document.createElement('div');
+                info.innerHTML = `
+                    <span class="font-semibold text-gray-700">${cls.gender} - Class ${cls.name}</span>
+                    <span class="text-xs text-gray-500 ml-2">(ID: ${selectedDepartment}-${cls.gender}-${cls.name})</span>
+                `;
+                
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'text-red-500 hover:text-red-700 text-sm font-semibold';
+                removeBtn.textContent = '✖ Remove';
+                removeBtn.onclick = () => removeClass(index);
+                
+                div.appendChild(info);
+                div.appendChild(removeBtn);
+                container.appendChild(div);
+            });
+        }
+        
+        // Add new department
+        window.addNewDepartment = function() {
+            const name = document.getElementById('new-dept-name').value.trim();
+            const abbr = document.getElementById('new-dept-abbr').value.trim();
+            
+            if (!name || !abbr) {
+                showMessage('Error', 'Please enter both department name and abbreviation.');
+                return;
+            }
+            
+            if (CLASS_DEFINITIONS[name]) {
+                showMessage('Error', 'This department already exists.');
+                return;
+            }
+            
+            CLASS_DEFINITIONS[name] = [];
+            updateDepartmentDropdown();
+            
+            document.getElementById('new-dept-name').value = '';
+            document.getElementById('new-dept-abbr').value = '';
+            
+            showMessage('Success', `Department "${name}" added!`);
+        };
+        
+        // Add new class
+        window.addNewClass = function() {
+            const gender = document.getElementById('new-class-gender').value;
+            const name = document.getElementById('new-class-name').value.trim();
+            
+            if (!name) {
+                showMessage('Error', 'Please enter a class name.');
+                return;
+            }
+            
+            if (!CLASS_DEFINITIONS[selectedDepartment]) {
+                CLASS_DEFINITIONS[selectedDepartment] = [];
+            }
+            
+            const exists = CLASS_DEFINITIONS[selectedDepartment].some(
+                cls => cls.gender === gender && cls.name === name
+            );
+            
+            if (exists) {
+                showMessage('Error', 'This class already exists in the current department.');
+                return;
+            }
+            
+            CLASS_DEFINITIONS[selectedDepartment].push({ gender, name });
+            renderCurrentClasses();
+            
+            document.getElementById('new-class-name').value = '';
+            showMessage('Success', `Class "${gender} - ${name}" added!`);
+        };
+        
+        // Remove class
+        function removeClass(index) {
+            if (confirm('Are you sure you want to remove this class?')) {
+                CLASS_DEFINITIONS[selectedDepartment].splice(index, 1);
+                renderCurrentClasses();
+                showMessage('Success', 'Class removed.');
+            }
+        }
+
+        // Toggle student filters submenu
+        window.toggleStudentFilters = function() {
+            const submenu = document.getElementById('student-filters-submenu');
+            const chevron = document.getElementById('filter-chevron');
+            
+            if (submenu.classList.contains('hidden')) {
+                submenu.classList.remove('hidden');
+                chevron.classList.add('rotate-180');
+            } else {
+                submenu.classList.add('hidden');
+                chevron.classList.remove('rotate-180');
+            }
+        };
+
+        // --- ADMIN MANAGEMENT FUNCTIONS ---
+        let ADMIN_LIST = ['MpcB7f35m0bITsSK1D7ACWFmch32']; // Default admin
+        let isAdmin = false;
+        let MENU_VISIBILITY = {
+            'index': true,
+            'dashboard': true,
+            'quran-tracker': true
+        };
+        
+        // Load admin list from Firebase
+        async function loadAdminList() {
+            try {
+                const adminDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'admins');
+                const docSnap = await getDoc(adminDocRef);
+                
+                if (docSnap.exists()) {
+                    ADMIN_LIST = docSnap.data().list || ADMIN_LIST;
+                    console.log('Admin list loaded from Firebase');
+                } else {
+                    console.log('No admin list in Firebase, using defaults');
+                    await saveAdminList();
+                }
+                
+                checkAdminStatus();
+            } catch (error) {
+                console.error('Error loading admin list:', error);
+                checkAdminStatus();
+            }
+        }
+        
+        // Save admin list to Firebase
+        async function saveAdminList() {
+            try {
+                const adminDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'admins');
+                await setDoc(adminDocRef, { list: ADMIN_LIST });
+                console.log('✅ Admin list saved to Firebase');
+            } catch (error) {
+                console.error('❌ Error saving admin list:', error);
+            }
+        }
+        
+        // Check if current user is admin
+        function checkAdminStatus() {
+            isAdmin = ADMIN_LIST.includes(userId);
+            console.log('User is admin:', isAdmin);
+            updateAdminButton();
+        }
+        
+        // Update admin button visibility
+        function updateAdminButton() {
+            const adminBtn = document.getElementById('admin-portal-btn');
+            if (adminBtn) {
+                if (isAdmin) {
+                    adminBtn.classList.remove('hidden');
+                } else {
+                    adminBtn.classList.add('hidden');
+                }
+            }
+        }
+        
+        // Show message helper
+        function showMessage(title, message) {
+            document.getElementById('message-title').textContent = title;
+            document.getElementById('message-text').textContent = message;
+            document.getElementById('message-box').classList.remove('hidden');
+        }
+        
+        // Open admin portal
+        window.openAdminPortal = () => {
+            if (!isAdmin) {
+                showMessage('Access Denied', 'You do not have admin privileges.');
+                return;
+            }
+            
+            document.getElementById('admin-user-id').textContent = userId;
+            renderAdminList();
+            document.getElementById('admin-portal-modal').classList.remove('hidden');
+            document.getElementById('mobile-nav-menu').classList.add('hidden');
+        };
+        
+        // Close admin portal
+        window.closeAdminPortal = () => {
+            document.getElementById('admin-portal-modal').classList.add('hidden');
+        };
+        
+        // Render admin list
+        function renderAdminList() {
+            const container = document.getElementById('admin-list');
+            container.innerHTML = '';
+            
+            ADMIN_LIST.forEach(adminId => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center p-2 bg-white border border-gray-200 rounded-lg';
+                
+                const idSpan = document.createElement('span');
+                idSpan.className = 'font-mono text-xs text-gray-700';
+                idSpan.textContent = adminId;
+                
+                if (adminId !== userId) {
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'text-red-500 hover:text-red-700 text-sm';
+                    removeBtn.textContent = '✖ Remove';
+                    removeBtn.onclick = () => removeAdmin(adminId);
+                    
+                    div.appendChild(idSpan);
+                    div.appendChild(removeBtn);
+                } else {
+                    const youBadge = document.createElement('span');
+                    youBadge.className = 'text-xs bg-green-100 text-green-700 px-2 py-1 rounded';
+                    youBadge.textContent = 'You';
+                    
+                    div.appendChild(idSpan);
+                    div.appendChild(youBadge);
+                }
+                
+                container.appendChild(div);
+            });
+        }
+        
+        // Add new admin
+        window.addNewAdmin = async () => {
+            const newAdminId = document.getElementById('new-admin-id').value.trim();
+            
+            if (!newAdminId) {
+                showMessage('Error', 'Please enter a user ID.');
+                return;
+            }
+            
+            if (ADMIN_LIST.includes(newAdminId)) {
+                showMessage('Error', 'This user is already an admin.');
+                return;
+            }
+            
+            ADMIN_LIST.push(newAdminId);
+            await saveAdminList();
+            
+            document.getElementById('new-admin-id').value = '';
+            renderAdminList();
+            
+            showMessage('Success', `User ${newAdminId} added as admin!`);
+        };
+        
+        // Remove admin
+        async function removeAdmin(adminId) {
+            if (adminId === userId) {
+                showMessage('Error', 'You cannot remove yourself as admin.');
+                return;
+            }
+            
+            if (ADMIN_LIST.length <= 1) {
+                showMessage('Error', 'Cannot remove the last admin.');
+                return;
+            }
+            
+            ADMIN_LIST = ADMIN_LIST.filter(id => id !== adminId);
+            await saveAdminList();
+            
+            renderAdminList();
+            showMessage('Success', `Admin ${adminId} removed.`);
+        }
+
+        // --- MENU VISIBILITY MANAGEMENT ---
+        
+        // Load menu visibility settings from Firebase
+        const loadMenuVisibility = async () => {
+            try {
+                const menuDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'menu_visibility');
+                const docSnap = await getDoc(menuDocRef);
+                
+                if (docSnap.exists()) {
+                    MENU_VISIBILITY = docSnap.data();
+                    console.log('Menu visibility loaded from Firebase:', MENU_VISIBILITY);
+                } else {
+                    console.log('No menu visibility settings in Firebase, using defaults');
+                    MENU_VISIBILITY = {
+                        'index': true,
+                        'dashboard': true,
+                        'quran-tracker': true
+                    };
+                    await saveMenuVisibility();
+                }
+                
+                updateMenuDisplay();
+            } catch (error) {
+                console.error('Error loading menu visibility:', error);
+                MENU_VISIBILITY = {
+                    'index': true,
+                    'dashboard': true,
+                    'quran-tracker': true
+                };
+                updateMenuDisplay();
+            }
+        };
+        
+        // Save menu visibility settings to Firebase
+        const saveMenuVisibility = async () => {
+            try {
+                const menuDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'menu_visibility');
+                await setDoc(menuDocRef, MENU_VISIBILITY);
+                console.log('✅ Menu visibility saved to Firebase');
+            } catch (error) {
+                console.error('❌ Error saving menu visibility:', error);
+            }
+        };
+        
+        // Update menu display based on visibility settings and admin status
+        const updateMenuDisplay = () => {
+            // Show/hide menu items based on visibility (for non-admins)
+            if (!isAdmin) {
+                // Regular users only see visible items
+                const indexItem = document.getElementById('menu-item-index');
+                const quranItem = document.getElementById('menu-item-quran');
+                const dashboardItem = document.getElementById('menu-item-dashboard');
+                
+                if (indexItem) {
+                    indexItem.style.display = MENU_VISIBILITY['index'] ? 'flex' : 'none';
+                }
+                if (quranItem) {
+                    quranItem.style.display = MENU_VISIBILITY['quran-tracker'] ? 'flex' : 'none';
+                }
+                if (dashboardItem) {
+                    dashboardItem.style.display = MENU_VISIBILITY['dashboard'] ? 'flex' : 'none';
+                }
+            } else {
+                // Admins see all items with toggle buttons
+                const indexItem = document.getElementById('menu-item-index');
+                const quranItem = document.getElementById('menu-item-quran');
+                const dashboardItem = document.getElementById('menu-item-dashboard');
+                
+                if (indexItem) indexItem.style.display = 'flex';
+                if (quranItem) quranItem.style.display = 'flex';
+                if (dashboardItem) dashboardItem.style.display = 'flex';
+                
+                // Show toggle buttons for admins
+                document.getElementById('toggle-index-btn').classList.remove('hidden');
+                document.getElementById('toggle-quran-btn').classList.remove('hidden');
+                document.getElementById('toggle-dashboard-btn').classList.remove('hidden');
+                
+                // Update eye icons
+                updateEyeIcon('index');
+                updateEyeIcon('quran-tracker');
+                updateEyeIcon('dashboard');
+            }
+        };
+        
+        // Update eye icon based on visibility
+        const updateEyeIcon = (itemKey) => {
+            const eyeSpan = document.getElementById(`eye-${itemKey}`);
+            if (eyeSpan) {
+                eyeSpan.textContent = MENU_VISIBILITY[itemKey] ? '👁️' : '🙈';
+                eyeSpan.title = MENU_VISIBILITY[itemKey] ? 'Visible to users' : 'Hidden from users';
+            }
+        };
+        
+        // Toggle menu item visibility
+        window.toggleMenuItemVisibility = async (itemKey) => {
+            if (!isAdmin) return;
+            
+            MENU_VISIBILITY[itemKey] = !MENU_VISIBILITY[itemKey];
+            await saveMenuVisibility();
+            updateEyeIcon(itemKey);
+            updateMenuDisplay();
+        };
+
         // Initialize the application once the window is loaded
         window.onload = app.init.bind(app);
         window.app = app; // Expose app to global scope for inline handlers
+        
+        // Mobile menu toggle functionality (after page loads)
+        window.addEventListener('DOMContentLoaded', function() {
+            const menuToggle = document.getElementById('menu-toggle');
+            const mobileNavMenu = document.getElementById('mobile-nav-menu');
+            
+            if (menuToggle && mobileNavMenu) {
+                menuToggle.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    mobileNavMenu.classList.toggle('hidden');
+                });
+                
+                // Close menu when clicking outside
+                document.addEventListener('click', function(e) {
+                    if (!mobileNavMenu.classList.contains('hidden') && 
+                        !mobileNavMenu.contains(e.target) && 
+                        e.target !== menuToggle) {
+                        mobileNavMenu.classList.add('hidden');
+                    }
+                });
+                
+                // Prevent menu from closing when clicking inside it
+                mobileNavMenu.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            }
+            
+            // User ID display and copy functionality
+            // Click to copy user ID
+            const userIdElement = document.getElementById('user-id-display-mobile');
+            if (userIdElement) {
+                userIdElement.addEventListener('click', () => {
+                    const idText = userIdElement.textContent;
+                    const uid = idText.replace('ID: ', '');
+                    try {
+                        const tempInput = document.createElement('textarea');
+                        tempInput.value = uid;
+                        document.body.appendChild(tempInput);
+                        tempInput.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(tempInput);
+                        
+                        const originalText = idText;
+                        userIdElement.textContent = '✓ Copied!';
+                        setTimeout(() => {
+                            userIdElement.textContent = originalText;
+                        }, 1500);
+                    } catch (err) {
+                        console.error('Could not copy text: ', err);
+                        alert('Failed to copy User ID to clipboard.');
+                    }
+                });
+            }
+        });
     </script>
 </body>
 </html>

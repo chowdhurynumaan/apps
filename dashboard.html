@@ -85,12 +85,26 @@
                 </select>
             </div>
             
+            <button id="admin-portal-btn" onclick="openAdminPortal()" 
+                    class="px-3 py-2 text-sm text-center bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold shadow-md">
+                🔒 Admin Portal
+            </button>
+            
             <div id="menu-item-index" class="flex items-center gap-2">
                 <a href="index.html" class="flex-1 px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
                     📚 Attendance Tracker
                 </a>
                 <button id="toggle-index-btn" onclick="toggleMenuItemVisibility('index')" class="hidden px-2 py-2 text-gray-600 hover:text-indigo-600" title="Toggle visibility">
                     <span id="eye-index">👁️</span>
+                </button>
+            </div>
+            
+            <div id="menu-item-dashboard" class="flex items-center gap-2">
+                <a href="dashboard.html" class="flex-1 px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
+                    📊 Dashboard
+                </a>
+                <button id="toggle-dashboard-btn" onclick="toggleMenuItemVisibility('dashboard')" class="hidden px-2 py-2 text-gray-600 hover:text-indigo-600" title="Toggle visibility">
+                    <span id="eye-dashboard">👁️</span>
                 </button>
             </div>
             
@@ -102,6 +116,11 @@
                     <span id="eye-quran-tracker">👁️</span>
                 </button>
             </div>
+            
+            <div id="user-id-display-mobile" class="text-xs text-gray-500 bg-gray-50 px-3 py-1 rounded-lg text-center mt-2 cursor-pointer border border-gray-200" 
+     title="User ID. Click to Copy">
+     ID: ...
+</div>
         </div>
     </div>
 </header>
@@ -314,6 +333,63 @@
 
     </div>
 
+    <!-- Admin Portal Modal -->
+    <div id="admin-portal-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-80 z-40 flex items-center justify-center p-4">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-bold text-red-700">🔒 Admin Portal</h3>
+                <button onclick="closeAdminPortal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+            
+            <!-- Admin Status -->
+            <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p class="text-sm text-red-800"><strong>Admin User:</strong> <span id="admin-user-id" class="font-mono"></span></p>
+            </div>
+            
+            <!-- Manage Admins Section -->
+            <div class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <h4 class="text-lg font-bold text-gray-700 mb-3">Manage Admins</h4>
+                
+                <!-- Current Admins List -->
+                <div class="mb-4">
+                    <h5 class="text-sm font-semibold text-gray-600 mb-2">Current Admins</h5>
+                    <div id="admin-list" class="space-y-2 max-h-40 overflow-y-auto"></div>
+                </div>
+                
+                <!-- Add New Admin -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div class="md:col-span-3">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">User ID</label>
+                        <input type="text" id="new-admin-id" placeholder="Enter user ID to make admin" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500">
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="addNewAdmin()" class="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition">
+                            ➕ Add Admin
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-4 pt-4 border-t flex justify-end">
+                <button onclick="closeAdminPortal()" class="px-6 py-2 bg-gray-500 text-white rounded-lg font-semibold hover:bg-gray-600 transition">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Message Box for Alerts -->
+    <div id="message-box" class="hidden fixed inset-0 bg-gray-900 bg-opacity-70 z-50 flex items-center justify-center p-4" onclick="this.classList.add('hidden')">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full" onclick="event.stopPropagation()">
+            <h3 id="message-title" class="text-xl font-bold mb-3 text-indigo-700"></h3>
+            <p id="message-text" class="text-gray-700 mb-4"></p>
+            <button onclick="document.getElementById('message-box').classList.add('hidden')" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 transition">
+                Got It
+            </button>
+        </div>
+    </div>
+
     <!-- Firebase & Chart.js Scripts -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js';
@@ -437,12 +513,6 @@
         // Load menu visibility and check admin status
         async function loadMenuVisibility() {
             try {
-                // Check if user is admin
-                const adminDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'admins', 'list');
-                const adminSnap = await getDoc(adminDocRef);
-                const adminList = adminSnap.exists() ? (adminSnap.data().admins || []) : [];
-                isAdmin = adminList.includes(userId);
-                
                 // Load menu visibility
                 const menuDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'menu_visibility');
                 const menuSnap = await getDoc(menuDocRef);
@@ -451,8 +521,9 @@
                     MENU_VISIBILITY = menuSnap.data();
                 } else {
                     MENU_VISIBILITY = {
-                        'quran-tracker': true,
-                        'index': true
+                        'index': true,
+                        'dashboard': true,
+                        'quran-tracker': true
                     };
                 }
                 
@@ -468,10 +539,14 @@
             if (!isAdmin) {
                 // Regular users only see visible items
                 const indexItem = document.getElementById('menu-item-index');
+                const dashboardItem = document.getElementById('menu-item-dashboard');
                 const quranItem = document.getElementById('menu-item-quran');
                 
                 if (indexItem) {
                     indexItem.style.display = MENU_VISIBILITY['index'] ? 'flex' : 'none';
+                }
+                if (dashboardItem) {
+                    dashboardItem.style.display = MENU_VISIBILITY['dashboard'] ? 'flex' : 'none';
                 }
                 if (quranItem) {
                     quranItem.style.display = MENU_VISIBILITY['quran-tracker'] ? 'flex' : 'none';
@@ -479,19 +554,24 @@
             } else {
                 // Admins see all items with toggle buttons
                 const indexItem = document.getElementById('menu-item-index');
+                const dashboardItem = document.getElementById('menu-item-dashboard');
                 const quranItem = document.getElementById('menu-item-quran');
                 
                 if (indexItem) indexItem.style.display = 'flex';
+                if (dashboardItem) dashboardItem.style.display = 'flex';
                 if (quranItem) quranItem.style.display = 'flex';
                 
                 // Show toggle buttons
                 const toggleIndex = document.getElementById('toggle-index-btn');
+                const toggleDashboard = document.getElementById('toggle-dashboard-btn');
                 const toggleQuran = document.getElementById('toggle-quran-btn');
                 if (toggleIndex) toggleIndex.classList.remove('hidden');
+                if (toggleDashboard) toggleDashboard.classList.remove('hidden');
                 if (toggleQuran) toggleQuran.classList.remove('hidden');
                 
                 // Update eye icons
                 updateEyeIcon('index');
+                updateEyeIcon('dashboard');
                 updateEyeIcon('quran-tracker');
             }
         }
@@ -615,10 +695,19 @@
                 console.log('Authentication successful, UID:', userCred.user.uid);
                 userId = userCred.user.uid; // Store userId for admin check
                 
+                // Update user ID display
+                const userIdMobile = document.getElementById('user-id-display-mobile');
+                if (userIdMobile) {
+                    userIdMobile.textContent = `ID: ${userId}`;
+                }
+                
                 // Load class definitions to get all departments
                 await loadClassDefinitions();
                 
-                // Load menu visibility and check admin status
+                // Load admin list and check admin status
+                await loadAdminList();
+                
+                // Load menu visibility settings
                 await loadMenuVisibility();
                 
                 const collectionPath = `artifacts/${appId}/public/data/daily_attendance_reports`;
@@ -1344,6 +1433,163 @@
             });
         }
 
+        // --- ADMIN MANAGEMENT FUNCTIONS ---
+        
+        let ADMIN_LIST = ['MpcB7f35m0bITsSK1D7ACWFmch32']; // Default admin
+        
+        // Load admin list from Firebase
+        async function loadAdminList() {
+            try {
+                const adminDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'admins');
+                const docSnap = await getDoc(adminDocRef);
+                
+                if (docSnap.exists()) {
+                    ADMIN_LIST = docSnap.data().list || ADMIN_LIST;
+                    console.log('Admin list loaded from Firebase');
+                } else {
+                    console.log('No admin list in Firebase, using defaults');
+                    await saveAdminList();
+                }
+                
+                checkAdminStatus();
+            } catch (error) {
+                console.error('Error loading admin list:', error);
+                checkAdminStatus();
+            }
+        }
+        
+        // Save admin list to Firebase
+        async function saveAdminList() {
+            try {
+                const adminDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'admins');
+                await setDoc(adminDocRef, { list: ADMIN_LIST });
+                console.log('✅ Admin list saved to Firebase');
+            } catch (error) {
+                console.error('❌ Error saving admin list:', error);
+            }
+        }
+        
+        // Check if current user is admin
+        function checkAdminStatus() {
+            isAdmin = ADMIN_LIST.includes(userId);
+            console.log('User is admin:', isAdmin);
+            updateAdminButton();
+            updateMenuDisplay();
+        }
+        
+        // Update admin button visibility
+        function updateAdminButton() {
+            const adminBtn = document.getElementById('admin-portal-btn');
+            if (adminBtn) {
+                if (isAdmin) {
+                    adminBtn.classList.remove('hidden');
+                } else {
+                    adminBtn.classList.add('hidden');
+                }
+            }
+        }
+        
+        // Show message helper
+        function showMessage(title, message) {
+            document.getElementById('message-title').textContent = title;
+            document.getElementById('message-text').textContent = message;
+            document.getElementById('message-box').classList.remove('hidden');
+        }
+        
+        // Open admin portal
+        window.openAdminPortal = () => {
+            if (!isAdmin) {
+                showMessage('Access Denied', 'You do not have admin privileges.');
+                return;
+            }
+            
+            document.getElementById('admin-user-id').textContent = userId;
+            renderAdminList();
+            document.getElementById('admin-portal-modal').classList.remove('hidden');
+            document.getElementById('mobile-nav-menu').classList.add('hidden');
+        };
+        
+        // Close admin portal
+        window.closeAdminPortal = () => {
+            document.getElementById('admin-portal-modal').classList.add('hidden');
+        };
+        
+        // Render admin list
+        function renderAdminList() {
+            const container = document.getElementById('admin-list');
+            container.innerHTML = '';
+            
+            ADMIN_LIST.forEach(adminId => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center p-2 bg-white border border-gray-200 rounded-lg';
+                
+                const idSpan = document.createElement('span');
+                idSpan.className = 'font-mono text-xs text-gray-700';
+                idSpan.textContent = adminId;
+                
+                if (adminId !== userId) {
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'text-red-500 hover:text-red-700 text-sm';
+                    removeBtn.textContent = '✖ Remove';
+                    removeBtn.onclick = () => removeAdmin(adminId);
+                    
+                    div.appendChild(idSpan);
+                    div.appendChild(removeBtn);
+                } else {
+                    const youBadge = document.createElement('span');
+                    youBadge.className = 'text-xs bg-green-100 text-green-700 px-2 py-1 rounded';
+                    youBadge.textContent = 'You';
+                    
+                    div.appendChild(idSpan);
+                    div.appendChild(youBadge);
+                }
+                
+                container.appendChild(div);
+            });
+        }
+        
+        // Add new admin
+        window.addNewAdmin = async () => {
+            const newAdminId = document.getElementById('new-admin-id').value.trim();
+            
+            if (!newAdminId) {
+                showMessage('Error', 'Please enter a user ID.');
+                return;
+            }
+            
+            if (ADMIN_LIST.includes(newAdminId)) {
+                showMessage('Error', 'This user is already an admin.');
+                return;
+            }
+            
+            ADMIN_LIST.push(newAdminId);
+            await saveAdminList();
+            
+            document.getElementById('new-admin-id').value = '';
+            renderAdminList();
+            
+            showMessage('Success', `User ${newAdminId} added as admin!`);
+        };
+        
+        // Remove admin
+        async function removeAdmin(adminId) {
+            if (adminId === userId) {
+                showMessage('Error', 'You cannot remove yourself as admin.');
+                return;
+            }
+            
+            if (ADMIN_LIST.length <= 1) {
+                showMessage('Error', 'Cannot remove the last admin.');
+                return;
+            }
+            
+            ADMIN_LIST = ADMIN_LIST.filter(id => id !== adminId);
+            await saveAdminList();
+            
+            renderAdminList();
+            showMessage('Success', `Admin ${adminId} removed.`);
+        }
+
         // Initialize
         loadData();
         
@@ -1369,6 +1615,32 @@
         mobileNavMenu.addEventListener('click', function(e) {
             e.stopPropagation();
         });
+        
+        // Click to copy user ID
+        const userIdElement = document.getElementById('user-id-display-mobile');
+        if (userIdElement) {
+            userIdElement.addEventListener('click', () => {
+                const idText = userIdElement.textContent;
+                const uid = idText.replace('ID: ', '');
+                try {
+                    const tempInput = document.createElement('textarea');
+                    tempInput.value = uid;
+                    document.body.appendChild(tempInput);
+                    tempInput.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(tempInput);
+                    
+                    const originalText = idText;
+                    userIdElement.textContent = '✓ Copied!';
+                    setTimeout(() => {
+                        userIdElement.textContent = originalText;
+                    }, 1500);
+                } catch (err) {
+                    console.error('Could not copy text: ', err);
+                    alert('Failed to copy User ID to clipboard.');
+                }
+            });
+        }
     </script>
 </body>
 </html>

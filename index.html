@@ -84,27 +84,37 @@
             </div>
             
             <button id="admin-portal-btn" onclick="openAdminPortal()" 
-                    class="hidden px-3 py-2 text-sm text-center bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold shadow-md">
+                    class="px-3 py-2 text-sm text-center bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold shadow-md">
                 🔒 Admin Portal
             </button>
             
+            <div id="menu-item-index" class="flex items-center gap-2">
+                <a href="index.html" class="flex-1 px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
+                    &#x1F4DA; Attendance Tracker
+                </a>
+                <button id="toggle-index-btn" onclick="toggleMenuItemVisibility('index')" class="hidden px-2 py-2 text-gray-600 hover:text-indigo-600" title="Toggle visibility">
+                    <span id="eye-index">👁️</span>
+                </button>
+            </div>
+            
+            <div id="menu-item-dashboard" class="flex items-center gap-2">
+                <a href="dashboard.html" class="flex-1 px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
+                    &#x1F4CA; Dashboard
+                </a>
+                <button id="toggle-dashboard-btn" onclick="toggleMenuItemVisibility('dashboard')" class="hidden px-2 py-2 text-gray-600 hover:text-indigo-600" title="Toggle visibility">
+                    <span id="eye-dashboard">👁️</span>
+                </button>
+            </div>
+            
             <div id="menu-item-quran" class="flex items-center gap-2">
                 <a href="quran-tracker.html" class="flex-1 px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
-                    Quran Tracker
+                    &#x1F4D6; Quran Tracker
                 </a>
                 <button id="toggle-quran-btn" onclick="toggleMenuItemVisibility('quran-tracker')" class="hidden px-2 py-2 text-gray-600 hover:text-indigo-600" title="Toggle visibility">
                     <span id="eye-quran-tracker">👁️</span>
                 </button>
             </div>
             
-            <div id="menu-item-dashboard" class="flex items-center gap-2">
-                <a href="dashboard.html" class="flex-1 px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
-                    📊 Dashboard
-                </a>
-                <button id="toggle-dashboard-btn" onclick="toggleMenuItemVisibility('dashboard')" class="hidden px-2 py-2 text-gray-600 hover:text-indigo-600" title="Toggle visibility">
-                    <span id="eye-dashboard">👁️</span>
-                </button>
-            </div>
             <div id="user-id-display-mobile" class="text-xs text-gray-500 bg-gray-50 px-3 py-1 rounded-lg text-center mt-2 cursor-pointer border border-gray-200" 
      title="User ID. Click to Copy">
      ID: ...
@@ -558,23 +568,20 @@
         // Load admin list from Firebase
         const loadAdminList = async () => {
             try {
-                const adminDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'admins', 'list');
+                const adminDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'admins');
                 const docSnap = await getDoc(adminDocRef);
                 
                 if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    ADMIN_LIST = data.admins || ['MpcB7f35m0bITsSK1D7ACWFmch32'];
-                    console.log('Admin list loaded from Firebase:', ADMIN_LIST);
+                    ADMIN_LIST = docSnap.data().list || ADMIN_LIST;
+                    console.log('Admin list loaded from Firebase');
                 } else {
-                    console.log('No admin list in Firebase, using default');
-                    ADMIN_LIST = ['MpcB7f35m0bITsSK1D7ACWFmch32'];
-                    await saveAdminList(); // Save default to Firebase
+                    console.log('No admin list in Firebase, using defaults');
+                    await saveAdminList();
                 }
                 
                 checkAdminStatus();
             } catch (error) {
                 console.error('Error loading admin list:', error);
-                ADMIN_LIST = ['MpcB7f35m0bITsSK1D7ACWFmch32'];
                 checkAdminStatus();
             }
         };
@@ -582,8 +589,8 @@
         // Save admin list to Firebase
         const saveAdminList = async () => {
             try {
-                const adminDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'admins', 'list');
-                await setDoc(adminDocRef, { admins: ADMIN_LIST });
+                const adminDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'admins');
+                await setDoc(adminDocRef, { list: ADMIN_LIST });
                 console.log('✅ Admin list saved to Firebase');
             } catch (error) {
                 console.error('❌ Error saving admin list:', error);
@@ -747,9 +754,13 @@
             // Show/hide menu items based on visibility (for non-admins)
             if (!isAdmin) {
                 // Regular users only see visible items
+                const indexItem = document.getElementById('menu-item-index');
                 const quranItem = document.getElementById('menu-item-quran');
                 const dashboardItem = document.getElementById('menu-item-dashboard');
                 
+                if (indexItem) {
+                    indexItem.style.display = MENU_VISIBILITY['index'] ? 'flex' : 'none';
+                }
                 if (quranItem) {
                     quranItem.style.display = MENU_VISIBILITY['quran-tracker'] ? 'flex' : 'none';
                 }
@@ -758,17 +769,21 @@
                 }
             } else {
                 // Admins see all items with toggle buttons
+                const indexItem = document.getElementById('menu-item-index');
                 const quranItem = document.getElementById('menu-item-quran');
                 const dashboardItem = document.getElementById('menu-item-dashboard');
                 
+                if (indexItem) indexItem.style.display = 'flex';
                 if (quranItem) quranItem.style.display = 'flex';
                 if (dashboardItem) dashboardItem.style.display = 'flex';
                 
                 // Show toggle buttons for admins
+                document.getElementById('toggle-index-btn').classList.remove('hidden');
                 document.getElementById('toggle-quran-btn').classList.remove('hidden');
                 document.getElementById('toggle-dashboard-btn').classList.remove('hidden');
                 
                 // Update eye icons
+                updateEyeIcon('index');
                 updateEyeIcon('quran-tracker');
                 updateEyeIcon('dashboard');
             }
@@ -785,18 +800,12 @@
         
         // Toggle menu item visibility
         window.toggleMenuItemVisibility = async (itemKey) => {
-            if (!isAdmin) {
-                showMessage('Access Denied', 'Only admins can change menu visibility.');
-                return;
-            }
+            if (!isAdmin) return;
             
             MENU_VISIBILITY[itemKey] = !MENU_VISIBILITY[itemKey];
             await saveMenuVisibility();
             updateEyeIcon(itemKey);
             updateMenuDisplay();
-            
-            const status = MENU_VISIBILITY[itemKey] ? 'visible' : 'hidden';
-            showMessage('Success', `Menu item is now ${status} to users.`);
         };
         
         // --- UTILITY FUNCTIONS ---
@@ -2351,24 +2360,6 @@ window.saveClassReport = async () => {
                 window.onload = () => {
                     initializeFirebase();
                 };
-                
-                // Copy user ID utility
-        document.getElementById('user-id-display-mobile').addEventListener('click', () => {
-            const idText = document.getElementById('user-id-display-mobile').textContent;
-            const id = idText.replace('ID: ', '');
-            try {
-                const tempInput = document.createElement('textarea');
-                tempInput.value = id;
-                document.body.appendChild(tempInput);
-                tempInput.select();
-                document.execCommand('copy');
-                document.body.removeChild(tempInput);
-                showMessage('Copied!', `User ID: ${id} has been copied to your clipboard.`);
-            } catch (err) {
-                console.error('Could not copy text: ', err);
-                showMessage('Error', 'Failed to copy User ID to clipboard.');
-            }
-        });
     </script>
     <script>
         // ... all your other existing functions (initializeFirebase, handleDateChange, showMessage, etc.) ...
@@ -2419,10 +2410,15 @@ window.saveClassReport = async () => {
                 tempInput.select();
                 document.execCommand('copy');
                 document.body.removeChild(tempInput);
-                showMessage('Copied!', `User ID: ${id} has been copied to your clipboard.`);
+                
+                const originalText = idText;
+                document.getElementById('user-id-display-mobile').textContent = '✓ Copied!';
+                setTimeout(() => {
+                    document.getElementById('user-id-display-mobile').textContent = originalText;
+                }, 1500);
             } catch (err) {
                 console.error('Could not copy text: ', err);
-                showMessage('Error', 'Failed to copy User ID to clipboard.');
+                alert('Failed to copy User ID to clipboard.');
             }
         });
         
