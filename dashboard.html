@@ -56,16 +56,18 @@
 <header class="flex-shrink-0 bg-white shadow-lg p-3 border-b border-gray-200 sticky top-0 z-20">
     <div class="max-w-7xl mx-auto flex justify-between items-center h-8">
         
-        <button id="menu-toggle" aria-label="Toggle navigation menu" 
-        class="p-2 -ml-2 text-indigo-700 hover:text-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded flex-shrink-0">
-            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
-            </svg>
-        </button>
-        
-        <h1 class="text-xs font-extrabold text-indigo-700 flex-grow text-center sm:text-left">
-            📊 Dashboard
-        </h1>
+        <div class="flex items-center gap-2 flex-1">
+            <button id="menu-toggle" aria-label="Toggle navigation menu" 
+            class="p-2 -ml-2 text-indigo-700 hover:text-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded flex-shrink-0">
+                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+                </svg>
+            </button>
+            
+            <h1 class="text-xs font-extrabold text-indigo-700">
+                📊 Dashboard
+            </h1>
+        </div>
         
         <div class="flex items-center space-x-2 flex-shrink-0">
             <input type="date" id="date-selector" 
