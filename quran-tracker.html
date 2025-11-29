@@ -6,6 +6,8 @@
     <title>Student Progress Tracker</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load SheetJS for Excel file handling -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <!-- Load Inter font -->
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
@@ -180,7 +182,10 @@
 <div id="student-list-view" class="flex flex-col flex-grow overflow-hidden">            <div id="fixed-header-container" class="pb-4 border-b border-gray-200">
                 <div class="flex space-x-2 mb-0">
                     <input type="text" id="search-student" placeholder="Search by name..." class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm" oninput="app.handleSearch(this.value)">
-                    <button onclick="app.showAddStudentModal()" class="flex-shrink-0 w-12 h-12 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-md transition duration-150 ease-in-out flex items-center justify-center" aria-label="Add New Student">
+                    <button id="bulk-upload-btn" onclick="showBulkUploadModal()" class="hidden flex-shrink-0 w-12 h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-md transition duration-150 ease-in-out items-center justify-center" aria-label="Bulk Upload" title="Bulk Upload Students">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                    </button>
+                    <button onclick="showAddStudentModal()" class="flex-shrink-0 w-12 h-12 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-md transition duration-150 ease-in-out flex items-center justify-center" aria-label="Add New Student">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                     </button>
                 </div>
@@ -365,6 +370,62 @@
     </div>
 
     </main>
+
+    <!-- Bulk Upload Modal -->
+    <div id="bulk-upload-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-80 z-50 flex items-center justify-center p-4">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">📤 Bulk Upload Students</h2>
+                <button onclick="closeBulkUploadModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+            
+            <div class="space-y-4">
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h3 class="font-semibold text-blue-800 mb-2">📋 Instructions:</h3>
+                    <ol class="text-sm text-blue-700 space-y-1 ml-4 list-decimal">
+                        <li>Download the template Excel file below</li>
+                        <li>Fill in student information (Name, Gender, Department, Stage, etc.)</li>
+                        <li>Upload the completed Excel file</li>
+                        <li>Students will be added to the selected department</li>
+                    </ol>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                    <label class="text-sm font-semibold text-gray-700">Target Department:</label>
+                    <select id="bulk-upload-department" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                        <option value="Weekend">Weekend (WKN)</option>
+                        <option value="Evening">Evening (EVN)</option>
+                        <option value="FullTime">Full Time (FLT)</option>
+                    </select>
+                </div>
+                
+                <button onclick="downloadTemplate()" class="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md transition duration-150">
+                    ⬇️ Download Excel Template
+                </button>
+                
+                <div class="border-t border-gray-300 pt-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Upload Completed Excel File:</label>
+                    <input type="file" id="excel-file-input" accept=".xlsx,.xls" 
+                           class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                           onchange="handleExcelUpload(event)">
+                </div>
+                
+                <div id="upload-status" class="hidden p-3 rounded-lg"></div>
+                
+                <div id="upload-preview" class="hidden border border-gray-300 rounded-lg p-4 max-h-64 overflow-y-auto">
+                    <h3 class="font-semibold text-gray-800 mb-2">Preview:</h3>
+                    <div id="preview-content" class="text-sm"></div>
+                </div>
+                
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button onclick="closeBulkUploadModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300">Cancel</button>
+                    <button id="confirm-upload-btn" onclick="confirmBulkUpload()" disabled class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                        Upload Students
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Admin Portal Modal -->
     <div id="admin-portal-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-80 z-50 flex items-center justify-center p-4">
@@ -2121,6 +2182,252 @@ showHifzBulkImportModal: function() {
             }
         };
 
+        // --- BULK UPLOAD FUNCTIONS ---
+        
+        let pendingStudents = [];
+        
+        // Show bulk upload modal
+        window.showBulkUploadModal = function() {
+            document.getElementById('bulk-upload-modal').classList.remove('hidden');
+            document.getElementById('bulk-upload-department').value = selectedDepartment;
+            document.getElementById('excel-file-input').value = '';
+            document.getElementById('upload-preview').classList.add('hidden');
+            document.getElementById('upload-status').classList.add('hidden');
+            document.getElementById('confirm-upload-btn').disabled = true;
+            pendingStudents = [];
+        };
+        
+        // Close bulk upload modal
+        window.closeBulkUploadModal = function() {
+            document.getElementById('bulk-upload-modal').classList.add('hidden');
+            pendingStudents = [];
+        };
+        
+        // Download Excel template
+        window.downloadTemplate = function() {
+            const templateData = [
+                {
+                    'Name': 'Example Student',
+                    'Gender': 'Male',
+                    'Department': 'Weekend',
+                    'Stage': 'Qaida',
+                    'Target Completion Date': '2025-12-31'
+                },
+                {
+                    'Name': 'Another Student',
+                    'Gender': 'Female',
+                    'Department': 'Evening',
+                    'Stage': 'Hifz',
+                    'Target Completion Date': '2026-06-30'
+                }
+            ];
+            
+            const ws = XLSX.utils.json_to_sheet(templateData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Students');
+            
+            // Add column widths
+            ws['!cols'] = [
+                { wch: 20 }, // Name
+                { wch: 10 }, // Gender
+                { wch: 15 }, // Department
+                { wch: 15 }, // Stage
+                { wch: 20 }  // Target Completion Date
+            ];
+            
+            XLSX.writeFile(wb, 'student_upload_template.xlsx');
+        };
+        
+        // Handle Excel file upload
+        window.handleExcelUpload = function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+                    
+                    if (jsonData.length === 0) {
+                        showUploadStatus('No data found in Excel file', 'error');
+                        return;
+                    }
+                    
+                    // Validate and prepare students
+                    const department = document.getElementById('bulk-upload-department').value;
+                    pendingStudents = [];
+                    const errors = [];
+                    const warnings = [];
+                    
+                    jsonData.forEach((row, index) => {
+                        const rowNum = index + 2; // Excel row number (accounting for header)
+                        
+                        if (!row.Name || !row.Gender || !row.Stage) {
+                            errors.push(`Row ${rowNum}: Missing required fields (Name, Gender, Stage)`);
+                            return;
+                        }
+                        
+                        if (!['Male', 'Female'].includes(row.Gender)) {
+                            errors.push(`Row ${rowNum}: Gender must be 'Male' or 'Female'`);
+                            return;
+                        }
+                        
+                        if (!['Qaida', 'Sifarah', 'Quran Reading', 'Hifz'].includes(row.Stage)) {
+                            errors.push(`Row ${rowNum}: Invalid Stage (must be Qaida, Sifarah, Quran Reading, or Hifz)`);
+                            return;
+                        }
+                        
+                        const studentName = row.Name.trim();
+                        const studentDept = row.Department || department;
+                        
+                        // Check for duplicates in existing students
+                        const existingStudent = app.state.allStudents.find(s => 
+                            s.name.toLowerCase() === studentName.toLowerCase() && 
+                            (s.department || 'Weekend') === studentDept
+                        );
+                        
+                        if (existingStudent) {
+                            warnings.push(`Row ${rowNum}: "${studentName}" already exists in ${studentDept} - will be skipped`);
+                            return;
+                        }
+                        
+                        // Check for duplicates within the upload file itself
+                        const duplicateInFile = pendingStudents.find(s => 
+                            s.name.toLowerCase() === studentName.toLowerCase() && 
+                            s.department === studentDept
+                        );
+                        
+                        if (duplicateInFile) {
+                            warnings.push(`Row ${rowNum}: Duplicate "${studentName}" in file - will be skipped`);
+                            return;
+                        }
+                        
+                        const student = {
+                            name: studentName,
+                            gender: row.Gender,
+                            department: studentDept,
+                            stage: row.Stage,
+                            targetCompletionDate: row['Target Completion Date'] || '',
+                            qaida_review_count: {},
+                            qaida_finished_count: {},
+                            sifarah_completed_ayahs: 0,
+                            hifz_coverage: {},
+                            reading_coverage: {},
+                            hifz_inventory: []
+                        };
+                        
+                        pendingStudents.push(student);
+                    });
+                    
+                    if (errors.length > 0) {
+                        showUploadStatus(`Validation errors:\n${errors.join('\n')}`, 'error');
+                        return;
+                    }
+                    
+                    if (pendingStudents.length === 0) {
+                        const warningMsg = warnings.length > 0 ? 
+                            `No new students to upload.\n\nSkipped items:\n${warnings.join('\n')}` :
+                            'No valid students found in the file.';
+                        showUploadStatus(warningMsg, 'error');
+                        return;
+                    }
+                    
+                    // Show preview
+                    showPreview(pendingStudents);
+                    
+                    let statusMsg = `✓ ${pendingStudents.length} student${pendingStudents.length !== 1 ? 's' : ''} ready to upload`;
+                    if (warnings.length > 0) {
+                        statusMsg += `\n\n⚠️ ${warnings.length} duplicate${warnings.length !== 1 ? 's' : ''} skipped:\n${warnings.join('\n')}`;
+                    }
+                    showUploadStatus(statusMsg, 'success');
+                    document.getElementById('confirm-upload-btn').disabled = false;
+                    
+                } catch (error) {
+                    console.error('Error reading Excel file:', error);
+                    showUploadStatus('Error reading Excel file: ' + error.message, 'error');
+                }
+            };
+            
+            reader.readAsArrayBuffer(file);
+        };
+        
+        // Show upload status
+        function showUploadStatus(message, type) {
+            const statusDiv = document.getElementById('upload-status');
+            statusDiv.textContent = message;
+            statusDiv.className = `p-3 rounded-lg ${type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`;
+            statusDiv.classList.remove('hidden');
+        }
+        
+        // Show preview of students
+        function showPreview(students) {
+            const previewDiv = document.getElementById('upload-preview');
+            const contentDiv = document.getElementById('preview-content');
+            
+            let html = '<table class=\"min-w-full divide-y divide-gray-200\"><thead><tr class=\"bg-gray-50\">';
+            html += '<th class=\"px-2 py-1 text-left text-xs font-semibold text-gray-700\">Name</th>';
+            html += '<th class=\"px-2 py-1 text-left text-xs font-semibold text-gray-700\">Gender</th>';
+            html += '<th class=\"px-2 py-1 text-left text-xs font-semibold text-gray-700\">Dept</th>';
+            html += '<th class=\"px-2 py-1 text-left text-xs font-semibold text-gray-700\">Stage</th>';
+            html += '</tr></thead><tbody class=\"divide-y divide-gray-200\">';
+            
+            students.forEach(s => {
+                html += '<tr>';
+                html += `<td class=\"px-2 py-1 text-xs\">${s.name}</td>`;
+                html += `<td class=\"px-2 py-1 text-xs\">${s.gender}</td>`;
+                html += `<td class=\"px-2 py-1 text-xs\">${s.department}</td>`;
+                html += `<td class=\"px-2 py-1 text-xs\">${s.stage}</td>`;
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            contentDiv.innerHTML = html;
+            previewDiv.classList.remove('hidden');
+        }
+        
+        // Confirm and upload students
+        window.confirmBulkUpload = async function() {
+            if (pendingStudents.length === 0) return;
+            
+            const btn = document.getElementById('confirm-upload-btn');
+            btn.disabled = true;
+            btn.textContent = 'Uploading...';
+            
+            try {
+                let successCount = 0;
+                let errorCount = 0;
+                
+                for (const student of pendingStudents) {
+                    try {
+                        const studentsRef = collection(db, `artifacts/${APP_ID}/public/data/students`);
+                        await addDoc(studentsRef, student);
+                        successCount++;
+                    } catch (error) {
+                        console.error('Error adding student:', student.name, error);
+                        errorCount++;
+                    }
+                }
+                
+                showUploadStatus(`✓ Successfully uploaded ${successCount} students${errorCount > 0 ? `. ${errorCount} failed.` : ''}`, successCount > 0 ? 'success' : 'error');
+                
+                if (successCount > 0) {
+                    setTimeout(() => {
+                        closeBulkUploadModal();
+                    }, 2000);
+                }
+                
+            } catch (error) {
+                console.error('Bulk upload error:', error);
+                showUploadStatus('Upload failed: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Upload Students';
+            }
+        };
+
         // --- ADMIN MANAGEMENT FUNCTIONS ---
         let ADMIN_LIST = ['MpcB7f35m0bITsSK1D7ACWFmch32']; // Default admin
         let isAdmin = false;
@@ -2172,11 +2479,23 @@ showHifzBulkImportModal: function() {
         // Update admin button visibility
         function updateAdminButton() {
             const adminBtn = document.getElementById('admin-portal-btn');
+            const bulkUploadBtn = document.getElementById('bulk-upload-btn');
+            
             if (adminBtn) {
                 if (isAdmin) {
                     adminBtn.classList.remove('hidden');
                 } else {
                     adminBtn.classList.add('hidden');
+                }
+            }
+            
+            if (bulkUploadBtn) {
+                if (isAdmin) {
+                    bulkUploadBtn.classList.remove('hidden');
+                    bulkUploadBtn.classList.add('flex');
+                } else {
+                    bulkUploadBtn.classList.add('hidden');
+                    bulkUploadBtn.classList.remove('flex');
                 }
             }
         }
@@ -2383,6 +2702,11 @@ showHifzBulkImportModal: function() {
             await saveMenuVisibility();
             updateEyeIcon(itemKey);
             updateMenuDisplay();
+        };
+        
+        // Global wrapper for add student modal
+        window.showAddStudentModal = function() {
+            app.showAddStudentModal();
         };
 
         // Initialize the application once the window is loaded
