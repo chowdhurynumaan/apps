@@ -612,17 +612,28 @@
         };
         let CLASS_DEFINITIONS = DEFAULT_CLASS_DEFINITIONS;
         
-        // Use your actual Firebase configuration and App ID here
-            const APP_ID = 'apps-e1163'; // Replace 'apps-e1163' with your project ID
-            const FIREBASE_CONFIG = {
-                apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJpMJihQ",
-                authDomain: "apps-e1163.firebaseapp.com",
-                projectId: "apps-e1163",
-                storageBucket: "apps-e1163.firebasestorage.app",
-                messagingSenderId: "855206153422",
-                appId: "1:855206153422:web:2a1366b2e7825304c3d49f",
-                measurementId: "G-7YCKESJB8T"
-            };
+        // --- FIREBASE CONFIGURATION (CRITICAL: Using user-provided config as base) ---
+
+        const USER_PROVIDED_FIREBASE_CONFIG = {
+            // API key from the user's latest console output
+            apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJpMJihQ",
+            authDomain: "apps-e1163.firebaseapp.com",
+            projectId: "apps-e1163",
+            storageBucket: "apps-e1163.firebasestorage.app",
+            messagingSenderId: "855206153422",
+            appId: "1:855206153422:web:2a1366b2e7825304c3d49f",
+            measurementId: "G-7YCKESJB8T"
+        };
+
+        // Prioritize Canvas injected config if it exists, otherwise use the user's config
+        const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined'
+            ? JSON.parse(__firebase_config)
+            : USER_PROVIDED_FIREBASE_CONFIG;
+
+        // Use injected app ID or fallback to the project ID if all else fails
+        const APP_ID = typeof __app_id !== 'undefined'
+            ? __app_id
+            : FIREBASE_CONFIG.projectId;
         // Application State Object
         const app = {
             state: {
@@ -794,7 +805,7 @@
                     filteredStudents.forEach(student => {
                         const item = document.createElement('div');
                         item.className = 'flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-lg shadow-sm transition duration-150 cursor-pointer border border-gray-200';
-                        item.onclick = () => this.showStudentDetailView(student);
+                        item.onclick = () => { window.location.href = `student_profile.html?id=${student.id}`; };
                         item.innerHTML = `
                             <div>
                                 <p class="text-lg font-bold text-gray-800">${this.sanitize(student.name)}</p>

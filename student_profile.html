@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Profile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f7f9;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+    <header class="mb-6 flex justify-between items-center border-b pb-4">
+        <h1 class="text-3xl font-extrabold text-gray-800">Student Profile</h1>
+        <a href="quran-tracker.html" class="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition duration-150">
+            ← Back to Tracker
+        </a>
+    </header>
+
+    <main id="profile-container" class="max-w-7xl mx-auto w-full">
+        <!-- Loading State -->
+        <div id="loading-state" class="text-center py-12">
+            <p class="text-xl text-gray-600">Loading student profile...</p>
+        </div>
+
+        <!-- Content Area -->
+        <div id="profile-content" class="hidden">
+            <div id="student-header" class="mb-6 p-4 border border-blue-200 rounded-lg bg-blue-50">
+                <h2 class="text-3xl font-bold text-gray-800" id="student-name"></h2>
+                <p class="text-lg font-medium text-gray-600">Stage: <span id="student-stage" class="font-bold text-blue-600"></span></p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">Recitation History</h3>
+                    <div id="log-history" class="space-y-3"></div>
+                </div>
+                <div>
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">Class Performance</h3>
+                    <div id="class-performance" class="space-y-3"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script type="module">
+        // --- FIREBASE CONFIGURATION ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const USER_PROVIDED_FIREBASE_CONFIG = {
+            // API key from the user's latest console output
+            apiKey: "AIzaSyAjGzS58U5ybbI5CYJUk2NRZBuLJpMJihQ",
+            authDomain: "apps-e1163.firebaseapp.com",
+            projectId: "apps-e1163",
+            storageBucket: "apps-e1163.firebasestorage.app",
+            messagingSenderId: "855206153422",
+            appId: "1:855206153422:web:2a1366b2e7825304c3d49f",
+            measurementId: "G-7YCKESJB8T"
+        };
+
+        // Prioritize Canvas injected config if it exists, otherwise use the user's config
+        const firebaseConfig = typeof __firebase_config !== 'undefined'
+            ? JSON.parse(__firebase_config)
+            : USER_PROVIDED_FIREBASE_CONFIG;
+
+        // Use injected app ID or fallback to the project ID if all else fails
+        const appId = typeof __app_id !== 'undefined'
+            ? __app_id
+            : firebaseConfig.projectId;
+        let db, auth;
+
+        // --- INITIALIZATION ---
+        async function initializeAppAndLoadData() {
+            // Initialize Firebase
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+
+            await signInAnonymously(auth);
+
+            // Get student ID from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const studentId = urlParams.get('id');
+
+            if (!studentId) {
+                document.getElementById('loading-state').textContent = 'No student ID provided.';
+                return;
+            }
+
+            // Load and render data
+            await loadStudentData(studentId);
+        }
+
+        // --- DATA FETCHING AND RENDERING ---
+        async function loadStudentData(studentId) {
+            try {
+                // Fetch student profile
+                const studentRef = doc(db, `artifacts/${appId}/public/data/students`, studentId);
+                const studentSnap = await getDoc(studentRef);
+
+                if (!studentSnap.exists()) {
+                    document.getElementById('loading-state').textContent = 'Student not found.';
+                    return;
+                }
+                const studentData = studentSnap.data();
+
+                // Fetch recitation logs
+                const logsRef = collection(db, `artifacts/${appId}/public/data/logs`);
+                const q = query(logsRef, where("studentId", "==", studentId));
+                const logsSnapshot = await getDocs(q);
+                const logs = logsSnapshot.docs.map(doc => doc.data()).sort((a, b) => b.timestamp.toDate() - a.timestamp.toDate());
+
+                // Fetch daily attendance reports to correlate with log dates
+                const reportsRef = collection(db, `artifacts/${appId}/public/data/daily_attendance_reports`);
+                const reportsSnapshot = await getDocs(reportsRef);
+                const reports = {};
+                reportsSnapshot.forEach(doc => {
+                    reports[doc.id] = doc.data();
+                });
+
+                // Render the data
+                renderProfile(studentData, logs, reports);
+
+                document.getElementById('loading-state').classList.add('hidden');
+                document.getElementById('profile-content').classList.remove('hidden');
+
+            } catch (error) {
+                console.error("Error loading student data:", error);
+                document.getElementById('loading-state').textContent = 'Error loading data. See console for details.';
+            }
+        }
+
+        function renderProfile(student, logs, reports) {
+            // Render header
+            document.getElementById('student-name').textContent = student.name;
+            document.getElementById('student-stage').textContent = student.stage;
+
+            // Render log history and class performance
+            const logHistoryContainer = document.getElementById('log-history');
+            const classPerformanceContainer = document.getElementById('class-performance');
+
+            if (logs.length === 0) {
+                logHistoryContainer.innerHTML = '<p class="text-gray-500">No recitation logs found.</p>';
+                classPerformanceContainer.innerHTML = '<p class="text-gray-500">No class performance data available.</p>';
+            } else {
+                let logHtml = '';
+                let performanceHtml = '';
+                const department = student.department || 'Weekend'; // Default to Weekend if not specified
+
+                logs.forEach(log => {
+                    const logDate = log.timestamp.toDate();
+                    const dateString = logDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+                    const date = log.timestamp.toDate().toLocaleDateString();
+                    let detailsHtml = '';
+                    if (log.stage === 'Qaida') {
+                        detailsHtml = `<p class="text-sm text-gray-600">Lesson: ${log.start_surah}</p>`;
+                    } else {
+                        detailsHtml = `<p class="text-sm text-gray-600">Details: ${log.start_surah}:${log.start_ayah} - ${log.end_surah}:${log.end_ayah}</p>`;
+                    }
+
+                    logHtml += `
+                        <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                            <p class="font-bold text-sm text-gray-800">${log.stage} (${date})</p>
+                            ${detailsHtml}
+                            ${log.notes ? `<p class="text-xs italic mt-2 text-gray-500">${sanitizeHTML(log.notes)}</p>` : ''}
+                        </div>
+                    `;
+
+                    // Calculate the average score for the student's department on the day of the log
+                    let departmentScore = 0;
+                    let classCount = 0;
+                    const report = reports[dateString];
+                    if (report) {
+                        for (const classId in report) {
+                            if (classId.startsWith(department)) {
+                                const classData = report[classId];
+                                if (classData.totalStudents) {
+                                    departmentScore += calculateDailyScore(classData);
+                                    classCount++;
+                                }
+                            }
+                        }
+                    }
+
+                    if (classCount > 0) {
+                        const avgDeptScore = departmentScore / classCount;
+                        performanceHtml += `
+                            <div class="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                <p class="font-bold text-sm text-gray-800">${logDate.toLocaleDateString()}</p>
+                                <p class="text-sm text-gray-600">Avg. Dept. Score: <span class="font-bold text-blue-600">${avgDeptScore.toFixed(1)}%</span></p>
+                            </div>
+                        `;
+                    } else {
+                         performanceHtml += `
+                            <div class="p-3 bg-gray-100 rounded-lg border border-gray-200">
+                                <p class="font-bold text-sm text-gray-800">${logDate.toLocaleDateString()}</p>
+                                <p class="text-sm text-gray-500">No class report found for this day.</p>
+                            </div>
+                        `;
+                    }
+                });
+
+                logHistoryContainer.innerHTML = logHtml;
+                classPerformanceContainer.innerHTML = performanceHtml;
+            }
+        }
+
+        function calculateDailyScore(report) {
+            const totalStudents = report.totalStudents || 0;
+            const presentToday = report.presentToday || 0;
+            const tardyToday = report.tardyToday || 0;
+            const progressReportBrought = report.progressReportBrought || 0;
+            const progressReportSigned = report.progressReportSigned || 0;
+
+            if (totalStudents <= 0) return 0;
+
+            const attendanceVal = Math.min(presentToday + (tardyToday * 0.5), totalStudents);
+            const attendanceScore = 50 * (attendanceVal / totalStudents);
+            const broughtScore = 25 * (Math.min(progressReportBrought, totalStudents) / totalStudents);
+            const signedScore = 25 * (Math.min(progressReportSigned, totalStudents) / totalStudents);
+
+            return Math.round((attendanceScore + broughtScore + signedScore) * 100) / 100;
+        }
+
+        function sanitizeHTML(str) {
+            const temp = document.createElement('div');
+            temp.textContent = str;
+            return temp.innerHTML;
+        }
+
+        // --- RUN APP ---
+        initializeAppAndLoadData();
+    </script>
+</body>
+</html>
