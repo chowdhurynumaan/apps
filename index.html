@@ -188,13 +188,17 @@
 
                 <!-- Summary Stats -->
                 <div class="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-2">
-                    <div class="grid grid-cols-4 gap-1.5 text-xs font-bold text-center mb-2">
+                    <div class="flex justify-around items-center gap-1.5 text-xs font-bold text-center mb-2">
                         <div class="bg-green-100 text-green-700 py-1.5 px-2 rounded text-2xs">
                             P: <span id="count-present">0</span>
+                        </div>
+                        <div class="bg-yellow-100 text-yellow-700 py-1.5 px-2 rounded text-2xs">
+                            T: <span id="count-tardy">0</span>
                         </div>
                         <div class="bg-red-100 text-red-700 py-1.5 px-2 rounded text-2xs">
                             A: <span id="count-absent">0</span>
                         </div>
+                        <div class="w-px h-4 bg-gray-300"></div>
                         <div class="bg-purple-100 text-purple-700 py-1.5 px-2 rounded text-2xs">
                             R: <span id="count-report-brought">0</span>
                         </div>
@@ -771,15 +775,16 @@
         
         // Update and display attendance counts
         const updateAttendanceCounts = () => {
-            let present = 0, absent = 0, reportBrought = 0, reportSigned = 0;
+            let present = 0, tardy = 0, absent = 0, reportBrought = 0, reportSigned = 0;
             const totalStudents = studentRosters[currentAttendanceClassId]?.length || 0;
             
             Object.values(currentAttendanceData).forEach(data => {
                 if (data.status === 'present') present++;
+                if (data.status === 'tardy') tardy++;
             });
             
-            // Anyone not marked as present is automatically absent
-            absent = totalStudents - present;
+            // Anyone not marked as present or tardy is automatically absent
+            absent = totalStudents - present - tardy;
             
             Object.values(currentAttendanceData).forEach(data => {
                 if (data.progressReportBrought) reportBrought++;
@@ -787,6 +792,7 @@
             });
             
             document.getElementById('count-present').textContent = present;
+            document.getElementById('count-tardy').textContent = tardy;
             document.getElementById('count-absent').textContent = absent;
             document.getElementById('count-report-brought').textContent = reportBrought;
             document.getElementById('count-report-signed').textContent = reportSigned;
