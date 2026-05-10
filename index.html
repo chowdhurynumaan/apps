@@ -802,10 +802,10 @@
                     attendanceDetails: currentAttendanceData // Store full details
                 };
                 
-                // Save to Firebase public data (so it displays on dashboard)
-                const dailyReportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', selectedDateId, 'classes', currentAttendanceClassId);
+                // Save to Firebase public data as a field in the daily report document (so listener picks it up)
+                const dailyReportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', selectedDateId);
                 await setDoc(dailyReportDocRef, {
-                    ...reportData,
+                    [currentAttendanceClassId]: reportData,
                     timestamp: serverTimestamp()
                 }, { merge: true });
                 
