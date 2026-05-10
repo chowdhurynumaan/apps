@@ -187,38 +187,30 @@
                 </div>
 
                 <!-- Summary Stats -->
-                <div class="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-4 space-y-2">
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs font-semibold text-center">
-                        <div class="bg-green-100 text-green-700 p-2 rounded">
-                            Present: <span id="count-present">0</span>
+                <div class="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-3">
+                    <div class="grid grid-cols-4 gap-2 text-sm font-bold text-center mb-3">
+                        <div class="bg-green-100 text-green-700 py-2 px-3 rounded">
+                            P: <span id="count-present">0</span>
                         </div>
-                        <div class="bg-yellow-100 text-yellow-700 p-2 rounded">
-                            Tardy: <span id="count-tardy">0</span>
+                        <div class="bg-red-100 text-red-700 py-2 px-3 rounded">
+                            A: <span id="count-absent">0</span>
                         </div>
-                        <div class="bg-orange-100 text-orange-700 p-2 rounded">
-                            Excused: <span id="count-excused">0</span>
+                        <div class="bg-purple-100 text-purple-700 py-2 px-3 rounded">
+                            B: <span id="count-report-brought">0</span>
                         </div>
-                        <div class="bg-red-100 text-red-700 p-2 rounded">
-                            Absent: <span id="count-absent">0</span>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 text-xs font-semibold text-center">
-                        <div class="bg-purple-100 text-purple-700 p-2 rounded">
-                            Report Brought: <span id="count-report-brought">0</span>
-                        </div>
-                        <div class="bg-pink-100 text-pink-700 p-2 rounded">
-                            Report Signed: <span id="count-report-signed">0</span>
+                        <div class="bg-gray-300 text-gray-700 py-2 px-3 rounded">
+                            S: <span id="count-report-signed">0</span>
                         </div>
                     </div>
 
                     <!-- Action Buttons -->
-                    <div class="flex gap-2 mt-4">
+                    <div class="flex gap-2">
                         <button onclick="saveAttendance()" 
-                                class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition">
-                            Save Attendance
+                                class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition">
+                            Save
                         </button>
                         <button onclick="closeAttendanceModal()" 
-                                class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">
+                                class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition">
                             Close
                         </button>
                     </div>
@@ -699,55 +691,47 @@
                 const hasReportSigned = currentAttendanceData[idx]?.progressReportSigned || false;
                 
                 return `
-                    <div class="border border-gray-200 rounded-lg p-3 bg-white hover:bg-gray-50 transition">
-                        <div class="flex items-start justify-between mb-2">
-                            <div>
-                                <p class="font-semibold text-gray-800">${student.name}</p>
-                                <p class="text-xs text-gray-500">${student.gender} | SN: ${student.sn}</p>
-                            </div>
+                    <div class="flex items-center justify-between gap-3 p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+                        <div class="flex-1">
+                            <p class="font-semibold text-gray-800 text-sm">${student.name}</p>
+                            <p class="text-xs text-gray-500">F | SN: ${student.sn}</p>
                         </div>
-                        <!-- Attendance Status: Present, Tardy, Absent -->
-                        <div class="grid grid-cols-3 gap-2 mb-2">
-                            <label class="flex items-center cursor-pointer p-2 rounded hover:bg-green-50 ${status === 'present' ? 'bg-green-100' : ''}">
-                                <input type="radio" name="status-${idx}" value="present" ${status === 'present' ? 'checked' : ''} 
-                                       onchange="updateAttendanceStatus(${idx}, 'present')" class="mr-2">
-                                <span class="text-xs font-semibold text-green-700">Present</span>
-                            </label>
-                            <label class="flex items-center cursor-pointer p-2 rounded hover:bg-yellow-50 ${status === 'tardy' ? 'bg-yellow-100' : ''}">
-                                <input type="radio" name="status-${idx}" value="tardy" ${status === 'tardy' ? 'checked' : ''} 
-                                       onchange="updateAttendanceStatus(${idx}, 'tardy')" class="mr-2">
-                                <span class="text-xs font-semibold text-yellow-700">Tardy</span>
-                            </label>
-                            <label class="flex items-center cursor-pointer p-2 rounded hover:bg-red-50 ${status === 'absent' ? 'bg-red-100' : ''}">
-                                <input type="radio" name="status-${idx}" value="absent" ${status === 'absent' ? 'checked' : ''} 
-                                       onchange="updateAttendanceStatus(${idx}, 'absent')" class="mr-2">
-                                <span class="text-xs font-semibold text-red-700">Absent</span>
-                            </label>
+                        <div class="flex gap-2 items-center">
+                            <!-- P: Present -->
+                            <button onclick="updateAttendanceStatus(${idx}, 'present')" 
+                                    class="w-8 h-8 rounded-full font-bold text-white text-xs transition-all ${status === 'present' ? 'bg-green-600 ring-2 ring-green-300' : 'bg-green-300 hover:bg-green-400'}">
+                                P
+                            </button>
+                            <!-- T: Tardy -->
+                            <button onclick="updateAttendanceStatus(${idx}, 'tardy')" 
+                                    class="w-8 h-8 rounded-full font-bold text-gray-800 text-xs transition-all ${status === 'tardy' ? 'bg-yellow-500 ring-2 ring-yellow-300' : 'bg-yellow-200 hover:bg-yellow-300'}">
+                                T
+                            </button>
+                            <!-- A: Absent -->
+                            <button onclick="updateAttendanceStatus(${idx}, 'absent')" 
+                                    class="w-8 h-8 rounded-full font-bold text-white text-xs transition-all ${status === 'absent' ? 'bg-red-600 ring-2 ring-red-300' : 'bg-red-300 hover:bg-red-400'}">
+                                A
+                            </button>
+                            <!-- R: Report Brought -->
+                            <button onclick="updateProgressReportStatus(${idx}, 'brought', !hasReportBrought)" 
+                                    class="w-8 h-8 rounded-full font-bold text-white text-xs transition-all ${hasReportBrought ? 'bg-purple-600 ring-2 ring-purple-300' : 'bg-purple-300 hover:bg-purple-400'}">
+                                R
+                            </button>
+                            <!-- S: Signed -->
+                            <button onclick="updateProgressReportStatus(${idx}, 'signed', !hasReportSigned)" 
+                                    class="w-8 h-8 rounded-full font-bold text-gray-700 text-xs transition-all ${hasReportSigned ? 'bg-gray-600 ring-2 ring-gray-300' : 'bg-gray-400 hover:bg-gray-500'}">
+                                S
+                            </button>
+                            <!-- E: Excused (shows when Tardy or Absent) -->
+                            ${(status === 'tardy' || status === 'absent') ? `
+                                <button onclick="updateExcusedStatus(${idx}, !isExcused)" 
+                                        class="w-8 h-8 rounded-full font-bold text-white text-xs transition-all ${isExcused ? 'bg-orange-600 ring-2 ring-orange-300' : 'bg-orange-300 hover:bg-orange-400'}">
+                                    E
+                                </button>
+                            ` : ''}
                         </div>
-                        <!-- Excused checkbox (shows when Tardy or Absent is selected) -->
-                        ${(status === 'tardy' || status === 'absent') ? `
-                            <div class="grid grid-cols-1 gap-2 mb-2">
-                                <label class="flex items-center cursor-pointer p-2 rounded hover:bg-orange-50 ${isExcused ? 'bg-orange-100' : ''}">
-                                    <input type="checkbox" ${isExcused ? 'checked' : ''} 
-                                           onchange="updateExcusedStatus(${idx}, this.checked)" class="mr-1">
-                                    <span class="text-xs font-semibold text-orange-700">Excused</span>
-                                </label>
-                            </div>
-                        ` : ''}
-                        <!-- Early Pickup checkbox (separate from attendance status) -->
-                        <div class="grid grid-cols-1 gap-2 mb-2 border-t pt-2">
-                            <label class="flex items-center cursor-pointer p-2 rounded hover:bg-blue-50 ${hasEarlyPickup ? 'bg-blue-100' : ''}">
-                                <input type="checkbox" ${hasEarlyPickup ? 'checked' : ''} 
-                                       onchange="updateEarlyPickup(${idx}, this.checked)" class="mr-2">
-                                <span class="text-xs font-semibold text-blue-700">Early Pickup</span>
-                            </label>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2 border-t pt-2">
-                            <label class="flex items-center cursor-pointer p-2 rounded hover:bg-purple-50 ${hasReportBrought ? 'bg-purple-100' : ''}">
-                                <input type="checkbox" ${hasReportBrought ? 'checked' : ''} 
-                                       onchange="updateProgressReportStatus(${idx}, 'brought', this.checked)" class="mr-2">
-                                <span class="text-xs font-semibold text-purple-700">Report Brought</span>
-                            </label>
+                    </div>
+                `;
                             <label class="flex items-center cursor-pointer p-2 rounded hover:bg-pink-50 ${hasReportSigned ? 'bg-pink-100' : ''}">
                                 <input type="checkbox" ${hasReportSigned ? 'checked' : ''} 
                                        onchange="updateProgressReportStatus(${idx}, 'signed', this.checked)" class="mr-2">
