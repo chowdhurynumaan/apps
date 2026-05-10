@@ -196,7 +196,7 @@
                             A: <span id="count-absent">0</span>
                         </div>
                         <div class="bg-purple-100 text-purple-700 py-2 px-3 rounded">
-                            B: <span id="count-report-brought">0</span>
+                            R: <span id="count-report-brought">0</span>
                         </div>
                         <div class="bg-gray-300 text-gray-700 py-2 px-3 rounded">
                             S: <span id="count-report-signed">0</span>
@@ -729,14 +729,6 @@
                                     E
                                 </button>
                             ` : ''}
-                        </div>
-                    </div>
-                `;
-                            <label class="flex items-center cursor-pointer p-2 rounded hover:bg-pink-50 ${hasReportSigned ? 'bg-pink-100' : ''}">
-                                <input type="checkbox" ${hasReportSigned ? 'checked' : ''} 
-                                       onchange="updateProgressReportStatus(${idx}, 'signed', this.checked)" class="mr-2">
-                                <span class="text-xs font-semibold text-pink-700">Report Signed</span>
-                            </label>
                         </div>
                     </div>
                 `;
@@ -2849,14 +2841,7 @@ window.saveClassReport = async () => {
 };
 
                 // --- INITIALIZATION ---
-                
-                window.onload = () => {
-                    initializeFirebase();
-                };
-    </script>
-    <script>
-        // ... all your other existing functions (initializeFirebase, handleDateChange, showMessage, etc.) ...
-        
+    
         // --- MOBILE MENU LOGIC ---
         const menuToggle = document.getElementById('menu-toggle');
         const mobileNavMenu = document.getElementById('mobile-nav-menu');
@@ -2922,10 +2907,6 @@ window.saveClassReport = async () => {
 
     </script>
 </body>
-</html>
-    </script>
-</body>
-
 </html>
 
 
