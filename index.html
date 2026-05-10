@@ -685,8 +685,6 @@
             
             const html = students.map((student, idx) => {
                 const status = currentAttendanceData[idx]?.status || '';
-                const isExcused = currentAttendanceData[idx]?.excused || false;
-                const hasEarlyPickup = currentAttendanceData[idx]?.earlyPickup || false;
                 const hasReportBrought = currentAttendanceData[idx]?.progressReportBrought || false;
                 const hasReportSigned = currentAttendanceData[idx]?.progressReportSigned || false;
                 
@@ -713,22 +711,15 @@
                                 A
                             </button>
                             <!-- R: Report Brought -->
-                            <button onclick="updateProgressReportStatus(${idx}, 'brought', !hasReportBrought)" 
+                            <button onclick="updateProgressReportStatus(${idx}, 'brought', ${!hasReportBrought})" 
                                     class="w-8 h-8 rounded-full font-bold text-white text-xs transition-all ${hasReportBrought ? 'bg-purple-600 ring-2 ring-purple-300' : 'bg-purple-300 hover:bg-purple-400'}">
                                 R
                             </button>
                             <!-- S: Signed -->
-                            <button onclick="updateProgressReportStatus(${idx}, 'signed', !hasReportSigned)" 
+                            <button onclick="updateProgressReportStatus(${idx}, 'signed', ${!hasReportSigned})" 
                                     class="w-8 h-8 rounded-full font-bold text-gray-700 text-xs transition-all ${hasReportSigned ? 'bg-gray-600 ring-2 ring-gray-300' : 'bg-gray-400 hover:bg-gray-500'}">
                                 S
                             </button>
-                            <!-- E: Excused (shows when Tardy or Absent) -->
-                            ${(status === 'tardy' || status === 'absent') ? `
-                                <button onclick="updateExcusedStatus(${idx}, !isExcused)" 
-                                        class="w-8 h-8 rounded-full font-bold text-white text-xs transition-all ${isExcused ? 'bg-orange-600 ring-2 ring-orange-300' : 'bg-orange-300 hover:bg-orange-400'}">
-                                    E
-                                </button>
-                            ` : ''}
                         </div>
                     </div>
                 `;
@@ -744,9 +735,6 @@
                 currentAttendanceData[studentIdx] = {};
             }
             currentAttendanceData[studentIdx].status = status;
-            if (status !== 'tardy' && status !== 'absent') {
-                currentAttendanceData[studentIdx].excused = false;
-            }
             renderStudentAttendanceList();
         };
         
@@ -756,15 +744,6 @@
                 currentAttendanceData[studentIdx] = {};
             }
             currentAttendanceData[studentIdx].earlyPickup = isChecked;
-            updateAttendanceCounts();
-        };
-        
-        // Update excused status for tardy student
-        window.updateExcusedStatus = (studentIdx, isExcused) => {
-            if (!currentAttendanceData[studentIdx]) {
-                currentAttendanceData[studentIdx] = {};
-            }
-            currentAttendanceData[studentIdx].excused = isExcused;
             updateAttendanceCounts();
         };
         
@@ -783,18 +762,11 @@
         
         // Update and display attendance counts
         const updateAttendanceCounts = () => {
-            let present = 0, tardy = 0, excused = 0, absent = 0, reportBrought = 0, reportSigned = 0;
+            let present = 0, absent = 0, reportBrought = 0, reportSigned = 0;
             
             Object.values(currentAttendanceData).forEach(data => {
                 if (data.status === 'present') present++;
-                else if (data.status === 'tardy') {
-                    tardy++;
-                    if (data.excused) excused++;
-                }
-                else if (data.status === 'absent') {
-                    absent++;
-                    if (data.excused) excused++;
-                }
+                else if (data.status === 'absent') absent++;
                 
                 if (data.progressReportBrought) reportBrought++;
                 if (data.progressReportSigned) reportSigned++;
