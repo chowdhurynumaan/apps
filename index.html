@@ -760,14 +760,21 @@
             
             if (reportType === 'brought') {
                 currentAttendanceData[studentIdx].progressReportBrought = isChecked;
+                // If checking brought and not tardy, auto-check present
+                if (isChecked && currentAttendanceData[studentIdx].status !== 'tardy') {
+                    currentAttendanceData[studentIdx].status = 'present';
+                }
                 // If unchecking brought, also uncheck signed (can't sign if not brought)
                 if (!isChecked) {
                     currentAttendanceData[studentIdx].progressReportSigned = false;
                 }
             } else if (reportType === 'signed') {
-                // If checking signed, automatically check brought (need to bring to sign)
+                // If checking signed and not tardy, auto-check brought and present
                 if (isChecked) {
                     currentAttendanceData[studentIdx].progressReportBrought = true;
+                    if (currentAttendanceData[studentIdx].status !== 'tardy') {
+                        currentAttendanceData[studentIdx].status = 'present';
+                    }
                 }
                 currentAttendanceData[studentIdx].progressReportSigned = isChecked;
             }
