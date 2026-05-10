@@ -724,8 +724,8 @@
                                 <span class="text-xs font-semibold text-red-700">Absent</span>
                             </label>
                         </div>
-                        <!-- Excused checkbox (shows only when Tardy is selected) -->
-                        ${status === 'tardy' ? `
+                        <!-- Excused checkbox (shows when Tardy or Absent is selected) -->
+                        ${(status === 'tardy' || status === 'absent') ? `
                             <div class="grid grid-cols-1 gap-2 mb-2">
                                 <label class="flex items-center cursor-pointer p-2 rounded hover:bg-orange-50 ${isExcused ? 'bg-orange-100' : ''}">
                                     <input type="checkbox" ${isExcused ? 'checked' : ''} 
@@ -768,7 +768,7 @@
                 currentAttendanceData[studentIdx] = {};
             }
             currentAttendanceData[studentIdx].status = status;
-            if (status !== 'tardy') {
+            if (status !== 'tardy' && status !== 'absent') {
                 currentAttendanceData[studentIdx].excused = false;
             }
             renderStudentAttendanceList();
@@ -815,7 +815,10 @@
                     tardy++;
                     if (data.excused) excused++;
                 }
-                else if (data.status === 'absent') absent++;
+                else if (data.status === 'absent') {
+                    absent++;
+                    if (data.excused) excused++;
+                }
                 
                 if (data.progressReportBrought) reportBrought++;
                 if (data.progressReportSigned) reportSigned++;
