@@ -802,12 +802,12 @@
                     attendanceDetails: currentAttendanceData // Store full details
                 };
                 
-                // Save to Firebase (using existing report structure)
-                const dailyReportDocRef = doc(db, 'users', userId, 'dailyReports', selectedDateId, 'classes', currentAttendanceClassId);
+                // Save to Firebase public data (so it displays on dashboard)
+                const dailyReportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', selectedDateId, 'classes', currentAttendanceClassId);
                 await setDoc(dailyReportDocRef, {
                     ...reportData,
                     timestamp: serverTimestamp()
-                });
+                }, { merge: true });
                 
                 showMessage('Success!', `Attendance saved for ${currentAttendanceClassId}`);
                 closeAttendanceModal();
