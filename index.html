@@ -763,11 +763,16 @@
         // Update and display attendance counts
         const updateAttendanceCounts = () => {
             let present = 0, absent = 0, reportBrought = 0, reportSigned = 0;
+            const totalStudents = studentRosters[currentAttendanceClassId]?.length || 0;
             
             Object.values(currentAttendanceData).forEach(data => {
                 if (data.status === 'present') present++;
-                else if (data.status === 'absent') absent++;
-                
+            });
+            
+            // Anyone not marked as present is automatically absent
+            absent = totalStudents - present;
+            
+            Object.values(currentAttendanceData).forEach(data => {
                 if (data.progressReportBrought) reportBrought++;
                 if (data.progressReportSigned) reportSigned++;
             });
@@ -787,19 +792,21 @@
             
             try {
                 // Use the calculated counts to populate the report
-                let present = 0, tardy = 0, absent = 0, reportBrought = 0, reportSigned = 0;
+                let present = 0, tardy = 0, reportBrought = 0, reportSigned = 0;
                 Object.values(currentAttendanceData).forEach(data => {
                     if (data.status === 'present') present++;
                     else if (data.status === 'tardy') tardy++;
-                    else if (data.status === 'absent') absent++;
                     if (data.progressReportBrought) reportBrought++;
                     if (data.progressReportSigned) reportSigned++;
                 });
                 
+                const totalStudents = studentRosters[currentAttendanceClassId].length;
+                const absent = totalStudents - present - tardy;
+                
                 // Create report object matching the existing format
                 const reportData = {
                     classId: currentAttendanceClassId,
-                    totalStudents: studentRosters[currentAttendanceClassId].length,
+                    totalStudents: totalStudents,
                     presentToday: present,
                     tardyToday: tardy,
                     progressReportBrought: reportBrought,
