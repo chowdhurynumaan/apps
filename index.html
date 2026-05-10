@@ -716,13 +716,15 @@
                             <!-- Separator -->
                             <div class="w-px h-4 bg-gray-300"></div>
                             <!-- R: Report Brought -->
-                            <button onclick="updateProgressReportStatus(${idx}, 'brought', ${!hasReportBrought})" 
-                                    class="w-6 h-6 rounded-full font-bold text-white text-2xs transition-all ${hasReportBrought ? 'bg-purple-600 ring-1 ring-purple-300' : 'bg-purple-300 hover:bg-purple-400'}">
+                            <button onclick="${status === 'absent' ? '' : `updateProgressReportStatus(${idx}, 'brought', ${!hasReportBrought})`}" 
+                                    class="w-6 h-6 rounded-full font-bold text-white text-2xs transition-all ${status === 'absent' ? 'bg-gray-300 cursor-not-allowed opacity-50' : hasReportBrought ? 'bg-purple-600 ring-1 ring-purple-300' : 'bg-purple-300 hover:bg-purple-400'}"
+                                    ${status === 'absent' ? 'disabled' : ''}>
                                 R
                             </button>
                             <!-- S: Signed -->
-                            <button onclick="updateProgressReportStatus(${idx}, 'signed', ${!hasReportSigned})" 
-                                    class="w-6 h-6 rounded-full font-bold text-gray-700 text-2xs transition-all ${hasReportSigned ? 'bg-gray-600 ring-1 ring-gray-300' : 'bg-gray-400 hover:bg-gray-500'}">
+                            <button onclick="${status === 'absent' ? '' : `updateProgressReportStatus(${idx}, 'signed', ${!hasReportSigned})`}" 
+                                    class="w-6 h-6 rounded-full font-bold text-gray-700 text-2xs transition-all ${status === 'absent' ? 'bg-gray-300 cursor-not-allowed opacity-50' : hasReportSigned ? 'bg-gray-600 ring-1 ring-gray-300' : 'bg-gray-400 hover:bg-gray-500'}"
+                                    ${status === 'absent' ? 'disabled' : ''}>
                                 S
                             </button>
                         </div>
@@ -740,6 +742,13 @@
                 currentAttendanceData[studentIdx] = {};
             }
             currentAttendanceData[studentIdx].status = status;
+            
+            // If marking as absent, clear R and S flags
+            if (status === 'absent') {
+                currentAttendanceData[studentIdx].progressReportBrought = false;
+                currentAttendanceData[studentIdx].progressReportSigned = false;
+            }
+            
             renderStudentAttendanceList();
         };
         
@@ -757,6 +766,12 @@
             if (!currentAttendanceData[studentIdx]) {
                 currentAttendanceData[studentIdx] = {};
             }
+            
+            // Don't allow R/S if student is absent
+            if (currentAttendanceData[studentIdx].status === 'absent') {
+                return;
+            }
+            
             if (reportType === 'brought') {
                 currentAttendanceData[studentIdx].progressReportBrought = isChecked;
                 // If unchecking brought, also uncheck signed (can't sign if not brought)
