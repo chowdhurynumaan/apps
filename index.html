@@ -754,7 +754,15 @@
             }
             if (reportType === 'brought') {
                 currentAttendanceData[studentIdx].progressReportBrought = isChecked;
+                // If unchecking brought, also uncheck signed (can't sign if not brought)
+                if (!isChecked) {
+                    currentAttendanceData[studentIdx].progressReportSigned = false;
+                }
             } else if (reportType === 'signed') {
+                // If checking signed, automatically check brought (need to bring to sign)
+                if (isChecked) {
+                    currentAttendanceData[studentIdx].progressReportBrought = true;
+                }
                 currentAttendanceData[studentIdx].progressReportSigned = isChecked;
             }
             renderStudentAttendanceList();
