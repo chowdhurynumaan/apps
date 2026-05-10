@@ -660,6 +660,11 @@
             currentAttendanceClassId = classId;
             currentAttendanceData = {};
             
+            // Load saved attendance data from current reports if it exists
+            if (currentReports[classId] && currentReports[classId].attendanceDetails) {
+                currentAttendanceData = currentReports[classId].attendanceDetails;
+            }
+            
             // Set modal title and date
             document.getElementById('attendance-modal-title').textContent = `Attendance: Class ${classId}`;
             document.getElementById('attendance-date-display').textContent = `Date: ${getDisplayDate(selectedDateId)}`;
