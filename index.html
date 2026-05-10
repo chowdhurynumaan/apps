@@ -522,7 +522,8 @@
                         const sn = row.SN || idx;
                         
                         // Group by Level (1a, 1b, 1c, 2, 3, 4 - normalize to uppercase: 1a -> 1A)
-                        if (row['Level']) {
+                        // Only include if student is ENROLLED (has a value in "Weekend 2025" column)
+                        if (row['Level'] && row['Weekend 2025']) {
                             const classId = String(row['Level']).toUpperCase();
                             if (!weekendRosters[classId]) {
                                 weekendRosters[classId] = {};
@@ -533,7 +534,7 @@
                             weekendRosters[classId][genderKey].push({ name, gender: row.Gender, sn });
                         }
                         
-                        // Evening enrollment - also by Level if available
+                        // Evening enrollment - also by Level if available AND enrolled in Evening
                         if (row['Level'] && row['Evening 2025']) {
                             const classId = String(row['Level']).toUpperCase();
                             if (!eveningRosters[classId]) {
