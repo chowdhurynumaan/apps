@@ -532,7 +532,7 @@
                             if (!weekendRosters[classId][genderKey]) {
                                 weekendRosters[classId][genderKey] = [];
                             }
-                            weekendRosters[classId][genderKey].push({ name, gender: row.Gender, sn, rg: row.RG });
+                            weekendRosters[classId][genderKey].push({ name, gender: row.Gender, sn, rg: row.RG || '' });
                         }
                         
                         // Evening enrollment - also by Level if available AND enrolled in Evening
@@ -544,7 +544,7 @@
                             if (!eveningRosters[classId][genderKey]) {
                                 eveningRosters[classId][genderKey] = [];
                             }
-                            eveningRosters[classId][genderKey].push({ name, gender: row.Gender, sn, rg: row.RG });
+                            eveningRosters[classId][genderKey].push({ name, gender: row.Gender, sn, rg: row.RG || '' });
                         }
                     }
                 });
