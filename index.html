@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>class-tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS for Excel file parsing -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
         
@@ -85,6 +87,16 @@
                 </select>
             </div>
             
+            <label class="text-xs font-semibold text-gray-600">Load Student Roster</label>
+            <div class="flex gap-2">
+                <input type="file" id="excel-file-input" accept=".xlsx,.xls" 
+                       class="px-3 py-2 border border-indigo-300 rounded-lg text-xs font-semibold text-gray-700 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition duration-150 flex-1">
+                <button onclick="loadExcelFile()" 
+                        class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold shadow-md text-xs whitespace-nowrap">
+                    Load Roster
+                </button>
+            </div>
+            
             <button id="admin-portal-btn" onclick="openAdminPortal()" 
                     class="px-3 py-2 text-sm text-center bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold shadow-md">
                 🔒 Admin Portal
@@ -151,7 +163,61 @@
                     <p class="text-center text-gray-500 italic py-10">Select a class to load the report entry form.</p>
                 </div>
                 <div id="modal-footer" class="mt-4 flex justify-center">
+                </div>
+            </div>
+        </div>
+
+        <!-- ATTENDANCE MODAL with Student Checkboxes -->
+        <div id="attendance-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-80 z-40 flex items-center justify-center p-4" onclick="closeAttendanceModal()">
+            <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-auto" onclick="event.stopPropagation()">
+                <!-- Modal Header -->
+                <div class="sticky top-0 bg-indigo-600 text-white p-4 border-b border-indigo-700 flex justify-between items-center">
+                    <div>
+                        <h2 id="attendance-modal-title" class="text-2xl font-bold">Attendance: Class Name</h2>
+                        <p id="attendance-date-display" class="text-sm text-indigo-100 mt-1">Date: Today</p>
                     </div>
+                    <button onclick="closeAttendanceModal()" class="text-white hover:text-indigo-200 text-2xl">×</button>
+                </div>
+
+                <!-- Student List with Checkboxes -->
+                <div class="p-4">
+                    <div id="student-attendance-list" class="space-y-3">
+                        <p class="text-center text-gray-500 py-8">Loading students...</p>
+                    </div>
+                </div>
+
+                <!-- Summary Stats -->
+                <div class="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-4 space-y-2">
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs font-semibold text-center">
+                        <div class="bg-green-100 text-green-700 p-2 rounded">
+                            Present: <span id="count-present">0</span>
+                        </div>
+                        <div class="bg-yellow-100 text-yellow-700 p-2 rounded">
+                            Tardy: <span id="count-tardy">0</span>
+                        </div>
+                        <div class="bg-orange-100 text-orange-700 p-2 rounded">
+                            Excused: <span id="count-excused">0</span>
+                        </div>
+                        <div class="bg-red-100 text-red-700 p-2 rounded">
+                            Absent: <span id="count-absent">0</span>
+                        </div>
+                        <div class="bg-blue-100 text-blue-700 p-2 rounded">
+                            Early Pickup: <span id="count-early">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex gap-2 mt-4">
+                        <button onclick="saveAttendance()" 
+                                class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition">
+                            Save Attendance
+                        </button>
+                        <button onclick="closeAttendanceModal()" 
+                                class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">
+                            Close
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
        
@@ -395,6 +461,360 @@
         let MENU_VISIBILITY = {
             'quran-tracker': true,
             'dashboard': true
+        };
+        
+        // ===== ATTENDANCE SYSTEM GLOBALS =====
+        let studentRosters = {}; // { classId: [ {name, gender, sn}, ... ] }
+        let currentAttendanceData = {}; // { studentIndex: { status: 'present|tardy|absent|early|excused', ... } }
+        let currentAttendanceClassId = null;
+        let isExcelLoaded = false;
+        
+        // Close attendance modal
+        window.closeAttendanceModal = () => {
+            document.getElementById('attendance-modal').classList.add('hidden');
+            currentAttendanceClassId = null;
+            currentAttendanceData = {};
+        };
+        
+        // Load and parse Excel file
+        window.loadExcelFile = async () => {
+            // Check if XLSX library is loaded
+            if (typeof XLSX === 'undefined') {
+                showMessage('Error', 'Excel library failed to load. Please check your internet connection and reload the page.');
+                console.error('XLSX library not loaded');
+                return;
+            }
+            
+            const fileInput = document.getElementById('excel-file-input');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showMessage('Error', 'Please select an Excel file first');
+                return;
+            }
+            
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const studentsSheet = workbook.Sheets['studentdata'];
+                
+                if (!studentsSheet) {
+                    showMessage('Error', 'No "studentdata" sheet found in Excel file');
+                    return;
+                }
+                
+                // Parse the data
+                const rows = XLSX.utils.sheet_to_json(studentsSheet);
+                console.log('Parsed rows:', rows);
+                
+                // Build rosters indexed by class number (Weekend 2025, Evening 2025)
+                const weekendRosters = {};  // { 1: [], 2: [], ... }
+                const eveningRosters = {};
+                
+                rows.forEach((row, idx) => {
+                    if (row.Name && row.Name.trim()) {
+                        const name = row.Name;
+                        // Map F/M to Girls/Boys for matching with class definitions
+                        let genderKey = row.Gender || 'Unknown';
+                        if (genderKey === 'F') genderKey = 'Girls';
+                        else if (genderKey === 'M') genderKey = 'Boys';
+                        
+                        const sn = row.SN || idx;
+                        
+                        // Group by Level (1a, 1b, 1c, 2, 3, 4 - normalize to uppercase: 1a -> 1A)
+                        if (row['Level']) {
+                            const classId = String(row['Level']).toUpperCase();
+                            if (!weekendRosters[classId]) {
+                                weekendRosters[classId] = {};
+                            }
+                            if (!weekendRosters[classId][genderKey]) {
+                                weekendRosters[classId][genderKey] = [];
+                            }
+                            weekendRosters[classId][genderKey].push({ name, gender: row.Gender, sn });
+                        }
+                        
+                        // Evening enrollment - also by Level if available
+                        if (row['Level'] && row['Evening 2025']) {
+                            const classId = String(row['Level']).toUpperCase();
+                            if (!eveningRosters[classId]) {
+                                eveningRosters[classId] = {};
+                            }
+                            if (!eveningRosters[classId][genderKey]) {
+                                eveningRosters[classId][genderKey] = [];
+                            }
+                            eveningRosters[classId][genderKey].push({ name, gender: row.Gender, sn });
+                        }
+                    }
+                });
+                
+                console.log('Weekend rosters:', weekendRosters);
+                console.log('Evening rosters:', eveningRosters);
+                console.log('🔍 DEBUG - Weekend roster keys:', Object.keys(weekendRosters));
+                
+                // Now match to actual class definitions
+                studentRosters = {};
+                const currentClasses = CLASS_DEFINITIONS['Weekend'] || [];
+                
+                console.log('=== CLASS MATCHING DEBUG ===');
+                console.log('Number of Weekend class definitions:', currentClasses.length);
+                console.log('Class definitions:', currentClasses);
+                
+                currentClasses.forEach(classDef => {
+                    console.log(`\n--- Matching class definition: ${classDef.id} ---`);
+                    
+                    // Extract from class ID: "Weekend-Girls-1A" -> parts
+                    const parts = classDef.id.split('-');
+                    console.log('  Parts:', parts);
+                    
+                    if (parts.length >= 3) {
+                        const dept = parts[0];  // "Weekend"
+                        const gender = parts[1]; // "Girls"
+                        const classId = parts[2]; // "1A", "1B", "1C", "2", "3", etc.
+                        
+                        console.log(`  Dept: ${dept}, Gender: ${gender}, ClassId: ${classId}`);
+                        console.log(`  Looking for: rosters[${classId}][${gender}]`);
+                        
+                        const rosters = dept === 'Weekend' ? weekendRosters : eveningRosters;
+                        
+                        if (rosters[classId]) {
+                            console.log(`    Found class ${classId} in rosters`);
+                            console.log(`    Available genders:`, Object.keys(rosters[classId]));
+                            
+                            if (rosters[classId][gender]) {
+                                const students = rosters[classId][gender];
+                                studentRosters[classDef.id] = students.map((s, idx) => ({
+                                    ...s,
+                                    index: idx
+                                }));
+                                console.log(`  ✅ MATCHED! Added ${students.length} students to ${classDef.id}`);
+                            } else {
+                                console.log(`  ❌ Gender ${gender} not found in class ${classId}`);
+                            }
+                        } else {
+                            console.log(`  ❌ Class ${classId} not found in rosters for dept ${dept}`);
+                        }
+                    }
+                });
+                
+                console.log('\n=== FINAL RESULT ===');
+                console.log('Final student rosters keys:', Object.keys(studentRosters));
+                console.log('Final student rosters:', studentRosters);
+                
+                // SAVE TO FIRESTORE
+                isExcelLoaded = true;
+                fileInput.value = '';
+                const classCount = Object.keys(studentRosters).length;
+                const studentCount = Object.values(studentRosters).reduce((sum, students) => sum + students.length, 0);
+                
+                try {
+                    await setDoc(doc(db, 'studentRosters', 'rosters'), {
+                        data: studentRosters,
+                        loadedAt: serverTimestamp(),
+                        totalClasses: classCount,
+                        totalStudents: studentCount
+                    });
+                    console.log('✅ Saved to Firestore!');
+                    showMessage('Success!', `Loaded ${studentCount} students in ${classCount} classes\n✅ Saved to Firestore`);
+                } catch (error) {
+                    console.error('Error saving to Firestore:', error);
+                    showMessage('Partial Success', `Loaded data but failed to save: ${error.message}`);
+                }
+                
+            } catch (error) {
+                console.error('Error loading Excel:', error);
+                showMessage('Error', `Failed to load Excel file: ${error.message}`);
+            }
+        };
+        
+        // Load rosters from Firestore on app startup
+        window.loadRostersFromFirestore = async () => {
+            try {
+                const docSnap = await getDoc(doc(db, 'studentRosters', 'rosters'));
+                if (docSnap.exists()) {
+                    studentRosters = docSnap.data().data;
+                    isExcelLoaded = true;
+                    const classCount = Object.keys(studentRosters).length;
+                    const studentCount = Object.values(studentRosters).reduce((sum, students) => sum + students.length, 0);
+                    console.log(`✅ Loaded rosters from Firestore: ${studentCount} students in ${classCount} classes`);
+                    return true;
+                }
+            } catch (error) {
+                console.error('Error loading from Firestore:', error);
+            }
+            return false;
+        };
+        
+        // Open attendance modal for a class
+        window.openAttendanceModal = (classId) => {
+            if (!isExcelLoaded) {
+                showMessage('Error', 'Please load student roster from Excel file first');
+                return;
+            }
+            
+            if (!studentRosters[classId] || studentRosters[classId].length === 0) {
+                showMessage('Info', `No students found for class ${classId}`);
+                return;
+            }
+            
+            currentAttendanceClassId = classId;
+            currentAttendanceData = {};
+            
+            // Set modal title and date
+            document.getElementById('attendance-modal-title').textContent = `Attendance: Class ${classId}`;
+            document.getElementById('attendance-date-display').textContent = `Date: ${getDisplayDate(selectedDateId)}`;
+            
+            // Render student list
+            renderStudentAttendanceList();
+            
+            // Show modal
+            document.getElementById('attendance-modal').classList.remove('hidden');
+        };
+        
+        // Render student list with checkboxes
+        const renderStudentAttendanceList = () => {
+            const students = studentRosters[currentAttendanceClassId] || [];
+            const container = document.getElementById('student-attendance-list');
+            
+            if (students.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-500 py-8">No students in this class</p>';
+                return;
+            }
+            
+            const html = students.map((student, idx) => {
+                const status = currentAttendanceData[idx]?.status || '';
+                const isExcused = currentAttendanceData[idx]?.excused || false;
+                
+                return `
+                    <div class="border border-gray-200 rounded-lg p-3 bg-white hover:bg-gray-50 transition">
+                        <div class="flex items-start justify-between mb-2">
+                            <div>
+                                <p class="font-semibold text-gray-800">${student.name}</p>
+                                <p class="text-xs text-gray-500">${student.gender} | SN: ${student.sn}</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+                            <label class="flex items-center cursor-pointer p-2 rounded hover:bg-green-50 ${status === 'present' ? 'bg-green-100' : ''}">
+                                <input type="radio" name="status-${idx}" value="present" ${status === 'present' ? 'checked' : ''} 
+                                       onchange="updateAttendanceStatus(${idx}, 'present')" class="mr-2">
+                                <span class="text-xs font-semibold text-green-700">Present</span>
+                            </label>
+                            <label class="flex items-center cursor-pointer p-2 rounded hover:bg-yellow-50 ${status === 'tardy' ? 'bg-yellow-100' : ''}">
+                                <input type="radio" name="status-${idx}" value="tardy" ${status === 'tardy' ? 'checked' : ''} 
+                                       onchange="updateAttendanceStatus(${idx}, 'tardy')" class="mr-2">
+                                <span class="text-xs font-semibold text-yellow-700">Tardy</span>
+                            </label>
+                            <label class="flex items-center cursor-pointer p-2 rounded hover:bg-red-50 ${status === 'absent' ? 'bg-red-100' : ''}">
+                                <input type="radio" name="status-${idx}" value="absent" ${status === 'absent' ? 'checked' : ''} 
+                                       onchange="updateAttendanceStatus(${idx}, 'absent')" class="mr-2">
+                                <span class="text-xs font-semibold text-red-700">Absent</span>
+                            </label>
+                            <label class="flex items-center cursor-pointer p-2 rounded hover:bg-blue-50 ${status === 'early' ? 'bg-blue-100' : ''}">
+                                <input type="radio" name="status-${idx}" value="early" ${status === 'early' ? 'checked' : ''} 
+                                       onchange="updateAttendanceStatus(${idx}, 'early')" class="mr-2">
+                                <span class="text-xs font-semibold text-blue-700">Early Pickup</span>
+                            </label>
+                            ${status === 'tardy' ? `
+                                <label class="flex items-center cursor-pointer p-2 rounded hover:bg-orange-50 ${isExcused ? 'bg-orange-100' : ''}">
+                                    <input type="checkbox" ${isExcused ? 'checked' : ''} 
+                                           onchange="updateExcusedStatus(${idx}, this.checked)" class="mr-1">
+                                    <span class="text-xs font-semibold text-orange-700">Excused</span>
+                                </label>
+                            ` : '<div></div>'}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            container.innerHTML = html;
+            updateAttendanceCounts();
+        };
+        
+        // Update attendance status for a student
+        window.updateAttendanceStatus = (studentIdx, status) => {
+            if (!currentAttendanceData[studentIdx]) {
+                currentAttendanceData[studentIdx] = {};
+            }
+            currentAttendanceData[studentIdx].status = status;
+            if (status !== 'tardy') {
+                currentAttendanceData[studentIdx].excused = false;
+            }
+            renderStudentAttendanceList();
+        };
+        
+        // Update excused status for tardy student
+        window.updateExcusedStatus = (studentIdx, isExcused) => {
+            if (!currentAttendanceData[studentIdx]) {
+                currentAttendanceData[studentIdx] = {};
+            }
+            currentAttendanceData[studentIdx].excused = isExcused;
+            updateAttendanceCounts();
+        };
+        
+        // Update and display attendance counts
+        const updateAttendanceCounts = () => {
+            let present = 0, tardy = 0, excused = 0, absent = 0, early = 0;
+            
+            Object.values(currentAttendanceData).forEach(data => {
+                if (data.status === 'present') present++;
+                else if (data.status === 'tardy') {
+                    tardy++;
+                    if (data.excused) excused++;
+                }
+                else if (data.status === 'absent') absent++;
+                else if (data.status === 'early') early++;
+            });
+            
+            document.getElementById('count-present').textContent = present;
+            document.getElementById('count-tardy').textContent = tardy;
+            document.getElementById('count-excused').textContent = excused;
+            document.getElementById('count-absent').textContent = absent;
+            document.getElementById('count-early').textContent = early;
+        };
+        
+        // Save attendance
+        window.saveAttendance = async () => {
+            if (!userId || !isAuthReady) {
+                showMessage('Error', 'Not authenticated. Please wait for app to load.');
+                return;
+            }
+            
+            try {
+                // Use the calculated counts to populate the report
+                let present = 0, tardy = 0, absent = 0;
+                Object.values(currentAttendanceData).forEach(data => {
+                    if (data.status === 'present') present++;
+                    else if (data.status === 'tardy') tardy++;
+                    else if (data.status === 'absent') absent++;
+                });
+                
+                // Create report object matching the existing format
+                const reportData = {
+                    classId: currentAttendanceClassId,
+                    totalStudents: studentRosters[currentAttendanceClassId].length,
+                    presentToday: present,
+                    tardyToday: tardy,
+                    progressReportBrought: 0, // Can be set later if needed
+                    progressReportSigned: 0,
+                    dateId: selectedDateId,
+                    userId: userId,
+                    userName: currentUserName || 'Unknown',
+                    attendanceDetails: currentAttendanceData // Store full details
+                };
+                
+                // Save to Firebase (using existing report structure)
+                const dailyReportDocRef = doc(db, 'users', userId, 'dailyReports', selectedDateId, 'classes', currentAttendanceClassId);
+                await setDoc(dailyReportDocRef, {
+                    ...reportData,
+                    timestamp: serverTimestamp()
+                });
+                
+                showMessage('Success!', `Attendance saved for ${currentAttendanceClassId}`);
+                closeAttendanceModal();
+                
+            } catch (error) {
+                console.error('Error saving attendance:', error);
+                showMessage('Error', `Failed to save attendance: ${error.message}`);
+            }
         };
         
         const getTodayDateId = () => {
@@ -1386,6 +1806,19 @@ const fetchAndRenderLogHistory = (classId) => {
          * @param {string} classId - The ID of the class card clicked.
          */
         window.selectClass = (classId) => {
+            // If student roster is loaded, check if this class has students
+            if (isExcelLoaded) {
+                console.log('Checking for roster for classId:', classId);
+                console.log('Available rosters:', Object.keys(studentRosters));
+                
+                if (studentRosters[classId] && studentRosters[classId].length > 0) {
+                    console.log('Found roster for', classId);
+                    openAttendanceModal(classId);
+                    return;
+                }
+            }
+            
+            // Otherwise use the old report entry form
             // Find the class definition
             const classDef = getCurrentClassDefinitions().find(c => c.id === classId);
             if (!classDef) {
@@ -1536,6 +1969,9 @@ const handleAppReady = async () => {
     
     // Load class definitions from Firebase
     await loadClassDefinitions();
+    
+    // Load student rosters from Firestore (if previously saved)
+    await loadRostersFromFirestore();
     
     // Load admin list and check if current user is admin
     await loadAdminList();
@@ -2098,11 +2534,19 @@ const renderClassList = () => {
          */
         window.selectClass = (classId) => {
             selectedClassId = classId;
-            renderModalContent(classId);
-            document.getElementById('report-modal').classList.remove('hidden');
             
-            // CRITICAL NEW CALL: Fetch and display log history when modal opens
-            fetchAndRenderLogHistory(classId);
+            // Check if Excel roster is loaded for this class
+            if (isExcelLoaded && studentRosters[classId]) {
+                console.log(`📋 Opening attendance modal for ${classId} with ${studentRosters[classId].length} students`);
+                openAttendanceModal(classId);
+            } else {
+                // Fall back to manual entry modal
+                renderModalContent(classId);
+                document.getElementById('report-modal').classList.remove('hidden');
+                
+                // CRITICAL NEW CALL: Fetch and display log history when modal opens
+                fetchAndRenderLogHistory(classId);
+            }
         };
 
         // --- DATA INPUT & PROCESSING ---
