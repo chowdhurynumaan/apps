@@ -710,7 +710,7 @@
                             </button>
                             <!-- A: Absent -->
                             <button onclick="updateAttendanceStatus(${idx}, 'absent')" 
-                                    class="w-6 h-6 rounded-full font-bold text-white text-2xs transition-all ${status === 'absent' ? 'bg-red-600 ring-1 ring-red-300' : 'bg-red-300 hover:bg-red-400'}">
+                                    class="w-6 h-6 rounded-full font-bold text-white text-2xs transition-all ${status !== 'present' && status !== 'tardy' ? 'bg-red-600 ring-1 ring-red-300' : 'bg-red-300 hover:bg-red-400'}">
                                 A
                             </button>
                             <!-- Separator -->
