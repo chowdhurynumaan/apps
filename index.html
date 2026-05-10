@@ -205,6 +205,14 @@
                             Early Pickup: <span id="count-early">0</span>
                         </div>
                     </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs font-semibold text-center">
+                        <div class="bg-purple-100 text-purple-700 p-2 rounded">
+                            Report Brought: <span id="count-report-brought">0</span>
+                        </div>
+                        <div class="bg-pink-100 text-pink-700 p-2 rounded">
+                            Report Signed: <span id="count-report-signed">0</span>
+                        </div>
+                    </div>
 
                     <!-- Action Buttons -->
                     <div class="flex gap-2 mt-4">
@@ -689,6 +697,8 @@
             const html = students.map((student, idx) => {
                 const status = currentAttendanceData[idx]?.status || '';
                 const isExcused = currentAttendanceData[idx]?.excused || false;
+                const hasReportBrought = currentAttendanceData[idx]?.progressReportBrought || false;
+                const hasReportSigned = currentAttendanceData[idx]?.progressReportSigned || false;
                 
                 return `
                     <div class="border border-gray-200 rounded-lg p-3 bg-white hover:bg-gray-50 transition">
@@ -698,7 +708,7 @@
                                 <p class="text-xs text-gray-500">${student.gender} | SN: ${student.sn}</p>
                             </div>
                         </div>
-                        <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
                             <label class="flex items-center cursor-pointer p-2 rounded hover:bg-green-50 ${status === 'present' ? 'bg-green-100' : ''}">
                                 <input type="radio" name="status-${idx}" value="present" ${status === 'present' ? 'checked' : ''} 
                                        onchange="updateAttendanceStatus(${idx}, 'present')" class="mr-2">
@@ -726,6 +736,18 @@
                                     <span class="text-xs font-semibold text-orange-700">Excused</span>
                                 </label>
                             ` : '<div></div>'}
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 border-t pt-2">
+                            <label class="flex items-center cursor-pointer p-2 rounded hover:bg-purple-50 ${hasReportBrought ? 'bg-purple-100' : ''}">
+                                <input type="checkbox" ${hasReportBrought ? 'checked' : ''} 
+                                       onchange="updateProgressReportStatus(${idx}, 'brought', this.checked)" class="mr-2">
+                                <span class="text-xs font-semibold text-purple-700">Report Brought</span>
+                            </label>
+                            <label class="flex items-center cursor-pointer p-2 rounded hover:bg-pink-50 ${hasReportSigned ? 'bg-pink-100' : ''}">
+                                <input type="checkbox" ${hasReportSigned ? 'checked' : ''} 
+                                       onchange="updateProgressReportStatus(${idx}, 'signed', this.checked)" class="mr-2">
+                                <span class="text-xs font-semibold text-pink-700">Report Signed</span>
+                            </label>
                         </div>
                     </div>
                 `;
@@ -756,9 +778,22 @@
             updateAttendanceCounts();
         };
         
+        // Update progress report status for a student
+        window.updateProgressReportStatus = (studentIdx, reportType, isChecked) => {
+            if (!currentAttendanceData[studentIdx]) {
+                currentAttendanceData[studentIdx] = {};
+            }
+            if (reportType === 'brought') {
+                currentAttendanceData[studentIdx].progressReportBrought = isChecked;
+            } else if (reportType === 'signed') {
+                currentAttendanceData[studentIdx].progressReportSigned = isChecked;
+            }
+            updateAttendanceCounts();
+        };
+        
         // Update and display attendance counts
         const updateAttendanceCounts = () => {
-            let present = 0, tardy = 0, excused = 0, absent = 0, early = 0;
+            let present = 0, tardy = 0, excused = 0, absent = 0, early = 0, reportBrought = 0, reportSigned = 0;
             
             Object.values(currentAttendanceData).forEach(data => {
                 if (data.status === 'present') present++;
@@ -768,6 +803,9 @@
                 }
                 else if (data.status === 'absent') absent++;
                 else if (data.status === 'early') early++;
+                
+                if (data.progressReportBrought) reportBrought++;
+                if (data.progressReportSigned) reportSigned++;
             });
             
             document.getElementById('count-present').textContent = present;
@@ -775,6 +813,8 @@
             document.getElementById('count-excused').textContent = excused;
             document.getElementById('count-absent').textContent = absent;
             document.getElementById('count-early').textContent = early;
+            document.getElementById('count-report-brought').textContent = reportBrought;
+            document.getElementById('count-report-signed').textContent = reportSigned;
         };
         
         // Save attendance
@@ -786,11 +826,13 @@
             
             try {
                 // Use the calculated counts to populate the report
-                let present = 0, tardy = 0, absent = 0;
+                let present = 0, tardy = 0, absent = 0, reportBrought = 0, reportSigned = 0;
                 Object.values(currentAttendanceData).forEach(data => {
                     if (data.status === 'present') present++;
                     else if (data.status === 'tardy') tardy++;
                     else if (data.status === 'absent') absent++;
+                    if (data.progressReportBrought) reportBrought++;
+                    if (data.progressReportSigned) reportSigned++;
                 });
                 
                 // Create report object matching the existing format
@@ -799,8 +841,8 @@
                     totalStudents: studentRosters[currentAttendanceClassId].length,
                     presentToday: present,
                     tardyToday: tardy,
-                    progressReportBrought: 0, // Can be set later if needed
-                    progressReportSigned: 0,
+                    progressReportBrought: reportBrought,
+                    progressReportSigned: reportSigned,
                     dateId: selectedDateId,
                     userId: userId,
                     userName: currentUserName || 'Unknown',
