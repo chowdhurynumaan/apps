@@ -465,7 +465,7 @@
         };
         
         // ===== ATTENDANCE SYSTEM GLOBALS =====
-        let studentRosters = {}; // { classId: [ {name, gender, sn}, ... ] }
+        let studentRosters = {}; // { classId: [ {name, gender, sn, group}, ... ] }
         let currentAttendanceData = {}; // { studentIndex: { status: 'present|tardy|absent|early|excused', ... } }
         let currentAttendanceClassId = null;
         let isExcelLoaded = false;
@@ -532,7 +532,7 @@
                             if (!weekendRosters[classId][genderKey]) {
                                 weekendRosters[classId][genderKey] = [];
                             }
-                            weekendRosters[classId][genderKey].push({ name, gender: row.Gender, sn });
+                            weekendRosters[classId][genderKey].push({ name, gender: row.Gender, sn, group: row.Group });
                         }
                         
                         // Evening enrollment - also by Level if available AND enrolled in Evening
@@ -544,7 +544,7 @@
                             if (!eveningRosters[classId][genderKey]) {
                                 eveningRosters[classId][genderKey] = [];
                             }
-                            eveningRosters[classId][genderKey].push({ name, gender: row.Gender, sn });
+                            eveningRosters[classId][genderKey].push({ name, gender: row.Gender, sn, group: row.Group });
                         }
                     }
                 });
@@ -695,7 +695,7 @@
                     <div class="flex items-center justify-between gap-2 p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50">
                         <div class="flex-1 min-w-0">
                             <p class="font-semibold text-gray-800 text-xs">${student.name}</p>
-                            <p class="text-2xs text-gray-500">F | SN: ${student.sn}</p>
+                            <p class="text-2xs text-gray-500">SN: ${student.sn} | ${student.group || 'N/A'}</p>
                         </div>
                         <div class="flex gap-1 items-center shrink-0">
                             <!-- P: Present -->
