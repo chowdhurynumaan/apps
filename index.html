@@ -3020,7 +3020,7 @@ window.saveClassReport = async () => {
                 menu.classList.add('hidden');
                 menuBtn.setAttribute('aria-expanded', 'false');
             }
-            if (!overflow.classList.contains('hidden') && !overflow.contains(e.target)) {
+            if (!overflow.classList.contains('hidden') && !overflow.contains(e.target) && !e.target.closest('[onclick*="toggleMobileOverflow"]')) {
                 overflow.classList.add('hidden');
             }
         });
