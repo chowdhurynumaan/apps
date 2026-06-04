@@ -3204,26 +3204,35 @@ window.saveClassReport = async () => {
 
         window.moveStudentToClass = async (fromClassId, idx) => {
             const student = studentRosters[fromClassId][idx];
-            const deptClasses = CLASS_DEFINITIONS[selectedDepartment] || [];
             const sheet = document.getElementById('student-action-sheet');
             if (sheet) sheet.remove();
+
+            // Show ALL classes across ALL departments, not just current
+            const allDepts = Object.keys(CLASS_DEFINITIONS);
+            let classButtons = '';
+            allDepts.forEach(dept => {
+                const classes = CLASS_DEFINITIONS[dept] || [];
+                const deptClasses = classes.filter(c => c.id !== fromClassId);
+                if (deptClasses.length === 0) return;
+                classButtons += `<p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-3 mb-1 px-1">${dept}</p>`;
+                classButtons += deptClasses.map(c =>
+                    `<button onclick="confirmMoveStudent('${fromClassId}', ${idx}, '${c.id}')" class="w-full p-3 rounded-xl bg-gray-50 hover:bg-indigo-50 text-left transition">
+                        <p class="text-sm font-semibold text-gray-800">${c.name} (${c.gender})</p>
+                        <p class="text-[10px] text-gray-400">${c.id}</p>
+                    </button>`
+                ).join('');
+            });
 
             const moveSheet = document.createElement('div');
             moveSheet.id = 'student-action-sheet';
             moveSheet.className = 'fixed inset-0 bg-black/40 z-50 flex items-end justify-center';
             moveSheet.onclick = (e) => { if (e.target === moveSheet) moveSheet.remove(); };
-            const classButtons = deptClasses.filter(c => c.id !== fromClassId).map(c =>
-                `<button onclick="confirmMoveStudent('${fromClassId}', ${idx}, '${c.id}')" class="w-full p-3 rounded-xl bg-gray-50 hover:bg-indigo-50 text-left transition">
-                    <p class="text-sm font-semibold text-gray-800">${c.name} (${c.gender})</p>
-                    <p class="text-[10px] text-gray-400">${c.id}</p>
-                </button>`
-            ).join('');
             moveSheet.innerHTML = `
                 <div class="bg-white rounded-t-2xl w-full max-w-md p-4 pb-6 shadow-2xl max-h-[70vh] overflow-auto" onclick="event.stopPropagation()">
                     <div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3"></div>
                     <p class="text-sm font-bold text-gray-800 mb-1">Move "${student.name}"</p>
-                    <p class="text-[11px] text-gray-400 mb-3">Select destination class</p>
-                    <div class="space-y-2">${classButtons}</div>
+                    <p class="text-[11px] text-gray-400 mb-1">Select destination class (any department)</p>
+                    <div>${classButtons}</div>
                     <button onclick="document.getElementById('student-action-sheet').remove()" class="w-full mt-3 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold text-sm rounded-xl transition">Cancel</button>
                 </div>
             `;
