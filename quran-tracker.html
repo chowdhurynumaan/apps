@@ -21,10 +21,21 @@
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f4f7f9;
-            transition: background-color 0.3s;
+            transition: background-color 0.3s, color 0.3s;
             display: flex;
             flex-direction: column;
         }
+
+        body.dark { background-color: #0f172a; color: #e2e8f0; }
+        body.dark header { background-color: #1e293b; border-color: #334155; }
+        body.dark .bg-white, body.dark #app-container { background-color: #1e293b; }
+        body.dark .bg-gray-50, body.dark .bg-gray-100, body.dark .bg-blue-50 { background-color: #1e293b; }
+        body.dark .text-gray-800 { color: #e2e8f0; }
+        body.dark .text-gray-700 { color: #cbd5e1; }
+        body.dark .text-gray-600 { color: #94a3b8; }
+        body.dark .border-gray-200, body.dark .border-gray-300, body.dark .border-blue-200 { border-color: #334155; }
+        body.dark input, body.dark select, body.dark textarea { background-color: #0f172a; border-color: #475569; color: #e2e8f0; }
+        body.dark .shadow-xl { box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
         /* Custom scrollbar for log list */
         .custom-scroll {
             -webkit-overflow-scrolling: touch; /* Essential for smooth kinetic scrolling on iOS/mobile */
@@ -83,6 +94,9 @@
         </div>
         
         <div class="flex items-center space-x-2 flex-shrink-0">
+            <button onclick="toggleDarkMode()" class="p-1.5 rounded-lg hover:bg-gray-200 text-gray-500 transition" title="Toggle Dark Mode" aria-label="Toggle Dark Mode">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+            </button>
             <span id="student-name-display" class="text-xs font-semibold text-gray-700 hidden"></span>
         </div>
     </div>
@@ -2840,6 +2854,13 @@ showHifzBulkImportModal: function() {
                 });
             }
         });
+
+        // --- DARK MODE ---
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark');
+            localStorage.setItem('darkMode', document.body.classList.contains('dark'));
+        }
+        if (localStorage.getItem('darkMode') === 'true') document.body.classList.add('dark');
     </script>
 </body>
 </html>

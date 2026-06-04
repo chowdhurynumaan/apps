@@ -20,10 +20,25 @@
         body { 
             font-family: 'Inter', sans-serif; 
             background-color: #f4f7f9; 
-            transition: background-color 0.3s;
+            transition: background-color 0.3s, color 0.3s;
             display: flex;
             flex-direction: column;
         }
+
+        /* Dark Mode */
+        body.dark { background-color: #0f172a; color: #e2e8f0; }
+        body.dark header { background-color: #1e293b; border-color: #334155; }
+        body.dark .bg-white { background-color: #1e293b; }
+        body.dark .bg-gray-50, body.dark .bg-gray-100 { background-color: #1e293b; }
+        body.dark .text-gray-800 { color: #e2e8f0; }
+        body.dark .text-gray-700 { color: #cbd5e1; }
+        body.dark .text-gray-600 { color: #94a3b8; }
+        body.dark .text-gray-500 { color: #64748b; }
+        body.dark .border-gray-200, body.dark .border-gray-300 { border-color: #334155; }
+        body.dark #main-content-area { background-color: #0f172a; }
+        body.dark .shadow-lg, body.dark .shadow-xl, body.dark .shadow-2xl { box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+        body.dark input, body.dark select { background-color: #1e293b; border-color: #475569; color: #e2e8f0; }
+        body.dark #mobile-nav-menu { background-color: #1e293b; border-color: #334155; }
 
         /* Utility classes for inputs and containers */
         
@@ -67,6 +82,9 @@
 </nav>
         
         <div class="flex items-center space-x-2 flex-shrink-0">
+            <button onclick="toggleDarkMode()" class="p-1.5 rounded-lg hover:bg-gray-200 text-gray-500 transition" title="Toggle Dark Mode" aria-label="Toggle Dark Mode">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+            </button>
             <input type="date" id="date-selector" onchange="handleDateChange(this.value)"
                    class="px-2 py-1 border border-indigo-300 rounded-lg text-xs font-semibold text-gray-700 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition duration-150 w-28">
         </div>
@@ -222,6 +240,10 @@
                         <button onclick="saveAttendance()" 
                                 class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 rounded transition text-sm">
                             Save
+                        </button>
+                        <button onclick="deleteAttendanceReport()" id="delete-report-btn"
+                                class="hidden flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2 rounded transition text-sm">
+                            Delete Report
                         </button>
                         <button onclick="closeAttendanceModal()" 
                                 class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 rounded transition text-sm">
@@ -679,6 +701,10 @@
             // Set modal title and date
             document.getElementById('attendance-modal-title').textContent = `Attendance: Class ${classId}`;
             document.getElementById('attendance-date-display').textContent = `Date: ${getDisplayDate(selectedDateId)}`;
+            
+            // Show delete button for admins
+            const deleteBtn = document.getElementById('delete-report-btn');
+            if (deleteBtn) deleteBtn.classList.toggle('hidden', !isAdmin);
             
             // Render student list
             renderStudentAttendanceList();
@@ -2987,6 +3013,35 @@ window.saveClassReport = async () => {
             XLSX.writeFile(wb, `Attendance_${selectedDepartment}_${selectedDateId}.xlsx`);
             showMessage('Exported!', `${rows.length} records exported to Excel.`);
         };
+
+        // --- DELETE ATTENDANCE REPORT FOR A CLASS ---
+        window.deleteAttendanceReport = async () => {
+            if (!isAdmin) { showMessage('Access Denied', 'Only admins can delete reports.'); return; }
+            if (!currentAttendanceClassId) return;
+            if (!confirm(`Delete the attendance report for ${currentAttendanceClassId} on ${selectedDateId}?\n\nThis removes the saved data for this class on this day. This cannot be undone.`)) return;
+
+            try {
+                const dailyReportDocRef = doc(db, 'attendance', 'app', 'daily_reports', selectedDateId);
+                const docSnap = await getDoc(dailyReportDocRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    delete data[currentAttendanceClassId];
+                    await setDoc(dailyReportDocRef, data);
+                }
+                showMessage('Deleted', `Report for ${currentAttendanceClassId} on ${selectedDateId} has been removed.`);
+                closeAttendanceModal();
+            } catch (e) {
+                showMessage('Error', 'Failed to delete: ' + e.message);
+            }
+        };
+
+        // --- DARK MODE ---
+        window.toggleDarkMode = () => {
+            document.body.classList.toggle('dark');
+            localStorage.setItem('darkMode', document.body.classList.contains('dark'));
+        };
+        // Restore dark mode preference
+        if (localStorage.getItem('darkMode') === 'true') document.body.classList.add('dark');
 
         // --- INITIALIZATION (Ensure this is at the end) ---
         window.onload = () => {

@@ -15,7 +15,17 @@
             overflow-x: hidden;
             width: 100%;
             max-width: 100vw;
+            transition: background-color 0.3s, color 0.3s;
         }
+
+        body.dark { background-color: #0f172a; color: #e2e8f0; }
+        body.dark header { background-color: #1e293b; border-color: #334155; }
+        body.dark .bg-white { background-color: #1e293b; }
+        body.dark .text-gray-800 { color: #e2e8f0; }
+        body.dark .text-gray-700 { color: #cbd5e1; }
+        body.dark .text-gray-600 { color: #94a3b8; }
+        body.dark .border-gray-200 { border-color: #334155; }
+        body.dark input, body.dark select { background-color: #1e293b; border-color: #475569; color: #e2e8f0; }
 
         .stat-card {
             animation: slideIn 0.4s ease-out;
@@ -70,6 +80,9 @@
         </div>
         
         <div class="flex items-center space-x-2 flex-shrink-0">
+            <button onclick="toggleDarkMode()" class="p-1.5 rounded-lg hover:bg-gray-200 text-gray-500 transition" title="Toggle Dark Mode" aria-label="Toggle Dark Mode">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+            </button>
             <input type="date" id="date-selector" 
                    class="px-2 py-1 border border-indigo-300 rounded-lg text-xs font-semibold text-gray-700 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition duration-150 w-28">
         </div>
@@ -647,13 +660,15 @@
                 if (dayData) {
                     renderDashboard();
                 } else {
-                    // Show message if no data for selected date
+                    // Show message if no data for selected date with suggestion
                     const [year, month, day] = selectedDate.split('-');
                     const dateObj = new Date(year, month - 1, day);
+                    const latestDate = allData.length > 0 ? allData[0].date : null;
                     document.getElementById('latestDayTitle').textContent = 
                         `No data for ${dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}`;
-                    document.getElementById('latestDaySummary').innerHTML = 
-                        '<p class="text-gray-500 col-span-4 text-center py-8">No attendance data recorded for this date</p>';
+                    document.getElementById('latestDaySummary').innerHTML = latestDate
+                        ? `<p class="text-gray-500 col-span-4 text-center py-8">No attendance recorded for this date. <button onclick="document.getElementById('date-selector').value='${latestDate}'; document.getElementById('date-selector').dispatchEvent(new Event('change'));" class="text-blue-600 underline font-semibold">Jump to latest (${latestDate})</button></p>`
+                        : '<p class="text-gray-500 col-span-4 text-center py-8">No attendance data recorded for this date</p>';
                 }
             });
         }
@@ -1643,6 +1658,13 @@
                 }
             });
         }
+
+        // --- DARK MODE ---
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark');
+            localStorage.setItem('darkMode', document.body.classList.contains('dark'));
+        }
+        if (localStorage.getItem('darkMode') === 'true') document.body.classList.add('dark');
     </script>
 </body>
 </html>
