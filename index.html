@@ -125,6 +125,11 @@
                 📥 Export Attendance
             </button>
             
+            <button onclick="showArchivedStudents()" 
+                    class="px-3 py-2 text-sm text-center bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-semibold shadow-md">
+                📦 Archived Students
+            </button>
+            
             <div id="menu-item-index" class="flex items-center gap-2">
                 <a href="index.html" class="flex-1 px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
                     &#x1F4DA; Attendance Tracker
@@ -3146,11 +3151,11 @@ window.saveClassReport = async () => {
                             </span>
                             <div><p class="text-sm font-semibold text-gray-800">Move to Another Class</p><p class="text-[10px] text-gray-400">Transfer to a different class</p></div>
                         </button>
-                        <button onclick="removeStudentFromRoster('${classId}', ${idx}); document.getElementById('student-action-sheet').remove();" class="w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-red-50 transition text-left">
-                            <span class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-600 shrink-0">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        <button onclick="removeStudentFromRoster('${classId}', ${idx}); document.getElementById('student-action-sheet').remove();" class="w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-amber-50 transition text-left">
+                            <span class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
                             </span>
-                            <div><p class="text-sm font-semibold text-red-700">Remove from Roster</p><p class="text-[10px] text-gray-400">Delete this student permanently</p></div>
+                            <div><p class="text-sm font-semibold text-amber-700">Archive Student</p><p class="text-[10px] text-gray-400">Move to archived list (can restore later)</p></div>
                         </button>
                     </div>
                     <button onclick="document.getElementById('student-action-sheet').remove()" class="w-full mt-3 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold text-sm rounded-xl transition">Cancel</button>
@@ -3161,56 +3166,155 @@ window.saveClassReport = async () => {
 
         window.editStudentName = async (classId, idx) => {
             const student = studentRosters[classId][idx];
-            const newName = prompt('Edit student name:', student.name);
-            if (!newName || newName.trim() === '' || newName === student.name) return;
-            studentRosters[classId][idx].name = newName.trim();
+            // Close action sheet, show inline edit
+            const sheet = document.getElementById('student-action-sheet');
+            if (sheet) sheet.remove();
+            
+            const editSheet = document.createElement('div');
+            editSheet.id = 'student-action-sheet';
+            editSheet.className = 'fixed inset-0 bg-black/40 z-50 flex items-end justify-center';
+            editSheet.onclick = (e) => { if (e.target === editSheet) editSheet.remove(); };
+            editSheet.innerHTML = `
+                <div class="bg-white rounded-t-2xl w-full max-w-md p-4 pb-6 shadow-2xl" onclick="event.stopPropagation()">
+                    <div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3"></div>
+                    <p class="text-sm font-bold text-gray-800 mb-3">Edit Student Name</p>
+                    <input id="edit-name-input" type="text" value="${student.name}" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" autofocus>
+                    <div class="flex gap-2 mt-3">
+                        <button onclick="document.getElementById('student-action-sheet').remove()" class="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold text-sm rounded-xl transition">Cancel</button>
+                        <button onclick="confirmEditName('${classId}', ${idx})" class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl transition">Save</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(editSheet);
+            setTimeout(() => document.getElementById('edit-name-input')?.focus(), 100);
+        };
+
+        window.confirmEditName = async (classId, idx) => {
+            const input = document.getElementById('edit-name-input');
+            const newName = input?.value?.trim();
+            if (!newName || newName === studentRosters[classId][idx].name) {
+                document.getElementById('student-action-sheet')?.remove();
+                return;
+            }
+            studentRosters[classId][idx].name = newName;
             await saveRosterToFirestore();
+            document.getElementById('student-action-sheet')?.remove();
             renderStudentAttendanceList();
         };
 
         window.moveStudentToClass = async (fromClassId, idx) => {
             const student = studentRosters[fromClassId][idx];
             const deptClasses = CLASS_DEFINITIONS[selectedDepartment] || [];
-            const classOptions = deptClasses.map((c, i) => `${i + 1} = ${c.id}`).join('\n');
-            const choice = prompt(`Move "${student.name}" to which class?\n\n${classOptions}`, '');
-            if (!choice) return;
-            const targetClass = deptClasses[parseInt(choice) - 1];
-            if (!targetClass) { alert('Invalid choice'); return; }
-            if (targetClass.id === fromClassId) { alert('Already in this class'); return; }
-            // Add to target class
-            if (!studentRosters[targetClass.id]) studentRosters[targetClass.id] = [];
-            studentRosters[targetClass.id].push({...student});
-            // Remove from source class
+            const sheet = document.getElementById('student-action-sheet');
+            if (sheet) sheet.remove();
+
+            const moveSheet = document.createElement('div');
+            moveSheet.id = 'student-action-sheet';
+            moveSheet.className = 'fixed inset-0 bg-black/40 z-50 flex items-end justify-center';
+            moveSheet.onclick = (e) => { if (e.target === moveSheet) moveSheet.remove(); };
+            const classButtons = deptClasses.filter(c => c.id !== fromClassId).map(c =>
+                `<button onclick="confirmMoveStudent('${fromClassId}', ${idx}, '${c.id}')" class="w-full p-3 rounded-xl bg-gray-50 hover:bg-indigo-50 text-left transition">
+                    <p class="text-sm font-semibold text-gray-800">${c.name} (${c.gender})</p>
+                    <p class="text-[10px] text-gray-400">${c.id}</p>
+                </button>`
+            ).join('');
+            moveSheet.innerHTML = `
+                <div class="bg-white rounded-t-2xl w-full max-w-md p-4 pb-6 shadow-2xl max-h-[70vh] overflow-auto" onclick="event.stopPropagation()">
+                    <div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3"></div>
+                    <p class="text-sm font-bold text-gray-800 mb-1">Move "${student.name}"</p>
+                    <p class="text-[11px] text-gray-400 mb-3">Select destination class</p>
+                    <div class="space-y-2">${classButtons}</div>
+                    <button onclick="document.getElementById('student-action-sheet').remove()" class="w-full mt-3 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold text-sm rounded-xl transition">Cancel</button>
+                </div>
+            `;
+            document.body.appendChild(moveSheet);
+        };
+
+        window.confirmMoveStudent = async (fromClassId, idx, toClassId) => {
+            const student = studentRosters[fromClassId][idx];
+            if (!studentRosters[toClassId]) studentRosters[toClassId] = [];
+            studentRosters[toClassId].push({...student});
             studentRosters[fromClassId].splice(idx, 1);
             await saveRosterToFirestore();
+            document.getElementById('student-action-sheet')?.remove();
             renderStudentAttendanceList();
-            alert(`Moved "${student.name}" to ${targetClass.id}`);
         };
 
         window.removeStudentFromRoster = async (classId, idx) => {
             const student = studentRosters[classId][idx];
-            if (!confirm(`Remove "${student.name}" from ${classId}? This removes them from the roster.`)) return;
+            const sheet = document.getElementById('student-action-sheet');
+            if (sheet) sheet.remove();
+
+            const archiveSheet = document.createElement('div');
+            archiveSheet.id = 'student-action-sheet';
+            archiveSheet.className = 'fixed inset-0 bg-black/40 z-50 flex items-end justify-center';
+            archiveSheet.onclick = (e) => { if (e.target === archiveSheet) archiveSheet.remove(); };
+            archiveSheet.innerHTML = `
+                <div class="bg-white rounded-t-2xl w-full max-w-md p-4 pb-6 shadow-2xl" onclick="event.stopPropagation()">
+                    <div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3"></div>
+                    <p class="text-sm font-bold text-gray-800 mb-1">Archive "${student.name}"?</p>
+                    <p class="text-[11px] text-gray-400 mb-4">They will be moved to the archived list and hidden from attendance. You can restore them later.</p>
+                    <div class="flex gap-2">
+                        <button onclick="document.getElementById('student-action-sheet').remove()" class="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold text-sm rounded-xl transition">Cancel</button>
+                        <button onclick="confirmArchiveStudent('${classId}', ${idx})" class="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm rounded-xl transition">Archive</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(archiveSheet);
+        };
+
+        window.confirmArchiveStudent = async (classId, idx) => {
+            const student = studentRosters[classId][idx];
+            // Add to archived list
+            if (!studentRosters._archived) studentRosters._archived = [];
+            studentRosters._archived.push({ ...student, archivedFrom: classId, archivedAt: new Date().toISOString() });
+            // Remove from active roster
             studentRosters[classId].splice(idx, 1);
             await saveRosterToFirestore();
+            document.getElementById('student-action-sheet')?.remove();
             renderStudentAttendanceList();
         };
 
         window.addStudentToClass = async () => {
             const classId = currentAttendanceClassId;
             if (!classId) return;
-            const name = prompt('New student name:');
-            if (!name || !name.trim()) return;
+
+            const addSheet = document.createElement('div');
+            addSheet.id = 'student-action-sheet';
+            addSheet.className = 'fixed inset-0 bg-black/40 z-50 flex items-end justify-center';
+            addSheet.onclick = (e) => { if (e.target === addSheet) addSheet.remove(); };
+            addSheet.innerHTML = `
+                <div class="bg-white rounded-t-2xl w-full max-w-md p-4 pb-6 shadow-2xl" onclick="event.stopPropagation()">
+                    <div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3"></div>
+                    <p class="text-sm font-bold text-gray-800 mb-3">Add New Student</p>
+                    <input id="add-student-input" type="text" placeholder="Student name" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" autofocus>
+                    <div class="flex gap-2 mt-3">
+                        <button onclick="document.getElementById('student-action-sheet').remove()" class="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold text-sm rounded-xl transition">Cancel</button>
+                        <button onclick="confirmAddStudent()" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-xl transition">Add</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(addSheet);
+            setTimeout(() => document.getElementById('add-student-input')?.focus(), 100);
+        };
+
+        window.confirmAddStudent = async () => {
+            const input = document.getElementById('add-student-input');
+            const name = input?.value?.trim();
+            if (!name) return;
+            const classId = currentAttendanceClassId;
             if (!studentRosters[classId]) studentRosters[classId] = [];
             const maxSN = studentRosters[classId].reduce((max, s) => Math.max(max, parseInt(s.sn) || 0), 0);
-            studentRosters[classId].push({ name: name.trim(), gender: '', sn: String(maxSN + 1), rg: '' });
+            studentRosters[classId].push({ name, gender: '', sn: String(maxSN + 1), rg: '' });
             await saveRosterToFirestore();
+            document.getElementById('student-action-sheet')?.remove();
             renderStudentAttendanceList();
         };
 
         window.saveRosterToFirestore = async () => {
             try {
-                const classCount = Object.keys(studentRosters).length;
-                const studentCount = Object.values(studentRosters).reduce((sum, s) => sum + s.length, 0);
+                const classCount = Object.keys(studentRosters).filter(k => k !== '_archived').length;
+                const studentCount = Object.entries(studentRosters).filter(([k]) => k !== '_archived').reduce((sum, [,s]) => sum + s.length, 0);
                 await setDoc(doc(db, 'attendance', 'app', 'rosters', 'current'), {
                     data: studentRosters,
                     loadedAt: serverTimestamp(),
@@ -3219,8 +3323,52 @@ window.saveClassReport = async () => {
                 });
             } catch (e) {
                 console.error('Failed to save roster:', e);
-                alert('Failed to save roster changes: ' + e.message);
             }
+        };
+
+        window.showArchivedStudents = () => {
+            const archived = studentRosters._archived || [];
+            const sheet = document.createElement('div');
+            sheet.id = 'student-action-sheet';
+            sheet.className = 'fixed inset-0 bg-black/40 z-50 flex items-end justify-center';
+            sheet.onclick = (e) => { if (e.target === sheet) sheet.remove(); };
+
+            const rows = archived.length === 0
+                ? '<p class="text-center text-gray-400 py-6 text-sm italic">No archived students</p>'
+                : archived.map((s, i) => `
+                    <div class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
+                        <div>
+                            <p class="text-sm font-semibold text-gray-800">${s.name}</p>
+                            <p class="text-[10px] text-gray-400">From: ${s.archivedFrom || 'Unknown'} | ${s.archivedAt ? new Date(s.archivedAt).toLocaleDateString() : ''}</p>
+                        </div>
+                        <button onclick="restoreArchivedStudent(${i})" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg transition">Restore</button>
+                    </div>
+                `).join('');
+
+            sheet.innerHTML = `
+                <div class="bg-white rounded-t-2xl w-full max-w-md p-4 pb-6 shadow-2xl max-h-[70vh] overflow-auto" onclick="event.stopPropagation()">
+                    <div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3"></div>
+                    <p class="text-sm font-bold text-gray-800 mb-1">Archived Students</p>
+                    <p class="text-[11px] text-gray-400 mb-3">${archived.length} student${archived.length !== 1 ? 's' : ''} archived</p>
+                    <div class="space-y-2">${rows}</div>
+                    <button onclick="document.getElementById('student-action-sheet').remove()" class="w-full mt-3 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold text-sm rounded-xl transition">Close</button>
+                </div>
+            `;
+            document.body.appendChild(sheet);
+        };
+
+        window.restoreArchivedStudent = async (archivedIdx) => {
+            const archived = studentRosters._archived || [];
+            const student = archived[archivedIdx];
+            if (!student) return;
+            const targetClass = student.archivedFrom || currentAttendanceClassId;
+            if (!studentRosters[targetClass]) studentRosters[targetClass] = [];
+            const { archivedFrom, archivedAt, ...cleanStudent } = student;
+            studentRosters[targetClass].push(cleanStudent);
+            studentRosters._archived.splice(archivedIdx, 1);
+            await saveRosterToFirestore();
+            document.getElementById('student-action-sheet')?.remove();
+            showArchivedStudents(); // Refresh the list
         };
 
         // --- GOOGLE SIGN-IN OVERLAY ---
