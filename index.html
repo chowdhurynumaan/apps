@@ -2218,16 +2218,12 @@ const handleAppReady = async () => {
                     if (result && result.user) console.log('Redirect OK:', result.user.email);
                 }).catch(e => console.warn('Redirect:', e.message));
 
-                // After 2 seconds, if still not authed, show sign-in button
+                // After 1 second, if still not authed, show sign-in button immediately
                 setTimeout(() => {
                     if (!isAuthReady) {
-                        if (initialAuthToken) {
-                            signInWithCustomToken(auth, initialAuthToken);
-                        } else {
-                            showGoogleSignInOverlay();
-                        }
+                        showGoogleSignInOverlay();
                     }
-                }, 2000);
+                }, 1000);
             } catch (error) {
                 console.error("Firebase initialization failed:", error);
                 spinner.classList.add('hidden');
@@ -3477,11 +3473,9 @@ window.saveClassReport = async () => {
         // --- GOOGLE SIGN-IN OVERLAY ---
         function showGoogleSignInOverlay() {
             if (document.getElementById('google-signin-overlay')) return;
-            // Hide the loading spinner
-            const spinner = document.getElementById('loading-spinner');
-            if (spinner) spinner.classList.add('hidden');
-            const msgText = document.getElementById('initial-message-text');
-            if (msgText) msgText.textContent = '';
+            // Hide the entire loading overlay
+            const initialMsg = document.getElementById('initial-message');
+            if (initialMsg) initialMsg.classList.add('hidden');
 
             const overlay = document.createElement('div');
             overlay.id = 'google-signin-overlay';
