@@ -3139,19 +3139,19 @@ window.saveClassReport = async () => {
                     <div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3"></div>
                     <p class="text-sm font-bold text-gray-800 mb-3 text-center">${name}</p>
                     <div class="space-y-2">
-                        <button onclick="editStudentName('${classId}', ${idx}); document.getElementById('student-action-sheet').remove();" class="w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-indigo-50 transition text-left">
+                        <button onclick="editStudentName('${classId}', ${idx})" class="w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-indigo-50 transition text-left">
                             <span class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                             </span>
                             <div><p class="text-sm font-semibold text-gray-800">Edit Name</p><p class="text-[10px] text-gray-400">Change this student's name</p></div>
                         </button>
-                        <button onclick="moveStudentToClass('${classId}', ${idx}); document.getElementById('student-action-sheet').remove();" class="w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-amber-50 transition text-left">
+                        <button onclick="moveStudentToClass('${classId}', ${idx})" class="w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-amber-50 transition text-left">
                             <span class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
                             </span>
                             <div><p class="text-sm font-semibold text-gray-800">Move to Another Class</p><p class="text-[10px] text-gray-400">Transfer to a different class</p></div>
                         </button>
-                        <button onclick="removeStudentFromRoster('${classId}', ${idx}); document.getElementById('student-action-sheet').remove();" class="w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-amber-50 transition text-left">
+                        <button onclick="removeStudentFromRoster('${classId}', ${idx})" class="w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-amber-50 transition text-left">
                             <span class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
                             </span>
