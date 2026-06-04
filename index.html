@@ -3128,7 +3128,11 @@ window.saveClassReport = async () => {
 
         window.doGoogleSignIn = () => {
             const provider = new GoogleAuthProvider();
-            signInWithPopup(auth, provider).catch(() => {
+            signInWithPopup(auth, provider).then(result => {
+                console.log('Popup sign-in OK:', result.user.email);
+            }).catch(err => {
+                console.warn('Popup failed, trying redirect:', err.message);
+                alert('Opening Google sign-in... (if nothing happens, check that systems.manarcapital.org is in Firebase Auth authorized domains)');
                 signInWithRedirect(auth, provider);
             });
         };
