@@ -82,6 +82,11 @@
 </nav>
         
         <div class="flex items-center space-x-2 flex-shrink-0">
+            <!-- Pending Students Bell (admin only) -->
+            <button id="pending-bell" onclick="showPendingStudents()" class="hidden relative p-1.5 rounded-lg hover:bg-gray-200 text-gray-500 transition" title="Pending Student Reviews" aria-label="Pending Reviews">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                <span id="pending-badge" class="hidden absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center bg-red-500 text-white text-[9px] font-bold rounded-full px-1">0</span>
+            </button>
             <button onclick="toggleDarkMode()" class="p-1.5 rounded-lg hover:bg-gray-200 text-gray-500 transition" title="Toggle Dark Mode" aria-label="Toggle Dark Mode">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
             </button>
@@ -460,6 +465,7 @@
             runTransaction,
             setLogLevel,
             getDoc,
+            getDocs,
             addDoc,
             writeBatch,
             query, // <-- New
@@ -2153,6 +2159,7 @@ const handleAppReady = async () => {
     document.getElementById('loading-spinner').classList.remove('hidden'); // Ensure spinner is visible
     document.getElementById('initial-message-text').textContent = "Authentication Complete! Fetching data...";
     setupFirestoreListeners(); // Set up listeners
+    setupPendingStudentsListener(); // Admin: listen for pending student approvals
     // REMOVED: The setTimeout logic. The listener will now correctly hide the overlay once data is available.
 };
 
@@ -3296,28 +3303,52 @@ window.saveClassReport = async () => {
                 <div class="bg-white rounded-t-2xl w-full max-w-md p-4 pb-6 shadow-2xl" onclick="event.stopPropagation()">
                     <div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3"></div>
                     <p class="text-sm font-bold text-gray-800 mb-3">Add New Student</p>
-                    <input id="add-student-input" type="text" placeholder="Student name" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" autofocus>
+                    <div class="space-y-2">
+                        <input id="add-student-name" type="text" placeholder="Student name *" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" autofocus>
+                        <div class="flex gap-2">
+                            <input id="add-student-id" type="text" placeholder="ID *" class="flex-1 px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none">
+                            <input id="add-student-rg" type="text" placeholder="RG *" class="flex-1 px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none">
+                        </div>
+                        <p id="add-student-error" class="text-[11px] text-red-500 hidden"></p>
+                    </div>
                     <div class="flex gap-2 mt-3">
                         <button onclick="document.getElementById('student-action-sheet').remove()" class="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold text-sm rounded-xl transition">Cancel</button>
-                        <button onclick="confirmAddStudent()" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-xl transition">Add</button>
+                        <button onclick="confirmAddStudent()" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-xl transition">Submit for Review</button>
                     </div>
+                    <p class="text-[10px] text-gray-400 mt-2 text-center">New students require admin approval before appearing in roster</p>
                 </div>
             `;
             document.body.appendChild(addSheet);
-            setTimeout(() => document.getElementById('add-student-input')?.focus(), 100);
+            setTimeout(() => document.getElementById('add-student-name')?.focus(), 100);
         };
 
         window.confirmAddStudent = async () => {
-            const input = document.getElementById('add-student-input');
-            const name = input?.value?.trim();
-            if (!name) return;
+            const name = document.getElementById('add-student-name')?.value?.trim();
+            const id = document.getElementById('add-student-id')?.value?.trim();
+            const rg = document.getElementById('add-student-rg')?.value?.trim();
+            const errEl = document.getElementById('add-student-error');
+
+            if (!name || !id || !rg) {
+                errEl.textContent = 'All fields are required (Name, ID, RG)';
+                errEl.classList.remove('hidden');
+                return;
+            }
+
             const classId = currentAttendanceClassId;
-            if (!studentRosters[classId]) studentRosters[classId] = [];
-            const maxSN = studentRosters[classId].reduce((max, s) => Math.max(max, parseInt(s.sn) || 0), 0);
-            studentRosters[classId].push({ name, gender: '', sn: String(maxSN + 1), rg: '' });
-            await saveRosterToFirestore();
-            document.getElementById('student-action-sheet')?.remove();
-            renderStudentAttendanceList();
+            // Save to pending review collection
+            try {
+                await addDoc(collection(db, 'attendance', 'app', 'pending_students'), {
+                    name, sn: id, rg, classId,
+                    submittedBy: currentUserName || userId,
+                    submittedAt: serverTimestamp(),
+                    status: 'pending'
+                });
+                document.getElementById('student-action-sheet')?.remove();
+                showMessage('Submitted!', `"${name}" has been submitted for admin approval.`);
+            } catch (e) {
+                errEl.textContent = 'Failed to submit: ' + e.message;
+                errEl.classList.remove('hidden');
+            }
         };
 
         window.saveRosterToFirestore = async () => {
@@ -3378,6 +3409,75 @@ window.saveClassReport = async () => {
             await saveRosterToFirestore();
             document.getElementById('student-action-sheet')?.remove();
             showArchivedStudents(); // Refresh the list
+        };
+
+        // --- GOOGLE SIGN-IN OVERLAY ---
+        // --- PENDING STUDENT APPROVAL (Admin) ---
+        let pendingStudents = [];
+
+        function setupPendingStudentsListener() {
+            if (!isAdmin) return;
+            document.getElementById('pending-bell')?.classList.remove('hidden');
+            const pendingRef = collection(db, 'attendance', 'app', 'pending_students');
+            onSnapshot(pendingRef, (snap) => {
+                pendingStudents = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(s => s.status === 'pending');
+                const badge = document.getElementById('pending-badge');
+                if (badge) {
+                    badge.textContent = pendingStudents.length;
+                    badge.classList.toggle('hidden', pendingStudents.length === 0);
+                }
+            });
+        }
+
+        window.showPendingStudents = () => {
+            const sheet = document.createElement('div');
+            sheet.id = 'student-action-sheet';
+            sheet.className = 'fixed inset-0 bg-black/40 z-50 flex items-end justify-center';
+            sheet.onclick = (e) => { if (e.target === sheet) sheet.remove(); };
+
+            const rows = pendingStudents.length === 0
+                ? '<p class="text-center text-gray-400 py-6 text-sm italic">No pending students</p>'
+                : pendingStudents.map(s => `
+                    <div class="p-3 rounded-xl bg-gray-50 border border-gray-100">
+                        <div class="flex items-center justify-between mb-1">
+                            <p class="text-sm font-bold text-gray-800">${s.name}</p>
+                            <span class="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full font-semibold">Pending</span>
+                        </div>
+                        <p class="text-[10px] text-gray-400">ID: ${s.sn} | RG: ${s.rg} | Class: ${s.classId}</p>
+                        <p class="text-[10px] text-gray-400">By: ${s.submittedBy || 'Unknown'}</p>
+                        <div class="flex gap-2 mt-2">
+                            <button onclick="approveStudent('${s.id}', '${s.classId}', '${s.name}', '${s.sn}', '${s.rg}')" class="flex-1 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg transition">Approve</button>
+                            <button onclick="rejectStudent('${s.id}')" class="flex-1 py-1.5 bg-red-400 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition">Reject</button>
+                        </div>
+                    </div>
+                `).join('');
+
+            sheet.innerHTML = `
+                <div class="bg-white rounded-t-2xl w-full max-w-md p-4 pb-6 shadow-2xl max-h-[70vh] overflow-auto" onclick="event.stopPropagation()">
+                    <div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3"></div>
+                    <p class="text-sm font-bold text-gray-800 mb-1">Pending Student Reviews</p>
+                    <p class="text-[11px] text-gray-400 mb-3">${pendingStudents.length} awaiting approval</p>
+                    <div class="space-y-2">${rows}</div>
+                    <button onclick="document.getElementById('student-action-sheet').remove()" class="w-full mt-3 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold text-sm rounded-xl transition">Close</button>
+                </div>
+            `;
+            document.body.appendChild(sheet);
+        };
+
+        window.approveStudent = async (docId, classId, name, sn, rg) => {
+            if (!studentRosters[classId]) studentRosters[classId] = [];
+            studentRosters[classId].push({ name, sn, rg, gender: '' });
+            await saveRosterToFirestore();
+            // Update status to approved
+            await updateDoc(doc(db, 'attendance', 'app', 'pending_students', docId), { status: 'approved', approvedBy: currentUserName || userId, approvedAt: serverTimestamp() });
+            document.getElementById('student-action-sheet')?.remove();
+            showPendingStudents();
+        };
+
+        window.rejectStudent = async (docId) => {
+            await updateDoc(doc(db, 'attendance', 'app', 'pending_students', docId), { status: 'rejected', rejectedBy: currentUserName || userId, rejectedAt: serverTimestamp() });
+            document.getElementById('student-action-sheet')?.remove();
+            showPendingStudents();
         };
 
         // --- GOOGLE SIGN-IN OVERLAY ---
