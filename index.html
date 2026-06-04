@@ -3120,15 +3120,43 @@ window.saveClassReport = async () => {
 
         // --- STUDENT ROSTER MANAGEMENT ---
         window.openStudentActions = (idx, name) => {
+            // Close any existing action sheet
+            const existing = document.getElementById('student-action-sheet');
+            if (existing) existing.remove();
+
             const classId = currentAttendanceClassId;
-            const action = prompt(
-                `Student: ${name}\n\nChoose action:\n1 = Edit Name\n2 = Move to Another Class\n3 = Remove from Roster\n4 = Cancel`,
-                '4'
-            );
-            if (!action || action === '4') return;
-            if (action === '1') editStudentName(classId, idx);
-            else if (action === '2') moveStudentToClass(classId, idx);
-            else if (action === '3') removeStudentFromRoster(classId, idx);
+            const sheet = document.createElement('div');
+            sheet.id = 'student-action-sheet';
+            sheet.className = 'fixed inset-0 bg-black/40 z-50 flex items-end justify-center';
+            sheet.onclick = (e) => { if (e.target === sheet) sheet.remove(); };
+            sheet.innerHTML = `
+                <div class="bg-white rounded-t-2xl w-full max-w-md p-4 pb-6 shadow-2xl" onclick="event.stopPropagation()">
+                    <div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3"></div>
+                    <p class="text-sm font-bold text-gray-800 mb-3 text-center">${name}</p>
+                    <div class="space-y-2">
+                        <button onclick="editStudentName('${classId}', ${idx}); document.getElementById('student-action-sheet').remove();" class="w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-indigo-50 transition text-left">
+                            <span class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                            </span>
+                            <div><p class="text-sm font-semibold text-gray-800">Edit Name</p><p class="text-[10px] text-gray-400">Change this student's name</p></div>
+                        </button>
+                        <button onclick="moveStudentToClass('${classId}', ${idx}); document.getElementById('student-action-sheet').remove();" class="w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-amber-50 transition text-left">
+                            <span class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                            </span>
+                            <div><p class="text-sm font-semibold text-gray-800">Move to Another Class</p><p class="text-[10px] text-gray-400">Transfer to a different class</p></div>
+                        </button>
+                        <button onclick="removeStudentFromRoster('${classId}', ${idx}); document.getElementById('student-action-sheet').remove();" class="w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-red-50 transition text-left">
+                            <span class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-600 shrink-0">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            </span>
+                            <div><p class="text-sm font-semibold text-red-700">Remove from Roster</p><p class="text-[10px] text-gray-400">Delete this student permanently</p></div>
+                        </button>
+                    </div>
+                    <button onclick="document.getElementById('student-action-sheet').remove()" class="w-full mt-3 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold text-sm rounded-xl transition">Cancel</button>
+                </div>
+            `;
+            document.body.appendChild(sheet);
         };
 
         window.editStudentName = async (classId, idx) => {
