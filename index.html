@@ -102,6 +102,11 @@
                 🔒 Admin Portal
             </button>
             
+            <button onclick="exportAttendanceToExcel()" 
+                    class="px-3 py-2 text-sm text-center bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-semibold shadow-md">
+                📥 Export Attendance
+            </button>
+            
             <div id="menu-item-index" class="flex items-center gap-2">
                 <a href="index.html" class="flex-1 px-3 py-2 text-sm text-center bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold shadow-md">
                     &#x1F4DA; Attendance Tracker
@@ -181,6 +186,11 @@
 
                 <!-- Student List with Checkboxes -->
                 <div class="p-2">
+                    <div class="flex gap-1.5 mb-2">
+                        <button onclick="markAllPresent()" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-1.5 rounded text-xs transition">✓ All Present</button>
+                        <button onclick="markAllAbsent()" class="flex-1 bg-red-400 hover:bg-red-500 text-white font-bold py-1.5 rounded text-xs transition">✗ All Absent</button>
+                        <button onclick="clearAttendance()" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-1.5 rounded text-xs transition">Clear</button>
+                    </div>
                     <div id="student-attendance-list" class="space-y-1.5">
                         <p class="text-center text-gray-500 py-4 text-xs">Loading students...</p>
                     </div>
@@ -740,6 +750,32 @@
                 currentAttendanceData[studentIdx] = {};
             }
             currentAttendanceData[studentIdx].status = status;
+            renderStudentAttendanceList();
+        };
+
+        // Quick-fill: Mark all students present
+        window.markAllPresent = () => {
+            const students = studentRosters[currentAttendanceClassId] || [];
+            students.forEach((_, idx) => {
+                if (!currentAttendanceData[idx]) currentAttendanceData[idx] = {};
+                currentAttendanceData[idx].status = 'present';
+            });
+            renderStudentAttendanceList();
+        };
+
+        // Quick-fill: Mark all students absent
+        window.markAllAbsent = () => {
+            const students = studentRosters[currentAttendanceClassId] || [];
+            students.forEach((_, idx) => {
+                if (!currentAttendanceData[idx]) currentAttendanceData[idx] = {};
+                currentAttendanceData[idx].status = 'absent';
+            });
+            renderStudentAttendanceList();
+        };
+
+        // Clear all attendance markings
+        window.clearAttendance = () => {
+            currentAttendanceData = {};
             renderStudentAttendanceList();
         };
         
@@ -2900,6 +2936,58 @@ window.saveClassReport = async () => {
             }
         });
         
+        // --- EXPORT ATTENDANCE TO EXCEL ---
+        window.exportAttendanceToExcel = () => {
+            if (!currentReports || Object.keys(currentReports).length === 0) {
+                showMessage('No Data', 'No attendance data for the selected date to export.');
+                return;
+            }
+
+            const rows = [];
+            const deptClasses = CLASS_DEFINITIONS[selectedDepartment] || [];
+
+            deptClasses.forEach(classDef => {
+                const report = currentReports[classDef.id];
+                if (!report) return;
+
+                const students = studentRosters[classDef.id] || [];
+                const details = report.attendanceDetails || {};
+
+                students.forEach((student, idx) => {
+                    const data = details[idx] || {};
+                    rows.push({
+                        Date: selectedDateId,
+                        Department: selectedDepartment,
+                        Class: classDef.id,
+                        'Student Name': student.name,
+                        Gender: student.gender || '',
+                        Status: data.status === 'present' ? 'Present' : data.status === 'tardy' ? 'Tardy' : 'Absent',
+                        'Report Brought': data.progressReportBrought ? 'Yes' : 'No',
+                        'Report Signed': data.progressReportSigned ? 'Yes' : 'No',
+                        'Saved By': report.userName || '',
+                    });
+                });
+            });
+
+            if (rows.length === 0) {
+                showMessage('No Data', 'No student-level data to export. Make sure rosters are loaded.');
+                return;
+            }
+
+            const ws = XLSX.utils.json_to_sheet(rows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+
+            // Auto-size columns
+            const colWidths = Object.keys(rows[0]).map(key => ({
+                wch: Math.max(key.length, ...rows.map(r => String(r[key] || '').length)) + 2
+            }));
+            ws['!cols'] = colWidths;
+
+            XLSX.writeFile(wb, `Attendance_${selectedDepartment}_${selectedDateId}.xlsx`);
+            showMessage('Exported!', `${rows.length} records exported to Excel.`);
+        };
+
         // --- INITIALIZATION (Ensure this is at the end) ---
         window.onload = () => {
             initializeFirebase();
