@@ -2179,9 +2179,15 @@ const handleAppReady = async () => {
                                 await signInWithCustomToken(auth, initialAuthToken);
                             } else {
                                 const provider = new GoogleAuthProvider();
-                                signInWithPopup(auth, provider).catch(() => {
+                                // Mobile: use redirect (popups blocked). Desktop: try popup first.
+                                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                                if (isMobile) {
                                     signInWithRedirect(auth, provider);
-                                });
+                                } else {
+                                    signInWithPopup(auth, provider).catch(() => {
+                                        signInWithRedirect(auth, provider);
+                                    });
+                                }
                             }
                         } catch (error) {
                             console.error("Authentication failed:", error);
