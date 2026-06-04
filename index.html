@@ -82,23 +82,23 @@
                 <span id="pending-badge" class="hidden absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center bg-red-500 text-white text-[9px] font-bold rounded-full px-1">0</span>
             </button>
 
-            <!-- Dark Mode -->
-            <button onclick="toggleDarkMode()" class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500 transition" title="Toggle Dark Mode" aria-label="Toggle Dark Mode">
-                <i data-lucide="moon" class="h-4 w-4"></i>
-            </button>
-
-            <!-- Date Selector -->
-            <input type="date" id="date-selector" onchange="handleDateChange(this.value)"
-                   class="px-2 py-1 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition w-28" title="Select date">
-
-            <!-- Mobile overflow (3-dot) -->
-            <button onclick="toggleMobileOverflow()" class="sm:hidden flex items-center justify-center w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500 transition flex-shrink-0" title="More actions" aria-label="More actions">
+            <!-- 3-dot overflow (always visible) -->
+            <button onclick="toggleMobileOverflow()" class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500 transition flex-shrink-0" title="More actions" aria-label="More actions">
                 <i data-lucide="more-vertical" class="h-4 w-4"></i>
             </button>
         </div>
 
-        <!-- Mobile Overflow Menu -->
-        <div id="mobileOverflowMenu" class="hidden absolute top-14 right-3 bg-white rounded-xl shadow-xl border border-slate-200 z-50 min-w-[180px] overflow-hidden flex flex-col">
+        <!-- Overflow Menu -->
+        <div id="mobileOverflowMenu" class="hidden absolute top-14 right-3 bg-white rounded-xl shadow-xl border border-slate-200 z-50 min-w-[200px] overflow-hidden flex flex-col">
+            <!-- Date Selector -->
+            <div class="px-3 py-2.5 border-b border-slate-100">
+                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date</label>
+                <input type="date" id="date-selector" onchange="handleDateChange(this.value)"
+                       class="mt-1 w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:ring-indigo-500 focus:border-indigo-500 transition" title="Select date">
+            </div>
+            <button onclick="toggleDarkMode(); toggleMobileOverflow();" class="flex items-center gap-2 w-full px-3 py-2.5 text-[13px] font-medium text-slate-700 hover:bg-slate-50 border-b border-slate-100 text-left">
+                <i data-lucide="moon" class="h-3.5 w-3.5 text-slate-400"></i> Dark Mode
+            </button>
             <button onclick="exportAttendanceToExcel(); toggleMobileOverflow();" class="flex items-center gap-2 w-full px-3 py-2.5 text-[13px] font-medium text-slate-700 hover:bg-slate-50 border-b border-slate-100 text-left">
                 <i data-lucide="download" class="h-3.5 w-3.5 text-slate-400"></i> Export Attendance
             </button>
