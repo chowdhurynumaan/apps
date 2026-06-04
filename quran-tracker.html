@@ -52,9 +52,9 @@
     </style>
     <!-- Load Firebase SDKs -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, runTransaction, FieldValue, serverTimestamp, setLogLevel, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, runTransaction, FieldValue, serverTimestamp, setLogLevel, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
 
         // Global Firebase variables exposed to the window for script access
         window.firebase = {
@@ -935,29 +935,7 @@
         } else {
                         // Hifz/Sifarah/Quran format
                         
-                        // --- START MANUAL OVERRIDE FOR THE LOG ENTRY (11/13/2025, 4:08:44 AM) ---
-                        const isTargetLog = log.stage === 'Hifz' && 
-                                            log.start_surah === 2 && log.start_ayah === 25 &&
-                                            log.end_surah === 2 && log.end_ayah === 66 &&
-                                            log.review_ayahs === 32 && log.new_ayahs === 10;
-                        
-                        // NEW: Manual override for the second known broken log entry (5:00:50 AM)
-                        const isSecondTargetLog = log.stage === 'Hifz' && 
-                                            log.start_surah === 2 && log.start_ayah === 24 &&
-                                            log.end_surah === 2 && log.end_ayah === 67 &&
-                                            log.review_ayahs === 42 && log.new_ayahs === 2;
-
-                        if (isTargetLog) {
-                            // Corrected ranges for the 4:08:44 AM log
-                            detailHTML += `<p class="text-sm text-gray-800">- <span class="font-medium text-blue-600">review:</span> 2:30 - 2:40, 2:45 - 2:65</p>`;
-                            detailHTML += `<p class="text-sm text-gray-800">- <span class="font-medium text-red-600">new:</span> 2:25 - 2:29, 2:41 - 2:44, 2:66</p>`;
-                            
-                        } else if (isSecondTargetLog) {
-                            // Corrected ranges for the 5:00:50 AM log (2:24 new, 2:25-2:66 review, 2:67 new)
-                            detailHTML += `<p class="text-sm text-gray-800">- <span class="font-medium text-blue-600">review:</span> 2:25 - 2:66</p>`;
-                            detailHTML += `<p class="text-sm text-gray-800">- <span class="font-medium text-red-600">new:</span> 2:24, 2:67</p>`;
-
-                        } else if (log.new_ranges || log.review_ranges) {
+                        if (log.new_ranges || log.review_ranges) {
                             // NEW LOGIC: Use the stored fragmented ranges for future logs
                             
                             const formatRanges = (ranges) => {
