@@ -156,6 +156,17 @@
      title="User ID. Click to Copy">
      ID: ...
 </div>
+            <!-- User Profile Section -->
+            <div id="user-profile-section" class="hidden mt-3 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                <div class="flex items-center gap-3">
+                    <img id="user-photo" src="" alt="" class="w-10 h-10 rounded-full bg-gray-200 hidden">
+                    <div class="flex-1 min-w-0">
+                        <p id="user-name-display" class="text-sm font-bold text-gray-800 truncate"></p>
+                        <p id="user-email-display" class="text-xs text-gray-500 truncate"></p>
+                    </div>
+                </div>
+                <button onclick="auth.signOut(); location.reload();" class="mt-2 w-full text-xs text-red-600 hover:text-red-800 font-semibold py-1.5 rounded border border-red-200 hover:bg-red-50 transition">Sign Out</button>
+            </div>
         </div>
     </div>
 </header>
@@ -2168,6 +2179,15 @@ const handleAppReady = async () => {
                         currentUserName = user.displayName || user.email || null;
                         console.log("Authenticated as:", userId, currentUserName);
                         document.getElementById('user-id-display').textContent = `ID: ${userId}`;
+                        // Show user profile in menu
+                        const profileSection = document.getElementById('user-profile-section');
+                        if (profileSection) {
+                            profileSection.classList.remove('hidden');
+                            document.getElementById('user-name-display').textContent = user.displayName || 'User';
+                            document.getElementById('user-email-display').textContent = user.email || '';
+                            const photo = document.getElementById('user-photo');
+                            if (user.photoURL) { photo.src = user.photoURL; photo.classList.remove('hidden'); }
+                        }
                         const overlay = document.getElementById('google-signin-overlay');
                         if (overlay) overlay.remove();
                         isAuthReady = true;
