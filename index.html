@@ -2156,6 +2156,18 @@ const handleAppReady = async () => {
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
+
+                // Check for redirect result FIRST (returning from Google sign-in)
+                let redirectHandled = false;
+                try {
+                    const result = await getRedirectResult(auth);
+                    if (result && result.user) {
+                        redirectHandled = true;
+                        // User will be picked up by onAuthStateChanged below
+                    }
+                } catch (e) {
+                    console.warn('Redirect result check:', e.message);
+                }
                 
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
@@ -2172,22 +2184,14 @@ const handleAppReady = async () => {
                         isAuthReady = true;
                         handleAppReady();
                         
-                    } else {
-                        // Show Google sign-in
+                    } else if (!redirectHandled) {
+                        // Only redirect if we're not already returning from one
                         try {
                             if (initialAuthToken) {
                                 await signInWithCustomToken(auth, initialAuthToken);
                             } else {
                                 const provider = new GoogleAuthProvider();
-                                // Mobile: use redirect (popups blocked). Desktop: try popup first.
-                                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-                                if (isMobile) {
-                                    signInWithRedirect(auth, provider);
-                                } else {
-                                    signInWithPopup(auth, provider).catch(() => {
-                                        signInWithRedirect(auth, provider);
-                                    });
-                                }
+                                signInWithRedirect(auth, provider);
                             }
                         } catch (error) {
                             console.error("Authentication failed:", error);
@@ -2195,13 +2199,9 @@ const handleAppReady = async () => {
                             messageText.textContent = "Authentication Failed. Access Denied.";
                             errorDetails.textContent = `Error: ${error.message}`;
                             errorDetails.classList.remove('hidden');
-                            showMessage('Authentication Error', `Could not sign in to the database. ${error.message}`);
                         }
                     }
                 });
-
-                // Check for redirect result
-                getRedirectResult(auth).catch(e => console.warn('Redirect result:', e));
             } catch (error) {
                 console.error("Firebase initialization failed:", error);
                 spinner.classList.add('hidden');
