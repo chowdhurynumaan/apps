@@ -194,6 +194,29 @@
         
 <div id="app-container" class="bg-white shadow-xl rounded-xl p-4 md:p-6 flex flex-col h-full overflow-hidden">
 
+        <!-- Teacher Overview View -->
+        <div id="teacher-overview-view" class="flex flex-col flex-grow overflow-hidden hidden">
+            <div class="flex items-center justify-between pb-4 border-b border-gray-200">
+                <h2 class="text-lg font-bold text-gray-800">Teacher Overview</h2>
+                <button onclick="app.showStudentListViewFromOverview()" class="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg">← Back to List</button>
+            </div>
+            <div class="flex-grow overflow-auto mt-4">
+                <table id="overview-table" class="w-full text-xs border-collapse">
+                    <thead class="sticky top-0 bg-white">
+                        <tr class="border-b-2 border-gray-300">
+                            <th class="text-left p-2 font-bold text-gray-700">Name</th>
+                            <th class="text-left p-2 font-bold text-gray-700">Gender</th>
+                            <th class="text-left p-2 font-bold text-gray-700">Stage</th>
+                            <th class="text-left p-2 font-bold text-gray-700">Progress</th>
+                            <th class="text-left p-2 font-bold text-gray-700">Last Log</th>
+                            <th class="text-left p-2 font-bold text-gray-700">Days Inactive</th>
+                        </tr>
+                    </thead>
+                    <tbody id="overview-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
         <!-- Main Student List View -->
 <div id="student-list-view" class="flex flex-col flex-grow overflow-hidden">            <div id="fixed-header-container" class="pb-4 border-b border-gray-200">
                 <div class="flex gap-2 mb-0">
@@ -203,6 +226,9 @@
                     </button>
                     <button id="bulk-upload-btn" onclick="showBulkUploadModal()" class="hidden w-11 h-11 sm:w-12 sm:h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-md transition duration-150 ease-in-out items-center justify-center flex-shrink-0" aria-label="Bulk Upload" title="Bulk Upload Students">
                         <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                    </button>
+                    <button onclick="app.showTeacherOverview()" class="w-11 h-11 sm:w-12 sm:h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-md transition duration-150 ease-in-out flex items-center justify-center flex-shrink-0" aria-label="Teacher Overview" title="Teacher Overview Grid">
+                        <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
                     </button>
                     <button onclick="showAddStudentModal()" class="w-11 h-11 sm:w-12 sm:h-12 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-md transition duration-150 ease-in-out flex items-center justify-center flex-shrink-0" aria-label="Add New Student">
                         <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
@@ -1494,6 +1520,71 @@
                     (!s.archived || this.state.showArchived)
                 );
                 this.renderStudentList();
+            },
+
+            // --- TEACHER OVERVIEW GRID ---
+            showTeacherOverview: async function() {
+                document.getElementById('student-list-view').classList.add('hidden');
+                document.getElementById('student-detail-view').classList.add('hidden');
+                document.getElementById('teacher-overview-view').classList.remove('hidden');
+
+                const tbody = document.getElementById('overview-tbody');
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-400">Loading...</td></tr>';
+
+                // Get all logs to find last log date per student
+                const logsRef = collection(db, 'quran_tracker/app/logs');
+                const logsSnap = await getDocs(logsRef);
+                const lastLogMap = {};
+                logsSnap.docs.forEach(d => {
+                    const data = d.data();
+                    const ts = data.timestamp?.toDate?.() || null;
+                    if (ts && (!lastLogMap[data.studentId] || ts > lastLogMap[data.studentId])) {
+                        lastLogMap[data.studentId] = ts;
+                    }
+                });
+
+                const now = new Date();
+                const students = this.state.students.filter(s => !s.archived);
+
+                tbody.innerHTML = students.map(s => {
+                    let progress = '';
+                    if (s.stage === 'Qaida') {
+                        const finished = Object.values(s.qaida_finished || {}).filter(Boolean).length;
+                        progress = `${finished}/29 lessons`;
+                    } else if (s.stage === 'Sifarah') {
+                        progress = `${s.sifarah_completed_ayahs || 0}/471 ayahs`;
+                    } else {
+                        const coverage = Object.keys(s.hifz_coverage || s.reading_coverage || {}).length;
+                        progress = `${coverage}/6236 ayahs`;
+                    }
+
+                    const lastLog = lastLogMap[s.id];
+                    const lastLogStr = lastLog ? lastLog.toLocaleDateString() : 'Never';
+                    const daysInactive = lastLog ? Math.floor((now - lastLog) / 86400000) : '∞';
+                    const inactiveClass = daysInactive > 7 ? 'text-red-600 font-bold' : daysInactive > 3 ? 'text-amber-600' : 'text-green-600';
+
+                    return `<tr class="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onclick="app.showStudentDetailFromOverview('${s.id}')">
+                        <td class="p-2 font-semibold">${this.sanitize(s.name)}</td>
+                        <td class="p-2">${s.gender || ''}</td>
+                        <td class="p-2"><span class="px-2 py-0.5 rounded-full text-2xs font-bold bg-blue-100 text-blue-700">${s.stage}</span></td>
+                        <td class="p-2">${progress}</td>
+                        <td class="p-2">${lastLogStr}</td>
+                        <td class="p-2 ${inactiveClass}">${daysInactive}</td>
+                    </tr>`;
+                }).join('');
+            },
+
+            showStudentListViewFromOverview: function() {
+                document.getElementById('teacher-overview-view').classList.add('hidden');
+                document.getElementById('student-list-view').classList.remove('hidden');
+            },
+
+            showStudentDetailFromOverview: function(studentId) {
+                const student = this.state.students.find(s => s.id === studentId);
+                if (student) {
+                    document.getElementById('teacher-overview-view').classList.add('hidden');
+                    this.showStudentDetailView(student);
+                }
             },
 
             sanitize: function(html) {
