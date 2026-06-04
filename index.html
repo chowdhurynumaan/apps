@@ -220,6 +220,7 @@
                     <button onclick="markAllPresent()" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 rounded-lg text-xs transition shadow-sm">✓ All Present</button>
                     <button onclick="markAllAbsent()" class="flex-1 bg-red-400 hover:bg-red-500 text-white font-semibold py-2 rounded-lg text-xs transition shadow-sm">✗ All Absent</button>
                     <button onclick="clearAttendance()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-600 font-semibold py-2 rounded-lg text-xs transition">Clear</button>
+                    <button onclick="addStudentToClass()" class="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-3 rounded-lg text-xs transition shadow-sm" title="Add Student">+</button>
                 </div>
 
                 <!-- Student List -->
@@ -747,7 +748,10 @@
                 const hasReportSigned = currentAttendanceData[idx]?.progressReportSigned || false;
                 const rowBg = status === 'present' ? 'bg-emerald-50 border-emerald-200' : status === 'tardy' ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100';
                 return `
-                    <div class="flex items-center justify-between gap-2 p-2 rounded-xl border ${rowBg} transition-colors">
+                    <div class="flex items-center justify-between gap-1 p-2 rounded-xl border ${rowBg} transition-colors">
+                        <button onclick="openStudentActions(${idx}, '${student.name.replace(/'/g, "\\'")}')" class="p-0.5 text-gray-300 hover:text-indigo-500 shrink-0" title="Edit Student">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
+                        </button>
                         <div class="flex-1 min-w-0">
                             <p class="font-semibold text-gray-800 text-[13px]">${student.name}</p>
                             <p class="text-[10px] text-gray-400">SN: ${student.sn} | RG: ${student.rg || 'N/A'}</p>
@@ -3113,6 +3117,83 @@ window.saveClassReport = async () => {
         };
         // Restore dark mode preference
         if (localStorage.getItem('darkMode') === 'true') document.body.classList.add('dark');
+
+        // --- STUDENT ROSTER MANAGEMENT ---
+        window.openStudentActions = (idx, name) => {
+            const classId = currentAttendanceClassId;
+            const action = prompt(
+                `Student: ${name}\n\nChoose action:\n1 = Edit Name\n2 = Move to Another Class\n3 = Remove from Roster\n4 = Cancel`,
+                '4'
+            );
+            if (!action || action === '4') return;
+            if (action === '1') editStudentName(classId, idx);
+            else if (action === '2') moveStudentToClass(classId, idx);
+            else if (action === '3') removeStudentFromRoster(classId, idx);
+        };
+
+        window.editStudentName = async (classId, idx) => {
+            const student = studentRosters[classId][idx];
+            const newName = prompt('Edit student name:', student.name);
+            if (!newName || newName.trim() === '' || newName === student.name) return;
+            studentRosters[classId][idx].name = newName.trim();
+            await saveRosterToFirestore();
+            renderStudentAttendanceList();
+        };
+
+        window.moveStudentToClass = async (fromClassId, idx) => {
+            const student = studentRosters[fromClassId][idx];
+            const deptClasses = CLASS_DEFINITIONS[selectedDepartment] || [];
+            const classOptions = deptClasses.map((c, i) => `${i + 1} = ${c.id}`).join('\n');
+            const choice = prompt(`Move "${student.name}" to which class?\n\n${classOptions}`, '');
+            if (!choice) return;
+            const targetClass = deptClasses[parseInt(choice) - 1];
+            if (!targetClass) { alert('Invalid choice'); return; }
+            if (targetClass.id === fromClassId) { alert('Already in this class'); return; }
+            // Add to target class
+            if (!studentRosters[targetClass.id]) studentRosters[targetClass.id] = [];
+            studentRosters[targetClass.id].push({...student});
+            // Remove from source class
+            studentRosters[fromClassId].splice(idx, 1);
+            await saveRosterToFirestore();
+            renderStudentAttendanceList();
+            alert(`Moved "${student.name}" to ${targetClass.id}`);
+        };
+
+        window.removeStudentFromRoster = async (classId, idx) => {
+            const student = studentRosters[classId][idx];
+            if (!confirm(`Remove "${student.name}" from ${classId}? This removes them from the roster.`)) return;
+            studentRosters[classId].splice(idx, 1);
+            await saveRosterToFirestore();
+            renderStudentAttendanceList();
+        };
+
+        window.addStudentToClass = async () => {
+            const classId = currentAttendanceClassId;
+            if (!classId) return;
+            const name = prompt('New student name:');
+            if (!name || !name.trim()) return;
+            if (!studentRosters[classId]) studentRosters[classId] = [];
+            const maxSN = studentRosters[classId].reduce((max, s) => Math.max(max, parseInt(s.sn) || 0), 0);
+            studentRosters[classId].push({ name: name.trim(), gender: '', sn: String(maxSN + 1), rg: '' });
+            await saveRosterToFirestore();
+            renderStudentAttendanceList();
+        };
+
+        window.saveRosterToFirestore = async () => {
+            try {
+                const classCount = Object.keys(studentRosters).length;
+                const studentCount = Object.values(studentRosters).reduce((sum, s) => sum + s.length, 0);
+                await setDoc(doc(db, 'attendance', 'app', 'rosters', 'current'), {
+                    data: studentRosters,
+                    loadedAt: serverTimestamp(),
+                    totalClasses: classCount,
+                    totalStudents: studentCount
+                });
+            } catch (e) {
+                console.error('Failed to save roster:', e);
+                alert('Failed to save roster changes: ' + e.message);
+            }
+        };
 
         // --- GOOGLE SIGN-IN OVERLAY ---
         function showGoogleSignInOverlay() {
