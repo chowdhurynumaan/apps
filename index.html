@@ -519,7 +519,7 @@
         let currentUserName = null; // New global variable to hold the user's name
         
         // Admin management
-        let ADMIN_LIST = ['MpcB7f35m0bITsSK1D7ACWFmch32', 'bwZZL8MK1uRFYYJwzG3U0sx8vDK2']; // Default admins
+        let ADMIN_LIST = ['MpcB7f35m0bITsSK1D7ACWFmch32', 'bwZZL8MK1uRFYYJwzG3U0sx8vDK2', 'pJfYEgsWthWdfZCBli83OOQDv462']; // Default admins
         let isAdmin = false;
         let MENU_VISIBILITY = {
             'quran-tracker': true,
@@ -1170,7 +1170,9 @@
                 const docSnap = await getDoc(adminDocRef);
                 
                 if (docSnap.exists()) {
-                    ADMIN_LIST = docSnap.data().list || ADMIN_LIST;
+                    const firestoreList = docSnap.data().list || [];
+                    // Merge: keep hardcoded defaults + anything from Firestore
+                    ADMIN_LIST = [...new Set([...ADMIN_LIST, ...firestoreList])];
                     console.log('Admin list loaded from Firebase');
                 } else {
                     console.log('No admin list in Firebase, using defaults');
