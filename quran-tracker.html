@@ -696,7 +696,7 @@
                 if (!this.state.isAuthReady) return;
 
                 // 1. Student Listener (Public Data)
-                const studentsRef = collection(db, `artifacts/${APP_ID}/public/data/students`);
+                const studentsRef = collection(db, 'quran_tracker/app/students');
                 onSnapshot(studentsRef, (snapshot) => {
                     this.state.allStudents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     // Filter by selected department
@@ -726,7 +726,7 @@
                 if (this.logUnsubscribe) this.logUnsubscribe();
                 if (!studentId || !this.state.isAuthReady) return;
 
-                const logsRef = collection(db, `artifacts/${APP_ID}/public/data/logs`);
+                const logsRef = collection(db, 'quran_tracker/app/logs');
                 const q = query(logsRef, where("studentId", "==", studentId));
 
                 this.logUnsubscribe = onSnapshot(q, (snapshot) => {
@@ -1334,7 +1334,7 @@
 
                     if (this.state.isEditMode) {
                         // Update existing student (only name, stage, gender, department, and target date are user-editable here)
-                        const studentDocRef = doc(db, `artifacts/${APP_ID}/public/data/students`, this.state.studentToEditId);
+                        const studentDocRef = doc(db, 'quran_tracker/app/students', this.state.studentToEditId);
                         await updateDoc(studentDocRef, {
                             name: this.sanitize(name),
                             gender: gender,
@@ -1344,7 +1344,7 @@
                         });
                     } else {
                         // Create new student
-                        await addDoc(collection(db, `artifacts/${APP_ID}/public/data/students`), data);
+                        await addDoc(collection(db, 'quran_tracker/app/students'), data);
                     }
                     this.closeModal('student-modal');
                 } catch (error) {
@@ -1370,11 +1370,11 @@
                 document.getElementById('delete-modal-error').textContent = 'Deleting...';
                 try {
                     // 1. Delete student document
-                    const studentDocRef = doc(db, `artifacts/${APP_ID}/public/data/students`, studentId);
+                    const studentDocRef = doc(db, 'quran_tracker/app/students', studentId);
                     await deleteDoc(studentDocRef);
 
                     // 2. Delete all associated logs (NOTE: This is not transactional with the student delete, but done best-effort)
-                    const logsRef = collection(db, `artifacts/${APP_ID}/public/data/logs`);
+                    const logsRef = collection(db, 'quran_tracker/app/logs');
                     const q = query(logsRef, where("studentId", "==", studentId));
                     const logsSnapshot = await getDocs(q);
                     const batch = writeBatch(db); // Use batch for logs delete
@@ -1447,11 +1447,11 @@
 
                 // --- 2. Run Firestore Transaction ---
 try {
-    const logsCollectionRef = collection(db, `artifacts/${APP_ID}/public/data/logs`);
+    const logsCollectionRef = collection(db, 'quran_tracker/app/logs');
     const newLogDocRef = doc(logsCollectionRef); // Pre-generate a new document reference ID
 
     await runTransaction(db, async (transaction) => {
-                        const studentRef = doc(db, `artifacts/${APP_ID}/public/data/students`, student.id);
+                        const studentRef = doc(db, 'quran_tracker/app/students', student.id);
                         const studentDoc = await transaction.get(studentRef);
 
                         if (!studentDoc.exists()) {
@@ -1861,7 +1861,7 @@ showHifzBulkImportModal: function() {
                             }
                         }
                         
-                        const studentRef = doc(db, `artifacts/${APP_ID}/public/data/students`, student.id);
+                        const studentRef = doc(db, 'quran_tracker/app/students', student.id);
                         
                         await updateDoc(studentRef, {
                             // Merge the new ranges with the existing inventory
@@ -1988,7 +1988,7 @@ showHifzBulkImportModal: function() {
         // Load class definitions from Firebase
         async function loadClassDefinitions() {
             try {
-                const classDefsDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'class_definitions', 'current');
+                const classDefsDocRef = doc(db, 'attendance', 'app', 'class_definitions', 'current');
                 const docSnap = await getDoc(classDefsDocRef);
                 
                 if (docSnap.exists()) {
@@ -2011,7 +2011,7 @@ showHifzBulkImportModal: function() {
         // Save class definitions to Firebase
         async function saveClassDefinitions() {
             try {
-                const classDefsDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'class_definitions', 'current');
+                const classDefsDocRef = doc(db, 'attendance', 'app', 'class_definitions', 'current');
                 await setDoc(classDefsDocRef, CLASS_DEFINITIONS);
                 console.log('✅ Class definitions saved to Firebase');
             } catch (error) {
@@ -2404,7 +2404,7 @@ showHifzBulkImportModal: function() {
                 
                 for (const student of pendingStudents) {
                     try {
-                        const studentsRef = collection(db, `artifacts/${APP_ID}/public/data/students`);
+                        const studentsRef = collection(db, 'quran_tracker/app/students');
                         await addDoc(studentsRef, student);
                         successCount++;
                     } catch (error) {
@@ -2442,7 +2442,7 @@ showHifzBulkImportModal: function() {
         // Load admin list from Firebase
         async function loadAdminList() {
             try {
-                const adminDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'admins');
+                const adminDocRef = doc(db, 'attendance', 'app', 'settings', 'admins');
                 const docSnap = await getDoc(adminDocRef);
                 
                 if (docSnap.exists()) {
@@ -2463,7 +2463,7 @@ showHifzBulkImportModal: function() {
         // Save admin list to Firebase
         async function saveAdminList() {
             try {
-                const adminDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'admins');
+                const adminDocRef = doc(db, 'attendance', 'app', 'settings', 'admins');
                 await setDoc(adminDocRef, { list: ADMIN_LIST });
                 console.log('✅ Admin list saved to Firebase');
             } catch (error) {
@@ -2608,7 +2608,7 @@ showHifzBulkImportModal: function() {
         // Load menu visibility settings from Firebase
         const loadMenuVisibility = async () => {
             try {
-                const menuDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'menu_visibility');
+                const menuDocRef = doc(db, 'attendance', 'app', 'settings', 'menu_visibility');
                 const docSnap = await getDoc(menuDocRef);
                 
                 if (docSnap.exists()) {
@@ -2639,7 +2639,7 @@ showHifzBulkImportModal: function() {
         // Save menu visibility settings to Firebase
         const saveMenuVisibility = async () => {
             try {
-                const menuDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'menu_visibility');
+                const menuDocRef = doc(db, 'attendance', 'app', 'settings', 'menu_visibility');
                 await setDoc(menuDocRef, MENU_VISIBILITY);
                 console.log('✅ Menu visibility saved to Firebase');
             } catch (error) {

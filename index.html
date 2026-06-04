@@ -609,7 +609,7 @@
                 const studentCount = Object.values(studentRosters).reduce((sum, students) => sum + students.length, 0);
                 
                 try {
-                    await setDoc(doc(db, 'studentRosters', 'rosters'), {
+                    await setDoc(doc(db, 'attendance', 'app', 'rosters', 'current'), {
                         data: studentRosters,
                         loadedAt: serverTimestamp(),
                         totalClasses: classCount,
@@ -631,7 +631,7 @@
         // Load rosters from Firestore on app startup
         window.loadRostersFromFirestore = async () => {
             try {
-                const docSnap = await getDoc(doc(db, 'studentRosters', 'rosters'));
+                const docSnap = await getDoc(doc(db, 'attendance', 'app', 'rosters', 'current'));
                 if (docSnap.exists()) {
                     studentRosters = docSnap.data().data;
                     isExcelLoaded = true;
@@ -841,7 +841,7 @@
                 };
                 
                 // Save to Firebase public data as a field in the daily report document (so listener picks it up)
-                const dailyReportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', selectedDateId);
+                const dailyReportDocRef = doc(db, 'attendance', 'app', 'daily_reports', selectedDateId);
                 await setDoc(dailyReportDocRef, {
                     [currentAttendanceClassId]: reportData,
                     timestamp: serverTimestamp()
@@ -909,7 +909,7 @@
         const saveClassDefinitions = async () => {
             try {
                 console.log('Saving class definitions to Firebase...', CLASS_DEFINITIONS);
-                const classDefsDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_definitions', 'current');
+                const classDefsDocRef = doc(db, 'attendance', 'app', 'class_definitions', 'current');
                 await setDoc(classDefsDocRef, CLASS_DEFINITIONS, { merge: true });
                 console.log('✅ Class definitions saved to Firebase successfully');
             } catch (error) {
@@ -921,7 +921,7 @@
         // Load class definitions from Firebase
         const loadClassDefinitions = async () => {
             try {
-                const classDefsDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_definitions', 'current');
+                const classDefsDocRef = doc(db, 'attendance', 'app', 'class_definitions', 'current');
                 const docSnap = await getDoc(classDefsDocRef);
                 
                 if (docSnap.exists()) {
@@ -946,7 +946,7 @@
         const setupClassDefinitionsListener = () => {
             try {
                 console.log('🔊 Setting up real-time listener for class definitions...');
-                const classDefsDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_definitions', 'current');
+                const classDefsDocRef = doc(db, 'attendance', 'app', 'class_definitions', 'current');
                 
                 onSnapshot(classDefsDocRef, (docSnap) => {
                     console.log('📡 Class definitions snapshot received');
@@ -1029,7 +1029,7 @@
         // Load admin list from Firebase
         const loadAdminList = async () => {
             try {
-                const adminDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'admins');
+                const adminDocRef = doc(db, 'attendance', 'app', 'settings', 'admins');
                 const docSnap = await getDoc(adminDocRef);
                 
                 if (docSnap.exists()) {
@@ -1050,7 +1050,7 @@
         // Save admin list to Firebase
         const saveAdminList = async () => {
             try {
-                const adminDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'admins');
+                const adminDocRef = doc(db, 'attendance', 'app', 'settings', 'admins');
                 await setDoc(adminDocRef, { list: ADMIN_LIST });
                 console.log('✅ Admin list saved to Firebase');
             } catch (error) {
@@ -1173,7 +1173,7 @@
         // Load menu visibility settings from Firebase
         const loadMenuVisibility = async () => {
             try {
-                const menuDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'menu_visibility');
+                const menuDocRef = doc(db, 'attendance', 'app', 'settings', 'menu_visibility');
                 const docSnap = await getDoc(menuDocRef);
                 
                 if (docSnap.exists()) {
@@ -1202,7 +1202,7 @@
         // Save menu visibility settings to Firebase
         const saveMenuVisibility = async () => {
             try {
-                const menuDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'menu_visibility');
+                const menuDocRef = doc(db, 'attendance', 'app', 'settings', 'menu_visibility');
                 await setDoc(menuDocRef, MENU_VISIBILITY);
                 console.log('✅ Menu visibility saved to Firebase');
             } catch (error) {
@@ -1354,7 +1354,7 @@ const ensureUserName = async () => {
     if (currentUserName) return; 
 
     // 1. Try reading from Firestore
-    const userDocRef = doc(db, 'users', userId);
+    const userDocRef = doc(db, 'attendance', 'app', 'users', userId);
     try {
         const userDoc = await getDoc(userDocRef);
         if (userDoc.exists() && userDoc.data().userName) {
@@ -1401,7 +1401,7 @@ const ensureUserName = async () => {
  */
 const fetchAndRenderLogHistory = (classId) => {
     // NEW PATH: Listen to the audit_trail subcollection under the date document
-    const auditTrailColRef = collection(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', selectedDateId, 'audit_trail');
+    const auditTrailColRef = collection(db, 'attendance', 'app', 'daily_reports', selectedDateId, 'audit_trail');
     const logHistoryContainer = document.getElementById('log-history-container');
     if (!logHistoryContainer) return;
 
@@ -1924,7 +1924,7 @@ const fetchAndRenderLogHistory = (classId) => {
 
             try {
                 // Determine the document ID for the daily report
-                const dailyReportDocRef = doc(db, 'users', userId, 'dailyReports', selectedDateId, 'classes', classId);
+                const dailyReportDocRef = doc(db, 'attendance', 'app', 'users', userId, 'dailyReports', selectedDateId, 'classes', classId);
                 
                 // Add metadata for the database record
             const dataToSave = {
@@ -1942,7 +1942,7 @@ const fetchAndRenderLogHistory = (classId) => {
                     transaction.set(dailyReportDocRef, dataToSave);
                     
                     // B. Update/Create Accumulated Score
-                    const accumulatedScoreDocRef = doc(db, 'users', userId, 'accumulatedScores', classId);
+                    const accumulatedScoreDocRef = doc(db, 'attendance', 'app', 'users', userId, 'accumulatedScores', classId);
                     
                     // Calculate the new daily score
                     const dailyScore = calculateDailyScore(newReport);
@@ -2089,7 +2089,7 @@ const setupFirestoreListeners = () => {
 
     // 1. Daily Report Listener - LISTEN TO THE SINGLE DOCUMENT PER DATE
 // Path: /artifacts/{appId}/public/data/daily_attendance_reports/{dateID}
-const dailyReportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', selectedDateId);
+const dailyReportDocRef = doc(db, 'attendance', 'app', 'daily_reports', selectedDateId);
 
 // Unsubscribe from old listener if it exists
 if (window.dailyReportUnsubscribe) {
@@ -2157,7 +2157,7 @@ if (window.dailyReportUnsubscribe) {
         window.accumulatedScoresUnsubscribe();
     }
     
-    const scoresCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'accumulated_class_scores');
+    const scoresCollectionRef = collection(db, 'attendance', 'app', 'scores');
     
     window.accumulatedScoresUnsubscribe = onSnapshot(scoresCollectionRef, (querySnapshot) => {
         const newScores = {};
@@ -2739,7 +2739,7 @@ window.saveClassReport = async () => {
     // 1. Transaction for Daily Report (update fields) and Audit Log (create new document)
     await runTransaction(db, async (transaction) => {
         // A. Daily Report Document Reference (single document per date)
-        const dailyReportDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_attendance_reports', todayDateId);
+        const dailyReportDocRef = doc(db, 'attendance', 'app', 'daily_reports', todayDateId);
 
         // 1. Prepare the Daily Report Payload (Map Field) - Uses serverTimestamp() correctly
         const dailyReportPayload = {
@@ -2777,7 +2777,7 @@ window.saveClassReport = async () => {
         // 2. Separate Transaction for Accumulated Score Update
         // This existing logic ensures safe read-modify-write for cumulative totals.
 
-        const accumulatedDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'accumulated_class_scores', classId);
+        const accumulatedDocRef = doc(db, 'attendance', 'app', 'scores', classId);
         
         await runTransaction(db, async (transaction) => {
             const accumulatedDoc = await transaction.get(accumulatedDocRef);

@@ -446,7 +446,7 @@
         // Load class definitions from Firebase to get all departments
         async function loadClassDefinitions() {
             try {
-                const classDefsDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'class_definitions', 'current');
+                const classDefsDocRef = doc(db, 'attendance', 'app', 'class_definitions', 'current');
                 const docSnap = await getDoc(classDefsDocRef);
                 
                 if (docSnap.exists()) {
@@ -516,7 +516,7 @@
         async function loadMenuVisibility() {
             try {
                 // Load menu visibility
-                const menuDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'menu_visibility');
+                const menuDocRef = doc(db, 'attendance', 'app', 'settings', 'menu_visibility');
                 const menuSnap = await getDoc(menuDocRef);
                 
                 if (menuSnap.exists()) {
@@ -594,7 +594,7 @@
             MENU_VISIBILITY[itemKey] = !MENU_VISIBILITY[itemKey];
             
             try {
-                const menuDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'menu_visibility');
+                const menuDocRef = doc(db, 'attendance', 'app', 'settings', 'menu_visibility');
                 await setDoc(menuDocRef, MENU_VISIBILITY);
                 updateEyeIcon(itemKey);
                 updateMenuDisplay();
@@ -712,7 +712,7 @@
                 // Load menu visibility settings
                 await loadMenuVisibility();
                 
-                const collectionPath = `artifacts/${appId}/public/data/daily_attendance_reports`;
+                const collectionPath = 'attendance/app/daily_reports';
                 console.log('Querying collection:', collectionPath);
                 
                 const q = query(
@@ -1442,7 +1442,7 @@
         // Load admin list from Firebase
         async function loadAdminList() {
             try {
-                const adminDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'admins');
+                const adminDocRef = doc(db, 'attendance', 'app', 'settings', 'admins');
                 const docSnap = await getDoc(adminDocRef);
                 
                 if (docSnap.exists()) {
@@ -1463,7 +1463,7 @@
         // Save admin list to Firebase
         async function saveAdminList() {
             try {
-                const adminDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'admins');
+                const adminDocRef = doc(db, 'attendance', 'app', 'settings', 'admins');
                 await setDoc(adminDocRef, { list: ADMIN_LIST });
                 console.log('✅ Admin list saved to Firebase');
             } catch (error) {

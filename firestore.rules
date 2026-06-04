@@ -3,89 +3,85 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ========== PRIMARY ADMIN - FULL ACCESS ==========
-    // Replace with your actual admin UID
     match /{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == 'MpcB7f35m0bITsSK1D7ACWFmch32';
     }
-    
-    // ========== TIMESHEET APP - MAIN COLLECTION ==========
-    // Core timesheet settings (shift definitions, form mappings, months, employees)
+
+    // ========== TIMESHEET APP ==========
+    // timesheet/app (anchor doc) + all subcollections: config, months, employees, audit, users
+    match /timesheet/app {
+      allow read, write: if request.auth != null;
+    }
+    match /timesheet/app/{subcollection}/{document=**} {
+      allow read, write: if request.auth != null;
+      allow delete: if request.auth != null && request.auth.uid == 'MpcB7f35m0bITsSK1D7ACWFmch32';
+    }
+
+    // ========== ATTENDANCE APP ==========
+    // attendance/app (anchor doc) + all subcollections: class_definitions, settings, daily_reports, scores, rosters, users
+    match /attendance/app {
+      allow read, write: if request.auth != null;
+    }
+    match /attendance/app/{subcollection}/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ========== QURAN TRACKER ==========
+    // quran_tracker/app (anchor doc) + subcollections: students, logs
+    match /quran_tracker/app {
+      allow read, write: if request.auth != null;
+    }
+    match /quran_tracker/app/{subcollection}/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ========== ACTION ITEMS ==========
+    // action_items/app (anchor doc) + subcollections: ideas, notes
+    match /action_items/app {
+      allow read, write: if request.auth != null;
+    }
+    match /action_items/app/{subcollection}/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ========== SHARED ==========
+    match /shared/app/{subcollection}/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ========== OLD COLLECTIONS (keep until migration verified) ==========
     match /timesheet_app/{document=**} {
       allow read, write: if request.auth != null;
-      allow delete: if request.auth != null && request.auth.uid == 'MpcB7f35m0bITsSK1D7ACWFmch32';
     }
-    
-    // ========== TIMESHEET APP - FLAT COLLECTION STRUCTURE ==========
-    // Alternative top-level collections for future use
-    
-    // Month Reports (2026_02, 2026_03, etc.)
     match /timesheet_app_months/{monthId} {
       allow read, write: if request.auth != null;
-      allow delete: if request.auth != null && request.auth.uid == 'MpcB7f35m0bITsSK1D7ACWFmch32';
     }
-
-    // Employee Data (emp_1_2026_02, emp_2_2026_02, etc.)
     match /timesheet_app_employees/{employeeId} {
       allow read, write: if request.auth != null;
-      allow delete: if request.auth != null && request.auth.uid == 'MpcB7f35m0bITsSK1D7ACWFmch32';
     }
-
-    // Audit Trail (audit_2026_02_timestamp, etc.)
     match /timesheet_app_audit/{auditId} {
       allow read, write: if request.auth != null;
-      allow delete: if request.auth != null && request.auth.uid == 'MpcB7f35m0bITsSK1D7ACWFmch32';
     }
-
-    // ========== OTHER APPS - PROTECTED ==========
-    // Pages config - read/write by authenticated users
-    match /artifacts/{appId}/config/pages {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
-    }
-
-    // Access requests
-    match /artifacts/{appId}/public/data/access_requests/{document=**} {
+    match /timesheet_app_users/{userId} {
       allow read, write: if request.auth != null;
     }
-
-    // User profiles and daily reports
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    match /artifacts/{appId}/{document=**} {
+      allow read, write: if request.auth != null;
     }
-
-    // Nested user data: dailyReports and attendance
     match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    match /artifacts/{appId}/users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    // Shared public data
-    match /artifacts/{appId}/public/data/{collectionName}/{document=**} {
       allow read, write: if request.auth != null;
     }
-    
-    // Hifz Classes - for other apps
-    match /hifz_classes/{document=**} {
-      allow read, write: if request.auth != null;
-    }
-
-    // Hifz Students - for other apps
-    match /hifz_students/{document=**} {
-      allow read, write: if request.auth != null;
-    }
-
-    // Student Rosters - for attendance tracking
     match /studentRosters/{document=**} {
       allow read, write: if request.auth != null;
     }
-
-    // Attendance Records - No Auth Required (legacy)
+    match /hifz_classes/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+    match /hifz_students/{document=**} {
+      allow read, write: if request.auth != null;
+    }
     match /attendance_records/{document=**} {
       allow read, write;
     }
-
   }
 }
