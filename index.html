@@ -2160,12 +2160,10 @@ const handleAppReady = async () => {
     // Set up real-time listener for class definitions
     setupClassDefinitionsListener();
     
-    // We ensure the spinner is visible and rely on setupFirestoreListeners to hide the loading message when data is received.
-    document.getElementById('loading-spinner').classList.remove('hidden'); // Ensure spinner is visible
-    document.getElementById('initial-message-text').textContent = "Authentication Complete! Fetching data...";
+    // Hide the loading overlay and set up data listeners
+    document.getElementById('initial-message').classList.add('hidden');
     setupFirestoreListeners(); // Set up listeners
     setupPendingStudentsListener(); // Admin: listen for pending student approvals
-    // REMOVED: The setTimeout logic. The listener will now correctly hide the overlay once data is available.
 };
 
 
