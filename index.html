@@ -2142,26 +2142,27 @@ const fetchAndRenderLogHistory = (classId) => {
         // --- FIREBASE AND AUTHENTICATION ---
 
 const handleAppReady = async () => {
+    // IMMEDIATELY hide loading overlay so content is visible
+    document.getElementById('initial-message').classList.add('hidden');
+    
     document.getElementById('date-selector').value = todayDateId;
     document.getElementById('header-dept-selector').value = selectedDepartment;
     
     // Load class definitions from Firebase
-    await loadClassDefinitions();
+    try { await loadClassDefinitions(); } catch(e) { console.warn('loadClassDefinitions failed:', e); }
     
     // Load student rosters from Firestore (if previously saved)
-    await loadRostersFromFirestore();
+    try { await loadRostersFromFirestore(); } catch(e) { console.warn('loadRostersFromFirestore failed:', e); }
     
     // Load admin list and check if current user is admin
-    await loadAdminList();
+    try { await loadAdminList(); } catch(e) { console.warn('loadAdminList failed:', e); }
     
     // Load menu visibility settings
-    await loadMenuVisibility();
+    try { await loadMenuVisibility(); } catch(e) { console.warn('loadMenuVisibility failed:', e); }
     
     // Set up real-time listener for class definitions
     setupClassDefinitionsListener();
     
-    // Hide the loading overlay and set up data listeners
-    document.getElementById('initial-message').classList.add('hidden');
     setupFirestoreListeners(); // Set up listeners
     setupPendingStudentsListener(); // Admin: listen for pending student approvals
 };
