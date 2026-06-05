@@ -2190,6 +2190,7 @@ const handleAppReady = async () => {
                     if (user) {
                         if (user.isAnonymous) {
                             await auth.signOut();
+                            showGoogleSignInOverlay();
                             return;
                         }
                         userId = user.uid;
@@ -2210,6 +2211,9 @@ const handleAppReady = async () => {
                         if (overlay) overlay.remove();
                         isAuthReady = true;
                         handleAppReady();
+                    } else {
+                        // No user session — show sign-in immediately
+                        showGoogleSignInOverlay();
                     }
                 });
 
